@@ -94,8 +94,8 @@ class KardexController extends Controller
         |
         */
 
-        $query->orderBy('fecha_movimiento', 'asc')
-              ->orderBy('id', 'asc');
+        $query->orderBy('fecha_movimiento', 'desc')
+              ->orderBy('id', 'desc');
 
         /*
         |--------------------------------------------------------------------------

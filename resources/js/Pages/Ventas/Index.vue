@@ -90,6 +90,11 @@ const columns = [
     },
 
     {
+        field: "comprobantes_count",
+        header: "Boletas",
+    },
+
+    {
         field: "fecha_emision",
         header: "Fecha de emisión",
         type: "date",
@@ -135,21 +140,32 @@ const verVenta = (venta) => {
     ventaSeleccionada.value = venta;
     mostrarDetalle.value = true;
 };
+const formatearFecha = (fecha) => {
+    if (!fecha) return "—";
 
+    const fechaObj = new Date(fecha);
 
-const verComprobante = () => {
-    if (!ventaSeleccionada.value) {
-        return;
+    if (Number.isNaN(fechaObj.getTime())) {
+        return "—";
     }
 
-    router.visit(
-        route(
-            "ventas.comprobante",
-            ventaSeleccionada.value.id
-        )
-    );
+    return new Intl.DateTimeFormat("es-PE", {
+        day: "2-digit",
+        month: "2-digit",
+        year: "numeric",
+        hour: "2-digit",
+        minute: "2-digit",
+        hour12: true,
+    }).format(fechaObj);
 };
 
+const verComprobante = () => {
+    mostrarComprobantes.value = true;
+};
+
+const abrirComprobante = (comprobante) => {
+    window.open(route("ventas.comprobante", comprobante.id), "_blank");
+};
 
 /*
 |--------------------------------------------------------------------------
@@ -205,18 +221,43 @@ const eliminarVenta = async (venta) => {
 
 //Computed
 const detallesVenta = computed(() => {
-    return ventaSeleccionada.value?.detalles ?? [];
+    return boletasVenta.value.flatMap((boleta) => boleta.detalles ?? []);
 });
 
 const boletasVenta = computed(() => {
-    return ventaSeleccionada.value?.comprobantes ?? [];
+    const comprobantes = ventaSeleccionada.value?.comprobantes ?? [];
+    const boletas = comprobantes.length > 0
+        ? comprobantes
+        : ventaSeleccionada.value
+          ? [ventaSeleccionada.value]
+          : [];
+
+    return Array.from(
+        new Map(boletas.map((boleta) => [boleta.id, boleta])).values(),
+    );
 });
 
+const esVentaAgrupada = computed(() => boletasVenta.value.length > 1);
+
+const nombreBoletas = computed(() => {
+    return boletasVenta.value.length === 1 ? "boleta" : "boletas";
+});
+
+const totalBoleta = (boleta) => {
+    return Number(boleta.importe_total ?? boleta.total ?? 0);
+};
+
+const cantidadProductosBoleta = (boleta) => {
+    return (boleta.detalles ?? []).reduce(
+        (cantidad, detalle) => cantidad + Number(detalle.cantidad ?? 0),
+        0,
+    );
+};
+
 const totalVenta = computed(() => {
-    return Number(
-        ventaSeleccionada.value?.importe_total ??
-            ventaSeleccionada.value?.total ??
-            0,
+    return boletasVenta.value.reduce(
+        (total, boleta) => total + totalBoleta(boleta),
+        0,
     );
 });
 </script>
@@ -273,12 +314,10 @@ const totalVenta = computed(() => {
                 <!-- Información de la venta -->
                 <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
                     <div>
-                        <p class="text-sm text-gray-500">Comprobante</p>
+                        <p class="text-sm text-gray-500">Boletas generadas</p>
 
-                        <p class="font-semibold">
-                            {{ ventaSeleccionada.serie }}-{{
-                                ventaSeleccionada.correlativo
-                            }}
+                        <p class="font-semibold text-rose-700">
+                            {{ boletasVenta.length }}
                         </p>
                     </div>
 
@@ -286,7 +325,7 @@ const totalVenta = computed(() => {
                         <p class="text-sm text-gray-500">Fecha de emisión</p>
 
                         <p class="font-semibold">
-                            {{ ventaSeleccionada.fecha_emision }}
+                            {{ formatearFecha(ventaSeleccionada.fecha_emision) }}
                         </p>
                     </div>
 
@@ -436,6 +475,31 @@ const totalVenta = computed(() => {
                         @click="verComprobante"
                     />
                 </div>
+            </div>
+        </Dialog>
+
+        <Dialog
+            v-model:visible="mostrarComprobantes"
+            modal
+            header="Boletas emitidas"
+            :style="{ width: '520px' }"
+            :breakpoints="{ '575px': '95vw' }"
+        >
+            <p class="text-sm text-gray-500 mb-4">
+                Esta venta generó {{ boletasVenta.length }} boleta(s).
+            </p>
+
+            <div class="flex flex-col gap-2">
+                <Button
+                    v-for="boleta in boletasVenta"
+                    :key="boleta.id"
+                    :label="`${boleta.tipo_comprobante?.nombre ?? 'Boleta'} ${boleta.serie}-${boleta.correlativo}`"
+                    icon="pi pi-external-link"
+                    severity="info"
+                    outlined
+                    class="justify-start"
+                    @click="abrirComprobante(boleta)"
+                />
             </div>
         </Dialog>
     </v-container>

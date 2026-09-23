@@ -56,139 +56,142 @@ const largoDocumentoEsperado = computed(() => {
     return cliente.value.tipo_documento === "RUC" ? 11 : 8;
 });
 
-    const buscarCliente = async () => {
-        const documento = cliente.value.numero_documento.trim();
+const buscarCliente = async () => {
+    const documento = cliente.value.numero_documento.trim();
 
-        if (documento.length !== largoDocumentoEsperado.value) {
+    if (documento.length !== largoDocumentoEsperado.value) {
+        return;
+    }
+
+    buscandoCliente.value = true;
+    mensajeCliente.value = "";
+
+    try {
+        // =====================================================
+        // 1. PRIMERO BUSCAMOS EN NUESTRA BASE DE DATOS
+        // =====================================================
+
+        const responseBD = await fetch(
+            `${route("clientes.buscar-documento")}?tipo_documento=${encodeURIComponent(
+                cliente.value.tipo_documento,
+            )}&numero_documento=${encodeURIComponent(documento)}`,
+            {
+                method: "GET",
+                headers: {
+                    Accept: "application/json",
+                    "X-Requested-With": "XMLHttpRequest",
+                },
+            },
+        );
+
+        if (!responseBD.ok) {
+            throw new Error(`Error BD HTTP ${responseBD.status}`);
+        }
+
+        const dataBD = await responseBD.json();
+
+        // =====================================================
+        // 2. SI EXISTE EN BD
+        // =====================================================
+
+        if (dataBD.success && dataBD.cliente) {
+            cliente.value = {
+                id: dataBD.cliente.id,
+                tipo_documento: dataBD.cliente.tipo_documento,
+                numero_documento: dataBD.cliente.numero_documento,
+                nombre: dataBD.cliente.nombre,
+            };
+
+            clienteEncontrado.value = true;
+            clienteEncontradoEnAPI.value = false;
+            mensajeCliente.value = "Cliente encontrado en tu base de datos.";
+
             return;
         }
 
-        buscandoCliente.value = true;
-        mensajeCliente.value = "";
+        // =====================================================
+        // 3. NO EXISTE → CONSULTAMOS JSON.PE
+        // =====================================================
+
+        const responseAPI = await fetch(route("clientes.consultar-dni"), {
+            method: "POST",
+            headers: {
+                "Content-Type": "application/json",
+                Accept: "application/json",
+                "X-Requested-With": "XMLHttpRequest",
+                "X-CSRF-TOKEN": document
+                    .querySelector('meta[name="csrf-token"]')
+                    ?.getAttribute("content"),
+            },
+            body: JSON.stringify({
+                numero_documento: documento,
+            }),
+        });
+
+        const textoAPI = await responseAPI.text();
+
+        let dataAPI;
 
         try {
-            // =====================================================
-            // 1. PRIMERO BUSCAMOS EN NUESTRA BASE DE DATOS
-            // =====================================================
+            dataAPI = JSON.parse(textoAPI);
+        } catch (e) {
+            console.error("Respuesta no JSON de JSON.pe:", textoAPI);
+            throw new Error(`Respuesta inválida HTTP ${responseAPI.status}`);
+        }
 
-            const responseBD = await fetch(
-                `${route("clientes.buscar-documento")}?tipo_documento=${encodeURIComponent(
-                    cliente.value.tipo_documento,
-                )}&numero_documento=${encodeURIComponent(documento)}`,
-                {
-                    method: "GET",
-                    headers: {
-                        Accept: "application/json",
-                        "X-Requested-With": "XMLHttpRequest",
-                    },
-                },
+        if (!responseAPI.ok) {
+            console.error(
+                "Error consultando JSON.pe:",
+                responseAPI.status,
+                dataAPI,
             );
 
-            if (!responseBD.ok) {
-                throw new Error(`Error BD HTTP ${responseBD.status}`);
-            }
+            throw new Error(`Error HTTP ${responseAPI.status}`);
+        }
 
-            const dataBD = await responseBD.json();
+        // =====================================================
+        // 4. JSON.PE ENCONTRÓ EL DOCUMENTO
+        // =====================================================
 
-            // =====================================================
-            // 2. SI EXISTE EN BD
-            // =====================================================
+        if (dataAPI.success && dataAPI.data) {
+            const datos = dataAPI.data;
 
-            if (dataBD.success && dataBD.cliente) {
-                cliente.value = {
-                    id: dataBD.cliente.id,
-                    tipo_documento: dataBD.cliente.tipo_documento,
-                    numero_documento: dataBD.cliente.numero_documento,
-                    nombre: dataBD.cliente.nombre,
-                };
+            cliente.value = {
+                id: null,
+                tipo_documento: cliente.value.tipo_documento,
+                numero_documento: documento,
+                nombre:
+                    datos.nombre_completo ||
+                    `${datos.nombres ?? ""} ${datos.apellido_paterno ?? ""} ${datos.apellido_materno ?? ""}`.trim(),
+            };
 
-                clienteEncontrado.value = true;
-                clienteEncontradoEnAPI.value = false;
-                mensajeCliente.value = "Cliente encontrado en tu base de datos.";
-
-                return;
-            }
-
-            // =====================================================
-            // 3. NO EXISTE → CONSULTAMOS JSON.PE
-            // =====================================================
-
-            const responseAPI = await fetch(route("clientes.consultar-dni"), {
-                method: "POST",
-                headers: {
-                    "Content-Type": "application/json",
-                    Accept: "application/json",
-                    "X-Requested-With": "XMLHttpRequest",
-                    "X-CSRF-TOKEN": document
-                        .querySelector('meta[name="csrf-token"]')
-                        ?.getAttribute("content"),
-                },
-                body: JSON.stringify({
-                    numero_documento: documento,
-                }),
-            });
-
-            const textoAPI = await responseAPI.text();
-
-            let dataAPI;
-
-            try {
-                dataAPI = JSON.parse(textoAPI);
-            } catch (e) {
-                console.error("Respuesta no JSON de JSON.pe:", textoAPI);
-                throw new Error(`Respuesta inválida HTTP ${responseAPI.status}`);
-            }
-
-            if (!responseAPI.ok) {
-                console.error(
-                    "Error consultando JSON.pe:",
-                    responseAPI.status,
-                    dataAPI,
-                );
-
-                throw new Error(`Error HTTP ${responseAPI.status}`);
-            }
-
-            // =====================================================
-            // 4. JSON.PE ENCONTRÓ EL DOCUMENTO
-            // =====================================================
-
-            if (dataAPI.success && dataAPI.data) {
-                const datos = dataAPI.data;
-
-                cliente.value = {
-                    id: null,
-                    tipo_documento: cliente.value.tipo_documento,
-                    numero_documento: documento,
-                    nombre:
-                        datos.nombre_completo ||
-                        `${datos.nombres ?? ""} ${datos.apellido_paterno ?? ""} ${datos.apellido_materno ?? ""}`.trim(),
-                };
-
-                clienteEncontrado.value = false;
-                clienteEncontradoEnAPI.value = true;
-                mensajeCliente.value = "Datos obtenidos de RENIEC/SUNAT. Se guardarán al confirmar.";
-            } else {
-                cliente.value.id = null;
-                cliente.value.nombre = "";
-
-                clienteEncontrado.value = false;
-                clienteEncontradoEnAPI.value = false;
-                mensajeCliente.value = "No se encontró el documento. Ingresa el nombre manualmente.";
-            }
-        } catch (error) {
-            console.error("Error buscando cliente:", error);
-
+            clienteEncontrado.value = false;
+            clienteEncontradoEnAPI.value = true;
+            mensajeCliente.value =
+                "Datos obtenidos de RENIEC/SUNAT. Se guardarán al confirmar.";
+        } else {
             cliente.value.id = null;
             cliente.value.nombre = "";
 
             clienteEncontrado.value = false;
             clienteEncontradoEnAPI.value = false;
-            mensajeCliente.value = "No se pudo validar el documento. Ingresa el nombre manualmente.";
-        } finally {
-            buscandoCliente.value = false;
+            mensajeCliente.value =
+                "No se encontró el documento. Ingresa el nombre manualmente.";
         }
-    };
+    } catch (error) {
+        console.error("Error buscando cliente:", error);
+
+        cliente.value.id = null;
+        cliente.value.nombre = "";
+
+        clienteEncontrado.value = false;
+        clienteEncontradoEnAPI.value = false;
+        mensajeCliente.value =
+            "No se pudo validar el documento. Ingresa el nombre manualmente.";
+    } finally {
+        buscandoCliente.value = false;
+    }
+};
 
 const modoPagoActivo = computed(() => {
     return calculadoraActiva.value && metodoPago.value === "efectivo";
@@ -981,51 +984,64 @@ watch(
             <Divider class="my-0" />
 
             <!-- RESUMEN -->
-            <div>
-                <div
-                    class="flex flex-col gap-1.5 max-h-32 overflow-y-auto pr-1 mb-3"
-                >
+            <div
+                class="w-full rounded-lg bg-gray-50 border border-gray-200 p-3"
+            >
+                <!-- Encabezado -->
+                <div class="flex items-center justify-between mb-2">
+                    <span
+                        class="text-xs font-semibold text-gray-500 uppercase tracking-wide"
+                    >
+                        Resumen de compra
+                    </span>
+
+                    <span class="text-xs text-gray-400">
+                        {{ carrito.length }} producto{{
+                            carrito.length !== 1 ? "s" : ""
+                        }}
+                    </span>
+                </div>
+
+                <!-- Lista de productos -->
+                <div class="flex flex-col gap-1 max-h-32 overflow-y-auto pr-1">
                     <div
                         v-for="item in carrito"
                         :key="item.producto_id"
-                        class="flex justify-between text-xs text-gray-500"
+                        class="flex items-center justify-between gap-3 py-1"
                     >
-                        <span class="truncate pr-2">
-                            {{ item.cantidad }}x
-                            {{ item.producto?.nombre }}
-                        </span>
+                        <!-- Producto + cantidad + precio -->
+                        <div class="min-w-0 flex-1 flex items-center gap-2">
+                            <span class="shrink-0 text-[11px] text-gray-400">
+                                {{ item.cantidad }} ×
+                                {{ formatearMoneda(item.precio_unitario) }}
+                            </span>
 
-                        <span class="shrink-0 font-medium text-gray-700">
+                            <p
+                                class="text-xs font-medium text-gray-700 truncate"
+                                :title="item.producto?.nombre"
+                            >
+                                {{ item.producto?.nombre }}
+                            </p>
+                        </div>
+
+                        <!-- Subtotal -->
+                        <span
+                            class="shrink-0 text-xs font-semibold text-gray-700"
+                        >
                             {{ formatearMoneda(item.subtotal) }}
                         </span>
                     </div>
                 </div>
 
-                <div class="flex justify-between text-xs text-gray-500 mb-1">
-                    <span>Op. gravada</span>
-
-                    <span>
-                        {{ formatearMoneda(totales.op_gravada) }}
-                    </span>
-                </div>
-
-                <div class="flex justify-between text-xs text-gray-500 mb-3">
-                    <span>IGV (18%)</span>
-
-                    <span>
-                        {{ formatearMoneda(totales.igv) }}
-                    </span>
-                </div>
-
-                <!-- TOTAL -->
+                <!-- Total -->
                 <div
-                    class="rounded-xl bg-rose-50 border border-rose-200 px-4 py-3 flex justify-between items-center"
+                    class="flex items-center justify-between border-t border-gray-200 mt-2 pt-2"
                 >
-                    <span class="font-semibold text-gray-700">
-                        Total a pagar
+                    <span class="text-xs font-semibold text-gray-600">
+                        Total
                     </span>
 
-                    <span class="text-xl font-bold text-rose-800">
+                    <span class="text-base font-bold text-rose-800">
                         {{ formatearMoneda(totales.total) }}
                     </span>
                 </div>

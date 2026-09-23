@@ -28,6 +28,7 @@ class Venta extends Model
         'descuento_total',
         'importe_total',
         'tienda_id',
+        'grupo_venta',
 
         // Se mantiene por compatibilidad con tu BD.
         // Ya no determina la serie ni el emisor.
@@ -147,6 +148,11 @@ class Venta extends Model
     public function detalles()
     {
         return $this->hasMany(DetalleVenta::class);
+    }
+
+    public function comprobantes()
+    {
+        return $this->hasMany(self::class, 'grupo_venta', 'grupo_venta');
     }
 
     /*

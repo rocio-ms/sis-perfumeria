@@ -11,7 +11,6 @@ import DataTableBase from "@/Components/DataTableBase.vue";
 import Card from "@/Components/Card.vue";
 import AppLayout from "@/Layouts/AppLayout.vue";
 
-
 // SweetAlert
 import Swal from "sweetalert2";
 
@@ -242,10 +241,14 @@ const eliminarCliente = async (cliente) => {
                     title-button="Nuevo cliente"
                     :show-view="true"
                     :show-delete="false"
-                    :mostrarCrear="true"
+                    :mostrarCrear="false"
                     @nuevo="abrirForm"
                     @editar="editarCliente"
                     @ver="verCliente"
+                    createPermission="productos.crear"
+                    viewPermission="productos.ver"
+                    editPermission="productos.editar"
+                    deletePermission="productos.eliminar"
                 />
             </template>
         </Card>

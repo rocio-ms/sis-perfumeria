@@ -10,12 +10,22 @@ import Button from "primevue/button";
 import Select from "primevue/select";
 import DatePicker from "primevue/datepicker";
 import Tag from "primevue/tag";
-
+import { usePage } from "@inertiajs/vue3";
 /*
 |--------------------------------------------------------------------------
 | PROPS
 |--------------------------------------------------------------------------
 */
+
+const page = usePage();
+
+const tienePermiso = (permiso) => {
+    if (!permiso) {
+        return true;
+    }
+
+    return (page.props.auth?.permissions ?? []).includes(permiso);
+};
 
 const props = defineProps({
     data: {
@@ -55,6 +65,30 @@ const props = defineProps({
     showDelete: {
         type: Boolean,
         default: true,
+    },
+    createPermission: {
+        type: String,
+        default: null,
+    },
+
+    viewPermission: {
+        type: String,
+        default: null,
+    },
+
+    editPermission: {
+        type: String,
+        default: null,
+    },
+
+    deletePermission: {
+        type: String,
+        default: null,
+    },
+
+    closePermission: {
+        type: String,
+        default: null,
     },
 
     showClose: {
@@ -458,7 +492,7 @@ const estadoTag = (valor, columna) => {
                 />
 
                 <Button
-                    v-if="mostrarCrear && titleButton"
+                    v-if="mostrarCrear && titleButton && tienePermiso(createPermission)"
                     :label="titleButton"
                     icon="pi pi-plus"
                     @click="emit('nuevo')"
@@ -730,7 +764,7 @@ const estadoTag = (valor, columna) => {
                 <template #body="{ data }">
                     <div class="flex justify-center gap-1">
                         <Button
-                            v-if="showView"
+                            v-if="showView && tienePermiso(viewPermission)"
                             icon="pi pi-eye"
                             severity="info"
                             v-tooltip.top="'Ver'"
@@ -738,7 +772,7 @@ const estadoTag = (valor, columna) => {
                         />
 
                         <Button
-                            v-if="showEdit"
+                            v-if="showEdit && tienePermiso(editPermission)"
                             icon="pi pi-pencil"
                             severity="warning"
                             v-tooltip.top="'Editar'"
@@ -746,7 +780,7 @@ const estadoTag = (valor, columna) => {
                         />
 
                         <Button
-                            v-if="showDelete"
+                            v-if="showDelete && tienePermiso(deletePermission)"
                             icon="pi pi-trash"
                             severity="danger"
                             v-tooltip.top="'Eliminar'"
@@ -756,12 +790,12 @@ const estadoTag = (valor, columna) => {
                         <Button
                             v-if="
                                 showClose &&
+                                tienePermiso(closePermission) &&
                                 (data.sesion_estado === 'Abierta' ||
                                     data.estado === 'Abierta')
                             "
                             icon="pi pi-lock"
                             severity="danger"
-                            rounded
                             v-tooltip.top="'Cerrar caja'"
                             @click="emit('cerrar', data)"
                         />

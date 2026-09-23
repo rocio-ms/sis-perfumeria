@@ -6,7 +6,7 @@ import AppLayout from "@/Layouts/AppLayout.vue";
 import DataTableBase from "@/Components/DataTableBase.vue";
 import Card from "@/Components/Card.vue";
 import Form from "./Form.vue";
-import Cierre from "./Sesiones/Cierre.vue";
+
 
 import Swal from "sweetalert2";
 defineOptions({
@@ -31,13 +31,6 @@ const props = defineProps({
         }),
     },
 });
-
-const mostrarForm = ref(false);
-const mostrarApertura = ref(false);
-const mostrarCierre = ref(false);
-
-const cajaSeleccionada = ref(null);
-const sesionSeleccionada = ref(null);
 
 const home = ref({
     icon: "pi pi-home",
@@ -160,67 +153,7 @@ const cerrarForm = () => {
     cajaSeleccionada.value = null;
 };
 
-const abrirCaja = (caja) => {
-    cajaSeleccionada.value = caja;
-    mostrarApertura.value = true;
-};
 
-const aperturaRealizada = () => {
-    mostrarApertura.value = false;
-
-    cajaSeleccionada.value = null;
-
-    router.reload({
-        only: ["cajas"],
-    });
-
-    Swal.fire({
-        title: "Caja abierta",
-        text: "La sesión de caja fue abierta correctamente",
-        icon: "success",
-        confirmButtonText: "Aceptar",
-    });
-};
-
-const cerrarCaja = (caja) => {
-    if (!caja.sesion_actual) {
-        Swal.fire({
-            title: "Sin sesión abierta",
-            text: "Esta caja no tiene una sesión abierta",
-            icon: "info",
-        });
-
-        return;
-    }
-
-    sesionSeleccionada.value = caja.sesion_actual;
-    mostrarCierre.value = true;
-};
-
-const cierreRealizado = () => {
-    mostrarCierre.value = false;
-    sesionSeleccionada.value = null;
-
-    router.reload({
-        only: ["cajas"],
-    });
-
-    Swal.fire({
-        title: "Caja cerrada",
-        text: "La sesión de caja fue cerrada correctamente.",
-        icon: "success",
-        confirmButtonText: "Aceptar",
-    });
-};
-const cancelarApertura = () => {
-    mostrarApertura.value = false;
-    cajaSeleccionada.value = null;
-};
-
-const cancelarCierre = () => {
-    mostrarCierre.value = false;
-    sesionSeleccionada.value = null;
-};
 </script>
 
 <template>
@@ -255,26 +188,12 @@ const cancelarCierre = () => {
                     titleButton="Nueva caja"
                     :show-view="false"
                     :show-delete="false"
+                    :show-close="false"     
                     :mostrarCrear="true"
                     @editar="editarCaja"
-                    @cerrar="cerrarCaja"
-                    @nuevo="abrirForm"
                 />
             </template>
         </Card>
     </v-container>
 
-    <Form
-        v-model:visible="mostrarForm"
-        :caja="cajaSeleccionada"
-        @saved="formularioGuardado"
-        @cancel="cerrarForm"
-    />
-
-    <Cierre
-        v-model:visible="mostrarCierre"
-        :sesion="sesionSeleccionada"
-        @confirmar-cierre="cierreRealizado"
-        @update:visible="cancelarCierre"
-    />
 </template>

@@ -20,6 +20,7 @@ use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Inertia\Inertia;
 use Illuminate\Support\Facades\Auth;
+use Illuminate\Support\Str;
 
 class VentaController extends Controller
 {
@@ -38,7 +39,11 @@ class VentaController extends Controller
             'serieComprobante',
             'detalles.producto',
             'detalles.lote',
+            'comprobantes.cliente',
+            'comprobantes.tipoComprobante',
+            'comprobantes.detalles.producto',
         ])
+            ->withCount('comprobantes')
             ->when($request->search, function ($query, $search) {
                 $query->where(function ($q) use ($search) {
                     $q->where('serie', 'like', "%{$search}%")
@@ -410,8 +415,21 @@ class VentaController extends Controller
                 });
 
             $ventas = collect();
+            $grupoVenta = (string) Str::uuid();
 
-            foreach ($detallesPorEmpresa as $empresaEmisoraId => $detallesEmpresa) {
+            $detallesPorMarca = collect($validated['detalles'])
+                ->groupBy(function ($detalle) use ($productosVenta) {
+                    return $productosVenta->firstWhere(
+                        'id',
+                        $detalle['producto_id']
+                    )->marca_id;
+                });
+
+            foreach ($detallesPorMarca as $detallesEmpresa) {
+                $empresaEmisoraId = $productosVenta->firstWhere(
+                    'id',
+                    $detallesEmpresa->first()['producto_id']
+                )->empresa_id;
 
                 /*
             |--------------------------------------------------------------------------
@@ -568,6 +586,8 @@ class VentaController extends Controller
 
                     'tienda_id' =>
                     $tienda->id,
+
+                    'grupo_venta' => $grupoVenta,
 
                     /*
                 |--------------------------------------------------------------------------
@@ -1210,10 +1230,27 @@ class VentaController extends Controller
             'serieComprobante',
         ]);
 
+        $comprobantes = Venta::where('grupo_venta', $venta->grupo_venta)
+            ->where('activo', true)
+            ->with([
+                'cliente',
+                'usuario',
+                'tipoComprobante',
+                'tipoPago',
+                'sesionCaja',
+                'detalles.producto',
+                'detalles.lote',
+                'empresaEmisora',
+                'serieComprobante',
+            ])
+            ->orderBy('id')
+            ->get();
+
         $tienda = Tienda::first();
 
         return Inertia::render('Ventas/Comprobante', [
             'venta' => $venta,
+            'comprobantes' => $comprobantes,
             'tienda' => $tienda,
         ]);
     }

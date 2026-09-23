@@ -191,10 +191,15 @@ const eliminarProducto = async (producto) => {
                     title-button="Nuevo producto"
                     :show-view="true"
                     :show-delete="false"
+                    :show-edit="true"
                     :mostrarCrear="true"
                     @nuevo="abrirForm"
                     @editar="editarProducto"
                     @ver="verProducto"
+                    createPermission="productos.crear"
+                    viewPermission="productos.ver"
+                    editPermission="productos.editar"
+                    deletePermission="productos.eliminar"
                 />
             </template>
         </Card>

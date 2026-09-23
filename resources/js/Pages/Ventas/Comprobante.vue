@@ -1,16 +1,20 @@
 <script setup>
-import { computed, onMounted, onBeforeUnmount } from "vue";
+import { computed, onBeforeUnmount, ref } from "vue";
 import { router } from "@inertiajs/vue3";
 
 import AppLayout from "@/Layouts/AppLayout.vue";
-
-import Card from "primevue/card";
+import Card from "@/Components/Card.vue";
 import Button from "primevue/button";
 
 const props = defineProps({
     venta: {
         type: Object,
         required: true,
+    },
+
+    comprobantes: {
+        type: Array,
+        default: () => [],
     },
 
     tienda: {
@@ -57,7 +61,11 @@ const ubicacionTienda = computed(() => {
 |--------------------------------------------------------------------------
 */
 
-const venta = computed(() => props.venta ?? {});
+const ventaActualParaImprimir = ref(null);
+
+const venta = computed(
+    () => ventaActualParaImprimir.value ?? props.venta ?? {},
+);
 
 /*
 |--------------------------------------------------------------------------
@@ -936,47 +944,30 @@ const buildTicketHtml = () => {
 
                     <div class="divider"></div>
 
-                    <table class="totals-table">
+                   
+                <table class="totals-table">
+                  <tbody>
+                     ${
+                            descuentoVenta.value > 0
+                            ? `
+                    <tr>
+                        <td class="text-left">Descuento:</td>
+                        <td class="text-right">- ${formatoMoneda(descuentoVenta.value)}</td>
+                    </tr>
+                            `
+                    : ""
+                }
 
-                        <tbody>
-                            <tr v-if="descuentoVenta > 0">
-                                <td class="text-left">
-                                    Descuento: 
-                                </td>
-                                <td class="text-right">
-                                    -
-                                    {{
-                                        formatoMoneda(
-                                            descuentoVenta
-                                        )
-                                    }}
-                                </td>    
-                            </tr>
+                <tr class="total-final">
+                <td class="text-left">TOTAL A PAGAR:</td>
+                <td class="text-right">${formatoMoneda(totalVenta.value)}</td>
+                </tr>
 
-                            <tr class="total-final">
-
-                                <td class="text-left">
-                                    TOTAL A PAGAR:
-                                </td>
-
-                                <td class="text-right">
-                                    {{formatoMoneda(totalVenta)}}
-                                </td>
-
-                            </tr>
-
-                            <tr>
-                                <td
-                                    colspan="2"
-                                    class="amount-in-words"
-                                >
-                                    {{importeEnLetras.value}}
-                                </td>
-                            </tr>
-
-                        </tbody>
-
-                    </table>
+            <tr>
+                <td colspan="2" class="amount-in-words">${importeEnLetras.value}</td>
+             </tr>
+        </tbody>
+        </table>
 
                     <div class="divider"></div>
 
@@ -1063,7 +1054,47 @@ const buildTicketHtml = () => {
     `;
 };
 
+let ventanaImpresion = null;
+let colaImpresion = [];
+let indiceImpresion = 0;
+let impresionEnCurso = false;
+
+const imprimirSiguienteTicket = () => {
+    const comprobante = colaImpresion[indiceImpresion];
+
+    if (!comprobante || !ventanaImpresion) {
+        impresionEnCurso = false;
+        ventanaImpresion?.close();
+        nuevaVenta();
+        return;
+    }
+
+    ventaActualParaImprimir.value = comprobante;
+    ventanaImpresion.document.open();
+    ventanaImpresion.document.write(buildTicketHtml());
+    ventanaImpresion.document.close();
+    ventanaImpresion.focus();
+
+    setTimeout(() => {
+        ventanaImpresion?.print();
+    }, 500);
+};
+
+const terminarImpresionActual = () => {
+    indiceImpresion += 1;
+    imprimirSiguienteTicket();
+};
+
 const imprimirTicket = () => {
+    if (impresionEnCurso) {
+        return;
+    }
+
+    colaImpresion =
+        props.comprobantes.length > 0 ? props.comprobantes : [props.venta];
+    indiceImpresion = 0;
+    impresionEnCurso = true;
+
     const ancho = 800;
     const alto = 900;
 
@@ -1071,7 +1102,7 @@ const imprimirTicket = () => {
 
     const arriba = Math.max(0, (window.screen.height - alto) / 2);
 
-    const printWindow = window.open(
+    ventanaImpresion = window.open(
         "",
         "Comprobante",
         `
@@ -1084,7 +1115,8 @@ const imprimirTicket = () => {
         `,
     );
 
-    if (!printWindow) {
+    if (!ventanaImpresion) {
+        impresionEnCurso = false;
         alert(
             "El navegador bloqueó la ventana de impresión. Permite ventanas emergentes para esta aplicación.",
         );
@@ -1092,13 +1124,8 @@ const imprimirTicket = () => {
         return;
     }
 
-    printWindow.document.write(buildTicketHtml());
-    printWindow.document.close();
-    printWindow.focus();
-
-    setTimeout(() => {
-        printWindow.print();
-    }, 500);
+    ventanaImpresion.onafterprint = terminarImpresionActual;
+    imprimirSiguienteTicket();
 };
 
 /*
@@ -1121,16 +1148,8 @@ const nuevaVenta = () => {
 |--------------------------------------------------------------------------
 */
 
-const manejarFinImpresion = () => {
-    nuevaVenta();
-};
-
-onMounted(() => {
-    window.addEventListener("afterprint", manejarFinImpresion);
-});
-
 onBeforeUnmount(() => {
-    window.removeEventListener("afterprint", manejarFinImpresion);
+    ventanaImpresion?.close();
 });
 </script>
 
@@ -1139,40 +1158,29 @@ onBeforeUnmount(() => {
         <div class="p-4 md:p-6 receipt-print-scope">
             <!-- CABECERA -->
 
-            <div
-                class="flex flex-col md:flex-row md:items-center md:justify-between gap-4 mb-5"
-            >
-                <div>
-                    <h1 class="text-2xl font-bold text-slate-800">
-                        Comprobante de venta
-                    </h1>
-
-                    <p class="text-sm text-slate-500 mt-1">
-                        Boleta generada correctamente
-                    </p>
-                </div>
-
-                <div class="flex gap-2 no-print">
-                    <Button
-                        label="Volver a crear venta"
-                        icon="pi pi-plus"
-                        severity="secondary"
-                        outlined
-                        @click="nuevaVenta"
-                    />
-
-                    <Button
-                        label="Imprimir"
-                        icon="pi pi-print"
-                        @click="imprimirTicket"
-                    />
-                </div>
-            </div>
-
             <!-- TICKET -->
 
             <Card class="shadow-sm">
                 <template #content>
+                    <div
+                        class="flex flex-col md:flex-row md:items-center md:justify-between gap-4 mb-5"
+                    >
+                        <div class="flex gap-2 no-print">
+                            <Button
+                                label="Volver a crear venta"
+                                icon="pi pi-plus"
+                                severity="secondary"
+                                outlined
+                                @click="nuevaVenta"
+                            />
+
+                            <Button
+                                label="Imprimir"
+                                icon="pi pi-print"
+                                @click="imprimirTicket"
+                            />
+                        </div>
+                    </div>
                     <div class="flex justify-center">
                         <div class="ticket-container">
                             <!-- EMISOR -->
@@ -1390,6 +1398,10 @@ onBeforeUnmount(() => {
                                         </td>
                                     </tr>
 
+                                    <tr class="">
+
+                                    </tr>
+
                                     <tr class="total-final">
                                         <td class="text-left">
                                             TOTAL A PAGAR:
@@ -1461,7 +1473,6 @@ onBeforeUnmount(() => {
                             <!-- PIE -->
 
                             <div class="footer text-center">
-
                                 <div>
                                     Representación impresa de la Boleta de Venta
                                     Electrónica.
@@ -1531,8 +1542,8 @@ onBeforeUnmount(() => {
 
 .logo {
     display: block;
-    max-width: 30mm;
-    max-height: 16mm;
+    max-width: 45mm;
+    max-height: 25mm;
     width: auto;
     height: auto;
     margin: 0 auto 2px;
