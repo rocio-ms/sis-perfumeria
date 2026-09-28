@@ -1,0 +1,1 @@
+import{I as e,Mt as t,N as n,d as r}from"./runtime-core.esm-bundler-C8qHIgUv.js";var i={class:`block font-medium text-sm text-gray-700`},a={key:0},o={key:1},s={__name:`InputLabel`,props:{value:String},setup(s){return(c,l)=>(n(),r(`label`,i,[s.value?(n(),r(`span`,a,t(s.value),1)):(n(),r(`span`,o,[e(c.$slots,`default`)]))]))}};export{s as t};
