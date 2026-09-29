@@ -7,7 +7,6 @@ import DataTableBase from "@/Components/DataTableBase.vue";
 import Card from "@/Components/Card.vue";
 import Form from "./Form.vue";
 
-
 import Swal from "sweetalert2";
 defineOptions({
     layout: AppLayout,
@@ -31,6 +30,9 @@ const props = defineProps({
         }),
     },
 });
+
+const mostrarForm = ref(false);
+const cajaSeleccionada = ref(null);
 
 const home = ref({
     icon: "pi pi-home",
@@ -101,6 +103,8 @@ const cargarCajas = computed(() => {
 });
 
 const abrirForm = () => {
+
+    console.log("🔥 SE EJECUTÓ abrirForm");
     cajaSeleccionada.value = null;
     mostrarForm.value = true;
 };
@@ -152,8 +156,6 @@ const cerrarForm = () => {
     mostrarForm.value = false;
     cajaSeleccionada.value = null;
 };
-
-
 </script>
 
 <template>
@@ -188,12 +190,19 @@ const cerrarForm = () => {
                     titleButton="Nueva caja"
                     :show-view="false"
                     :show-delete="false"
-                    :show-close="false"     
+                    :show-close="false"
                     :mostrarCrear="true"
+                    @nuevo="abrirForm"
                     @editar="editarCaja"
                 />
             </template>
         </Card>
-    </v-container>
 
+        <Form
+            v-model:visible="mostrarForm"
+            :caja="cajaSeleccionada"
+            @saved="formularioGuardado"
+            @cancel="cerrarForm"
+        />
+    </v-container>
 </template>

@@ -20,11 +20,20 @@ import { usePage } from "@inertiajs/vue3";
 const page = usePage();
 
 const tienePermiso = (permiso) => {
+    console.log("=================================");
+    console.log("🔐 PERMISO SOLICITADO:", permiso);
+    console.log("👤 PERMISOS DEL USUARIO:", page.props.auth?.permissions);
+
     if (!permiso) {
+        console.log("✅ No se solicitó permiso → PERMITIDO");
         return true;
     }
 
-    return (page.props.auth?.permissions ?? []).includes(permiso);
+    const permitido = (page.props.auth?.permissions ?? []).includes(permiso);
+
+    console.log(permitido ? "✅ PERMISO CONCEDIDO" : "❌ PERMISO DENEGADO");
+
+    return permitido;
 };
 
 const props = defineProps({
@@ -109,6 +118,7 @@ const props = defineProps({
 */
 
 const emit = defineEmits(["nuevo", "ver", "editar", "eliminar", "cerrar"]);
+
 
 /*
 |--------------------------------------------------------------------------
@@ -492,7 +502,11 @@ const estadoTag = (valor, columna) => {
                 />
 
                 <Button
-                    v-if="mostrarCrear && titleButton && tienePermiso(createPermission)"
+                    v-if="
+                        mostrarCrear &&
+                        titleButton &&
+                        tienePermiso(createPermission)
+                    "
                     :label="titleButton"
                     icon="pi pi-plus"
                     @click="emit('nuevo')"
