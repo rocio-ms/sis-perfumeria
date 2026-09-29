@@ -98,9 +98,7 @@ class HandleInertiaRequests extends Middleware
 
                 return [
                     'items' => $items,
-                    'total' => Notificacion::where('leida', false)
-                        ->where('solucionada', false)
-                        ->count(),
+                    'total' => $items->count(),
                 ];
             },
         ];

@@ -49,20 +49,19 @@ class NotificacionController extends Controller
 
         if ($request->filled('estado')) {
 
-            if ($request->estado === 'no_leidas') {
-                $query->where('leida', false);
-            }
-
-            if ($request->estado === 'leidas') {
-                $query->where('leida', true);
-            }
-
-            if ($request->estado === 'solucionadas') {
-                $query->where('solucionada', true);
-            }
-
-            if ($request->estado === 'pendientes') {
-                $query->where('solucionada', false);
+            switch ($request->estado) {
+                case 'no_leidas':
+                    $query->where('leida', false);
+                    break;
+                case 'leidas':
+                    $query->where('leida', true);
+                    break;
+                case 'pendientes':
+                    $query->where('solucionada', false);
+                    break;
+                case 'solucionadas':
+                    $query->where('solucionada', true);
+                    break;
             }
         }
 
@@ -77,6 +76,8 @@ class NotificacionController extends Controller
         */
 
         $noLeidas = Notificacion::where('leida', false)->count();
+        $pendientes = Notificacion::where('solucionada', false)->count();
+        $solucionadas = Notificacion::where('solucionada', true)->count();
 
         /*
         |--------------------------------------------------------------------------
@@ -93,6 +94,7 @@ class NotificacionController extends Controller
         return Inertia::render('Notificaciones/Index', [
             'notificaciones' => $notificaciones,
             'noLeidas' => $noLeidas,
+            'solucionadas' => $solucionadas,
             'tipos' => $tipos,
             'filters' => [
                 'search' => $request->search,

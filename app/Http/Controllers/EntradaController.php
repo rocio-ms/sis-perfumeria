@@ -11,6 +11,7 @@ use App\Models\PrecioProducto;
 use App\Models\Categoria;
 use App\Models\Marca;
 use App\Models\Kardex;
+use App\Models\Notificacion;
 use App\Models\TipoMovimiento;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
@@ -415,12 +416,24 @@ class EntradaController extends Controller
 
                 $stockNuevo = $stockAnterior + $cantidad;
 
+                // Resolver automáticamente la notificación de stock bajo
+                if ($stockNuevo > $producto->stock_minimo) {
+                    Notificacion::where('tipo', 'stock_bajo')
+                        ->where('referencia_tipo', 'Producto')
+                        ->where('referencia_id', $producto->id)
+                        ->where('solucionada', false)
+                        ->update([
+                            'solucionada' => true,
+                            'solucionada_at' => now(),
+                        ]);
+                }
+
                 //Registrar kardex
 
                 $tipoMovimiento = TipoMovimiento::where('tipo', 'entrada')
                     ->firstOrFail();
 
-                $saldoCantidad = $producto->stock_actual + $cantidad;
+                $saldoCantidad = $producto->stock_actual;
 
                 Kardex::create([
                     'producto_id' => $producto->id,
