@@ -212,7 +212,8 @@ class TiendaController extends Controller
 
         unset($validated['logo']);
 
-        $tienda->update($validated);
+        $tienda->logo_url = $validated['logo_url'];
+        $tienda->save();
 
         return redirect()
             ->route('tiendas.index')

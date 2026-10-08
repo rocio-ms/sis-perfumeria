@@ -38,11 +38,13 @@ const op = ref();
 const notificationsOpen = ref(false);
 
 const notifications = computed(() => {
-    return page.props.notificaciones?.items ?? [];
+    return (page.props.notificaciones?.items ?? []).filter(
+        (item) => !item.solucionada,
+    );
 });
 
 const unread = computed(() => {
-    return page.props.notificaciones?.total ?? 0;
+    return notifications.value.filter((item) => !item.leida).length;
 });
 
 const unreadLabel = computed(() => (unread.value > 9 ? "9+" : unread.value));
@@ -66,24 +68,65 @@ const toggleUserMenu = (event) => {
 };
 
 // Cierre de sesión
-const logout = () => {
+const logout = async () => {
     userMenu.value?.hide();
+    try {
+        const response = await fetch(route("sesiones-caja.verificar-abierta"), {
+            headers: {
+                Accept: "application/json",
+                "X-Requested-With": "XMLHttpRequest",
+            },
+            credentials: "same-origin",
+        });
 
-    Swal.fire({
-        title: "¿Cerrar sesión?",
-        text: "Vas a salir de tu cuenta.",
-        icon: "question",
-        showCancelButton: true,
-        confirmButtonText: "Sí, salir",
-        cancelButtonText: "Cancelar",
-        reverseButtons: true,
-        confirmButtonColor: "#7b1e3a",
-        cancelButtonColor: "#94a3b8",
-    }).then((result) => {
-        if (result.isConfirmed) {
-            router.post(route("logout"));
+        const data = await response.json();
+
+        if (data.abierta) {
+            Swal.fire({
+                title: "Caja abierta",
+                text: "Debes cerrar tu caja antes de cerrar sesión.",
+                icon: "warning",
+                confirmButtonText: "Ir a cerrar caja",
+                cancelButtonText: "Cancelar",
+                showCancelButton: true,
+                reverseButtons: true,
+                confirmButtonColor: "#7b1e3a",
+                cancelButtonColor: "#94a3b8",
+            }).then((result) => {
+                if (result.isConfirmed) {
+                    router.visit(route("sesiones-caja.index"));
+                }
+            });
+
+            return;
         }
-    });
+
+        Swal.fire({
+            title: "¿Cerrar sesión?",
+            text: "Vas a salir de tu cuenta.",
+            icon: "question",
+            showCancelButton: true,
+            confirmButtonText: "Sí, salir",
+            cancelButtonText: "Cancelar",
+            reverseButtons: true,
+            confirmButtonColor: "#7b1e3a",
+            cancelButtonColor: "#94a3b8",
+        }).then((result) => {
+            if (result.isConfirmed) {
+                router.post(route("logout"));
+            }
+        });
+    } catch (error) {
+        console.error("Error verificando la caja:", error);
+
+        Swal.fire({
+            title: "Error",
+            text: "No se pudo verificar el estado de la caja.",
+            icon: "error",
+            confirmButtonText: "Aceptar",
+            confirmButtonColor: "#7b1e3a",
+        });
+    }
 };
 </script>
 
@@ -702,6 +745,4 @@ const logout = () => {
 .view-all-btn:hover {
     background: #f8e9ee !important;
 }
-
-
 </style>

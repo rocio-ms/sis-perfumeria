@@ -73,6 +73,7 @@ class VentaController extends Controller
 
         return Inertia::render('Ventas/Index', [
             'ventas' => $ventas,
+            'tienda' => Tienda::first(),
             'filters' => [
                 'search' => $request->search,
             ],
@@ -84,54 +85,20 @@ class VentaController extends Controller
      */
     public function create()
     {
+        $comprobantesEmitidosIds = session()->pull(
+            'comprobantes_emitidos_ids',
+            []
+        );
+
+        $sesionCaja = SesionCaja::where('user_id', Auth::id())
+            ->where('estado', 'abierta')
+            ->first();
+
         $clientes = Cliente::where('activo', true)
             ->orderBy('numero_documento')
             ->get();
 
-        $productos = Producto::where('activo', true)
-            ->with([
-                'precioActual',
-                'lotes' => function ($query) {
-                    $query
-                        ->where('cantidad_actual', '>', 0)
-                        ->orderBy('fecha_vencimiento');
-                },
-            ])
-            ->orderBy('nombre')
-            ->get()
-            ->map(function ($producto) {
-                $precio = $producto->precioActual;
-
-                return [
-                    'id' => $producto->id,
-                    'nombre' => $producto->nombre,
-                    'codigo' => $producto->codigo,
-                    'codigo_barras' => $producto->codigo_barras,
-
-                    // Empresa y marca del producto
-                    'empresa_id' => $producto->empresa_id,
-                    'marca_id' => $producto->marca_id,
-
-                    // Stock general
-                    'stock_actual' => $producto->stock_actual,
-
-                    // Precio
-                    'precio_venta' => $precio?->precio_venta,
-                    'tiene_descuento' => $precio?->tiene_descuento ?? false,
-                    'descuento' => $precio?->descuento ?? 0,
-
-                    // Lotes disponibles
-                    'lotes' => $producto->lotes
-                        ->map(function ($lote) {
-                            return [
-                                'id' => $lote->id,
-                                'cantidad_actual' => (int) $lote->cantidad_actual,
-                                'fecha_vencimiento' => $lote->fecha_vencimiento,
-                            ];
-                        })
-                        ->values(),
-                ];
-            });
+        $productos = $this->productosParaVenta();
 
         $tiposComprobante = TipoComprobante::where('activo', true)
             ->orderBy('nombre')
@@ -140,6 +107,24 @@ class VentaController extends Controller
         $tiposPago = TipoPago::where('activo', true)
             ->orderBy('nombre')
             ->get();
+
+        $comprobantesEmitidos = empty($comprobantesEmitidosIds)
+            ? collect()
+            : Venta::whereIn('id', $comprobantesEmitidosIds)
+                ->where('activo', true)
+                ->with([
+                    'cliente',
+                    'usuario',
+                    'tipoComprobante',
+                    'tipoPago',
+                    'sesionCaja',
+                    'detalles.producto',
+                    'detalles.lote',
+                    'empresaEmisora',
+                    'serieComprobante',
+                ])
+                ->orderBy('id')
+                ->get();
 
         $sesionCaja = SesionCaja::where(
             'user_id',
@@ -154,7 +139,126 @@ class VentaController extends Controller
             'tiposComprobante' => $tiposComprobante,
             'tiposPago' => $tiposPago,
             'sesionCaja' => $sesionCaja,
+            'cajaAbierta' => $sesionCaja !== null,
+            'comprobantesEmitidos' => $comprobantesEmitidos,
+            'tienda' => Tienda::first(),
         ]);
+    }
+
+    public function buscarProductos(Request $request)
+    {
+        $validated = $request->validate([
+            'search' => ['nullable', 'string', 'max:100'],
+        ]);
+
+        return response()->json([
+            'productos' => $this->productosParaVenta(
+                trim($validated['search'] ?? '')
+            ),
+        ]);
+    }
+
+    private function productosParaVenta(string $search = '')
+    {
+        $crearConsulta = fn() => Producto::query()
+            ->select([
+                'id',
+                'codigo',
+                'codigo_barras',
+                'nombre',
+                'stock_actual',
+                'stock_minimo',
+                'imagen_url',
+                'empresa_id',
+                'marca_id',
+            ])
+            ->where('activo', true)
+            ->where('stock_actual', '>', 0)
+            ->with([
+                'precioActual',
+                'lotes' => function ($query) {
+                    $query
+                        ->where('cantidad_actual', '>', 0)
+                        ->orderBy('fecha_vencimiento');
+                },
+            ]);
+
+        $productos = collect();
+
+        if ($search !== '') {
+            $termino = addcslashes($search, '\\%_');
+            $prefijo = $termino . '%';
+
+            $productoExacto = $crearConsulta()
+                ->where(function ($query) use ($search) {
+                    $query
+                        ->where('codigo', $search)
+                        ->orWhere('codigo_barras', $search);
+                })
+                ->first();
+
+            if ($productoExacto) {
+                $productos = collect([$productoExacto]);
+            } else {
+                $productos = $crearConsulta()
+                    ->where(function ($query) use ($prefijo) {
+                        $query
+                            ->where('codigo', 'like', $prefijo)
+                            ->orWhere('codigo_barras', 'like', $prefijo);
+                    })
+                    ->orderBy('codigo')
+                    ->limit(24)
+                    ->get();
+
+                if ($productos->isEmpty()) {
+                    $productos = $crearConsulta()
+                        ->where('nombre', 'like', $prefijo)
+                        ->orderBy('nombre')
+                        ->limit(24)
+                        ->get();
+                }
+
+                if ($productos->isEmpty() && mb_strlen($search) >= 3) {
+                    $productos = $crearConsulta()
+                        ->where('nombre', 'like', '%' . $termino . '%')
+                        ->orderBy('nombre')
+                        ->limit(24)
+                        ->get();
+                }
+            }
+        } else {
+            $productos = $crearConsulta()
+                ->orderBy('nombre')
+                ->limit(24)
+                ->get();
+        }
+
+        return $productos
+            ->map(function ($producto) {
+                $precio = $producto->precioActual;
+                $lote = $producto->lotes->first();
+
+                return [
+                    'id' => $producto->id,
+                    'nombre' => $producto->nombre,
+                    'codigo' => $producto->codigo,
+                    'codigo_barras' => $producto->codigo_barras,
+                    'empresa_id' => $producto->empresa_id,
+                    'marca_id' => $producto->marca_id,
+                    'stock_actual' => $producto->stock_actual,
+                    'stock_minimo' => $producto->stock_minimo,
+                    'imagen_url' => $producto->imagen_url,
+                    'precio_venta' => $precio?->precio_venta,
+                    'tiene_descuento' => $precio?->tiene_descuento ?? false,
+                    'descuento' => $precio?->descuento ?? 0,
+                    'lotes' => $lote ? [[
+                        'id' => $lote->id,
+                        'cantidad_actual' => (int) $lote->cantidad_actual,
+                        'fecha_vencimiento' => $lote->fecha_vencimiento,
+                    ]] : [],
+                ];
+            })
+            ->values();
     }
 
     /**
@@ -166,6 +270,58 @@ class VentaController extends Controller
             'cliente_id' => [
                 'nullable',
                 'exists:clientes,id',
+            ],
+
+            'cliente' => [
+                'nullable',
+                'array',
+            ],
+
+            'cliente.tipo_documento' => [
+                'nullable',
+                'in:DNI,RUC',
+            ],
+
+            'cliente.numero_documento' => [
+                'nullable',
+                'string',
+                'max:20',
+            ],
+
+            'cliente.nombre' => [
+                'nullable',
+                'string',
+                'max:255',
+            ],
+
+            'cliente.razon_social_nombre' => [
+                'nullable',
+                'string',
+                'max:255',
+            ],
+
+            'cliente.ap_paterno' => [
+                'nullable',
+                'string',
+                'max:100',
+            ],
+
+            'cliente.ap_materno' => [
+                'nullable',
+                'string',
+                'max:100',
+            ],
+
+            'cliente.nombres' => [
+                'nullable',
+                'string',
+                'max:100',
+            ],
+
+            'cliente.direccion' => [
+                'nullable',
+                'string',
+                'max:255',
             ],
 
             'sesion_caja_id' => [
@@ -252,37 +408,13 @@ class VentaController extends Controller
         |--------------------------------------------------------------------------
         */
 
-        $clienteId = $validated['cliente_id'] ?? null;
-
-        if (!$clienteId) {
-            $cliente = Cliente::firstOrCreate(
-                [
-                    'numero_documento' => '00000000',
-                ],
-                [
-                    'tipo_documento' => 'DNI',
-                    'nombre' => 'CLIENTES VARIOS',
-                    'razon_social_nombre' => 'CLIENTE ANÓNIMO',
-                    'ap_paterno' => '',
-                    'ap_materno' => '',
-                    'nombres' => '',
-                    'activo' => true,
-                ]
-            );
-
-            $clienteId = $cliente->id;
-        }
-
         /*
         |--------------------------------------------------------------------------
         | TRANSACCIÓN
         |--------------------------------------------------------------------------
         */
 
-        $venta = DB::transaction(function () use (
-            $validated,
-            $clienteId
-        ) {
+        $venta = DB::transaction(function () use ($validated) {
             /*
             |--------------------------------------------------------------------------
             | TIENDA
@@ -296,7 +428,100 @@ class VentaController extends Controller
                     'No existe una tienda configurada.'
                 );
             }
+            // =====================================================
+            // CLIENTE DE LA VENTA
+            // =====================================================
 
+            $clienteId = $validated['cliente_id'] ?? null;
+
+            if ($clienteId) {
+
+                // Cliente seleccionado por el vendedor
+                $cliente = Cliente::where('id', $clienteId)
+                    ->where('activo', true)
+                    ->first();
+
+                if (!$cliente) {
+                    throw new \Exception(
+                        'El cliente seleccionado no existe o se encuentra inactivo.'
+                    );
+                }
+
+                $clienteId = $cliente->id;
+            } elseif (
+                !empty($validated['cliente']['numero_documento'])
+            ) {
+
+                $datosCliente = $validated['cliente'];
+
+                // Buscar si ya existe por número de documento
+                $cliente = Cliente::where(
+                    'numero_documento',
+                    $datosCliente['numero_documento']
+                )->first();
+
+                // Si no existe, crearlo
+                if (!$cliente) {
+
+                    $nombreCompleto = trim(
+                        (string) ($datosCliente['nombre'] ?? '')
+                    );
+
+                    $razonSocialNombre = trim(
+                        (string) ($datosCliente['razon_social_nombre'] ?? '')
+                    );
+
+                    if ($razonSocialNombre === '') {
+                        $razonSocialNombre = $nombreCompleto;
+                    }
+
+                    $cliente = Cliente::create([
+                        'tipo_documento' =>
+                        $datosCliente['tipo_documento'] ?? 'DNI',
+
+                        'numero_documento' =>
+                        $datosCliente['numero_documento'],
+
+                        'razon_social_nombre' =>
+                        $razonSocialNombre,
+
+                        'ap_paterno' =>
+                        $datosCliente['ap_paterno'] ?? '',
+
+                        'ap_materno' =>
+                        $datosCliente['ap_materno'] ?? '',
+
+                        'nombres' =>
+                        $datosCliente['nombres'] ?? '',
+
+                        'direccion' =>
+                        $datosCliente['direccion'] ?? null,
+
+                        'activo' => true,
+                    ]);
+                }
+
+                $clienteId = $cliente->id;
+            } else {
+
+                // Si no se seleccionó cliente, usar/crear CLIENTES VARIOS
+                $cliente = Cliente::firstOrCreate(
+                    [
+                        'numero_documento' => '00000000'
+                    ],
+                    [
+                        'tipo_documento' => 'DNI',
+                        'nombre' => 'CLIENTES VARIOS',
+                        'razon_social_nombre' => 'CLIENTES VARIOS',
+                        'ap_paterno' => '',
+                        'ap_materno' => '',
+                        'nombres' => 'CLIENTES VARIOS',
+                        'activo' => true,
+                    ]
+                );
+
+                $clienteId = $cliente->id;
+            }
             /*
             |--------------------------------------------------------------------------
             | TIPO DE COMPROBANTE
@@ -336,10 +561,7 @@ class VentaController extends Controller
             |--------------------------------------------------------------------------
             */
 
-            if (
-                $productosVenta->count() !==
-                $productoIds->count()
-            ) {
+            if ($productosVenta->count() !== $productoIds->count()) {
                 throw new \Exception(
                     'Uno o más productos de la venta no existen.'
                 );
@@ -405,32 +627,28 @@ class VentaController extends Controller
             | Venta mixta.
             |
             */
-
             $detallesPorEmpresa = collect($validated['detalles'])
                 ->groupBy(function ($detalle) use ($productosVenta) {
-                    return $productosVenta->firstWhere(
+
+                    $producto = $productosVenta->firstWhere(
                         'id',
                         $detalle['producto_id']
-                    )->empresa_id;
+                    );
+
+                    return $producto->empresa_id;
                 });
 
             $ventas = collect();
             $grupoVenta = (string) Str::uuid();
 
-            $detallesPorMarca = collect($validated['detalles'])
-                ->groupBy(function ($detalle) use ($productosVenta) {
-                    return $productosVenta->firstWhere(
-                        'id',
-                        $detalle['producto_id']
-                    )->marca_id;
-                });
 
-            foreach ($detallesPorMarca as $detallesEmpresa) {
-                $empresaEmisoraId = $productosVenta->firstWhere(
+            foreach ($detallesPorEmpresa as $detallesEmpresa) {
+                $primerProducto = $productosVenta->firstWhere(
                     'id',
                     $detallesEmpresa->first()['producto_id']
-                )->empresa_id;
+                );
 
+                $empresaEmisoraId = $primerProducto->empresa_id;
                 /*
             |--------------------------------------------------------------------------
             | BUSCAR SERIE DEL COMPROBANTE
@@ -447,7 +665,7 @@ class VentaController extends Controller
             |
             */
 
-                $serieQuery = SerieComprobante::where(
+                $serieComprobante = SerieComprobante::where(
                     'tienda_id',
                     $tienda->id
                 )
@@ -455,33 +673,19 @@ class VentaController extends Controller
                         'tipo_comprobante_id',
                         $validated['tipo_comprobante_id']
                     )
-                    ->where('activo', true);
-
-                $serieQuery->where(
-                    'empresa_id',
-                    $empresaEmisoraId
-                );
-
-                /*
-            |--------------------------------------------------------------------------
-            | BLOQUEAR SERIE
-            |--------------------------------------------------------------------------
-            |
-            | Evita que dos ventas simultáneas obtengan
-            | el mismo correlativo.
-            |
-            */
-
-
-                $serieComprobante = $serieQuery
+                    ->where(
+                        'empresa_id',
+                        $empresaEmisoraId
+                    )
+                    ->where('activo', true)
                     ->lockForUpdate()
                     ->first();
 
                 /*
-            |--------------------------------------------------------------------------
-            | VALIDAR SERIE
-            |--------------------------------------------------------------------------
-            */
+                |--------------------------------------------------------------------------
+                | VALIDAR SERIE
+                |--------------------------------------------------------------------------
+                */
 
                 if (!$serieComprobante) {
                     throw new \Exception(
@@ -872,6 +1076,9 @@ class VentaController extends Controller
                         'descripcion' =>
                         $detalle['descripcion']
                             ?? $producto->nombre,
+
+                        'empresa_id' =>
+                        $producto->empresa_id,
                     ]);
 
                     /*
@@ -1035,10 +1242,9 @@ class VentaController extends Controller
         |--------------------------------------------------------------------------
         */
 
-        return redirect()->route(
-            'ventas.comprobante',
-            $venta->first()->id
-        );
+        return redirect()
+            ->route('ventas.create')
+            ->with('comprobantes_emitidos_ids', $venta->pluck('id')->all());
     }
 
     /**
@@ -1230,21 +1436,23 @@ class VentaController extends Controller
             'serieComprobante',
         ]);
 
-        $comprobantes = Venta::where('grupo_venta', $venta->grupo_venta)
-            ->where('activo', true)
-            ->with([
-                'cliente',
-                'usuario',
-                'tipoComprobante',
-                'tipoPago',
-                'sesionCaja',
-                'detalles.producto',
-                'detalles.lote',
-                'empresaEmisora',
-                'serieComprobante',
-            ])
-            ->orderBy('id')
-            ->get();
+        $comprobantes = $venta->grupo_venta === null
+            ? collect([$venta])
+            : Venta::where('grupo_venta', $venta->grupo_venta)
+                ->where('activo', true)
+                ->with([
+                    'cliente',
+                    'usuario',
+                    'tipoComprobante',
+                    'tipoPago',
+                    'sesionCaja',
+                    'detalles.producto',
+                    'detalles.lote',
+                    'empresaEmisora',
+                    'serieComprobante',
+                ])
+                ->orderBy('id')
+                ->get();
 
         $tienda = Tienda::first();
 

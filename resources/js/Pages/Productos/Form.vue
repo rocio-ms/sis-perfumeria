@@ -73,7 +73,7 @@ const subtitulo = computed(() => {
         : "Registra la información del producto para incorporarlo en tu inventario";
 });
 
-const descripcionLength = computed(() => form.descripcion?.length ?? 0);
+const descripcionLength = computed(() => form.nombre?.length ?? 0);
 
 //Limpiar form
 const limpiarFormulario = () => {
@@ -296,20 +296,27 @@ const cerrar = () => {
             </div>
 
             <!-- Nombre -->
+
             <div class="flex flex-col gap-1 col-span-2">
                 <FloatLabel variant="on">
-                    <InputText
-                        id="nombre"
+                    <Textarea
+                        id="descripcion"
                         v-model="form.nombre"
                         class="w-full"
+                        rows="3"
                         :invalid="!!form.errors.nombre"
                     />
 
-                    <label for="nombre">
-                        Nombre
-                        <span class="text-red-500">*</span>
+                    <label for="descripcion">
+                        Descripción <span class="text-red-500">*</span>
                     </label>
                 </FloatLabel>
+
+                <div class="flex justify-end">
+                    <small class="text-gray-400">
+                        {{ descripcionLength }} / 255
+                    </small>
+                </div>
 
                 <small v-if="form.errors.nombre" class="text-red-500">
                     {{ form.errors.nombre }}
@@ -515,31 +522,6 @@ const cerrar = () => {
 
                 <small v-if="form.errors.volumen_ml" class="text-red-500">
                     {{ form.errors.volumen_ml }}
-                </small>
-            </div>
-
-            <!-- Descripción -->
-            <div class="flex flex-col gap-1 col-span-2">
-                <FloatLabel variant="on">
-                    <Textarea
-                        id="descripcion"
-                        v-model="form.descripcion"
-                        class="w-full"
-                        rows="3"
-                        :invalid="!!form.errors.descripcion"
-                    />
-
-                    <label for="descripcion"> Descripción </label>
-                </FloatLabel>
-
-                <div class="flex justify-end">
-                    <small class="text-gray-400">
-                        {{ descripcionLength }} / 255
-                    </small>
-                </div>
-
-                <small v-if="form.errors.descripcion" class="text-red-500">
-                    {{ form.errors.descripcion }}
                 </small>
             </div>
 

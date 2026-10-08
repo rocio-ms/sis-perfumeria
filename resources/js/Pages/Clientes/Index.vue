@@ -43,10 +43,10 @@ const mostrarShow = ref(false);
 // ============================================================
 // COLUMNAS
 // ============================================================
-
+console.log("DATOS DE LOS CLIENTES: ",props.clientes.data);
 const columns = [
     {
-        field: "tipo_documento.nombre",
+        field: "tipo_documento",
         header: "Tipo documento",
     },
     {
@@ -54,16 +54,8 @@ const columns = [
         header: "N.º documento",
     },
     {
-        field: "nombre_completo",
+        field: "razon_social_nombre",
         header: "Cliente",
-    },
-    {
-        field: "telefono",
-        header: "Teléfono",
-    },
-    {
-        field: "correo",
-        header: "Correo",
     },
     {
         field: "activo",
@@ -239,9 +231,10 @@ const eliminarCliente = async (cliente) => {
                     :columns="columns"
                     :loading="false"
                     title-button="Nuevo cliente"
-                    :show-view="true"
+                    :show-view="false"
                     :show-delete="false"
                     :mostrarCrear="false"
+                    :show-edit="false"
                     @nuevo="abrirForm"
                     @editar="editarCliente"
                     @ver="verCliente"

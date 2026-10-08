@@ -1,9 +1,10 @@
 <script setup>
-import { computed, onBeforeUnmount, ref } from "vue";
+import { computed } from "vue";
 import { router } from "@inertiajs/vue3";
 
 import AppLayout from "@/Layouts/AppLayout.vue";
 import Card from "@/Components/Card.vue";
+import ComprobanteTicket from "./ComprobanteTicket.vue";
 import Button from "primevue/button";
 
 const props = defineProps({
@@ -61,11 +62,22 @@ const ubicacionTienda = computed(() => {
 |--------------------------------------------------------------------------
 */
 
-const ventaActualParaImprimir = ref(null);
+const venta = computed(() => props.venta ?? {});
 
-const venta = computed(
-    () => ventaActualParaImprimir.value ?? props.venta ?? {},
-);
+const comprobantesAdicionales = computed(() => {
+    const ids = new Set([String(props.venta?.id ?? "")]);
+
+    return props.comprobantes.filter((comprobante) => {
+        const id = String(comprobante.id ?? "");
+
+        if (!id || ids.has(id)) {
+            return false;
+        }
+
+        ids.add(id);
+        return true;
+    });
+});
 
 /*
 |--------------------------------------------------------------------------
@@ -185,6 +197,10 @@ const numeroComprobante = computed(() => {
 */
 
 const cliente = computed(() => venta.value.cliente ?? null);
+
+console.log("VENTA COMPLETA:", venta.value);
+console.log("CLIENTE RECIBIDO:", venta.value.cliente);
+console.log("CLIENTE ID:", venta.value.cliente_id);
 
 /*
 |--------------------------------------------------------------------------
@@ -541,592 +557,7 @@ const nombreFormaPago = computed(() => {
     );
 });
 
-/*
-|--------------------------------------------------------------------------
-| IMPRESIÓN
-|--------------------------------------------------------------------------
-*/
-
-const buildTicketHtml = () => {
-    const logoHtml = logoUrl.value
-        ? `<img src="${logoUrl.value}" class="logo" alt="Logo de la tienda" />`
-        : "";
-
-    const detallesHtml = detalles.value.length
-        ? detalles.value
-              .map((item) => {
-                  const nombre = descripcionProducto(item);
-
-                  const cantidad = cantidadProducto(item).toFixed(2);
-
-                  const pUnit = formatoMoneda(precioUnitario(item));
-
-                  const subtotal = formatoMoneda(subtotalDetalle(item));
-
-                  return `
-                    <tr>
-                        <td colspan="3">
-                            <span class="item-name">
-                                ${nombre}
-                            </span>
-
-                            <span class="item-calc">
-                                ${cantidad} x ${pUnit}
-                            </span>
-                        </td>
-                    </tr>
-
-                    <tr class="item-totals-row">
-                        <td></td>
-
-                        <td class="text-right">
-                            ${pUnit}
-                        </td>
-
-                        <td class="text-right bold-text">
-                            ${subtotal}
-                        </td>
-                    </tr>
-                `;
-              })
-              .join("")
-        : `<tr>
-                <td colspan="3" class="text-center">
-                    No hay productos registrados.
-                </td>
-           </tr>`;
-
-    return `
-        <html>
-            <head>
-                <title>Comprobante</title>
-
-                <style>
-                    html, body {
-                        margin: 0;
-                        padding: 0;
-                        background: #fff;
-                        font-family: 'Courier New', Courier, monospace;
-                    }
-
-                    body {
-                        display: flex;
-                        align-items: center;
-                        justify-content: center;
-                        min-height: 100vh;
-                    }
-
-                    .ticket-container {
-                        width: 72mm;
-                        max-width: 72mm;
-                        min-width: 72mm;
-                        background: #ffffff;
-                        color: #000;
-                        padding: 4mm;
-                        box-sizing: border-box;
-                        font-size: 11px;
-                        line-height: 1.2;
-                    }
-
-                    .text-center {
-                        text-align: center;
-                    }
-
-                    .text-right {
-                        text-align: right;
-                    }
-
-                    .text-left {
-                        text-align: left;
-                    }
-
-                    .bold-text {
-                        font-weight: bold;
-                    }
-
-                    .text-md {
-                        font-size: 13px;
-                    }
-
-                    .divider {
-                        border-top: 1px dashed #000;
-                        margin: 5px 0;
-                    }
-
-                    .double-divider {
-                        border-top: 2px double #000;
-                        margin: 5px 0;
-                    }
-
-                    .logo {
-                        display: block;
-                        max-width: 30mm;
-                        max-height: 16mm;
-                        width: auto;
-                        height: auto;
-                        margin: 0 auto 2px;
-                    }
-
-                    .store-name {
-                        font-size: 18px;
-                        font-weight: bold;
-                        text-transform: uppercase;
-                        word-break: break-word;
-                    }
-
-                    .store-info {
-                        font-size: 10px;
-                        word-break: break-word;
-                    }
-
-                    .ticket-title {
-                        font-size: 12px;
-                        font-weight: bold;
-                        line-height: 1.2;
-                    }
-
-                    .info-table,
-                    .totals-table,
-                    .items-table {
-                        width: 100%;
-                        border-collapse: collapse;
-                        font-size: 11px;
-                        table-layout: fixed;
-                    }
-
-                    .info-table td {
-                        padding: 1px 0;
-                        vertical-align: top;
-                        word-break: break-word;
-                    }
-
-                    .info-table td:first-child {
-                        width: 35%;
-                    }
-
-                    .info-table td:last-child {
-                        width: 65%;
-                    }
-
-                    .items-table th {
-                        border-bottom: 1px solid #000;
-                        padding-bottom: 2px;
-                        font-weight: bold;
-                    }
-
-                    .items-table th:first-child {
-                        width: 50%;
-                    }
-
-                    .items-table th:nth-child(2) {
-                        width: 23%;
-                    }
-
-                    .items-table th:nth-child(3) {
-                        width: 27%;
-                    }
-
-                    .item-name {
-                        display: block;
-                        font-weight: bold;
-                        word-break: break-word;
-                    }
-
-                    .item-calc {
-                        display: block;
-                        font-size: 10px;
-                        color: #333;
-                        word-break: break-word;
-                    }
-
-                    .item-totals-row td {
-                        padding-bottom: 4px;
-                    }
-
-                    .totals-table td {
-                        padding: 1px 0;
-                    }
-
-                    .total-final {
-                        font-size: 14px;
-                        font-weight: bold;
-                    }
-
-                    .amount-in-words {
-                        padding-top: 3px !important;
-                        font-size: 9px;
-                        line-height: 1.25;
-                        text-align: left;
-                        overflow-wrap: anywhere;
-                    }
-
-                    .border-top-dashed {
-                        border-top: 1px dashed #000;
-                    }
-
-
-                    @page {
-                        size: 80mm auto;
-                        margin: 0;
-                    }
-
-                    @media print {
-                        body {
-                            margin: 0;
-                        }
-                    }
-                </style>
-            </head>
-
-            <body>
-                <div class="ticket-container">
-
-                    <div class="header text-center">
-
-                        ${logoHtml}
-
-                        <div class="store-name">
-                            ${nombreTienda.value}
-                        </div>
-
-                        ${
-                            !esVentaMixta.value &&
-                            razonSocialEmisor.value &&
-                            razonSocialEmisor.value !== nombreTienda.value
-                                ? `<div class="store-info">
-                                    ${razonSocialEmisor.value}
-                                   </div>`
-                                : ""
-                        }
-
-                        <div class="store-info">
-
-                            ${
-                                rucEmisor.value
-                                    ? `RUC: ${rucEmisor.value}<br />`
-                                    : ""
-                            }
-
-                            ${
-                                direccionEmisor.value
-                                    ? `${direccionEmisor.value}<br />`
-                                    : ""
-                            }
-
-                            ${
-                                ubicacionTienda.value
-                                    ? `${ubicacionTienda.value}<br />`
-                                    : ""
-                            }
-
-                            ${
-                                tienda.value.ubigeo
-                                    ? `Ubigeo: ${tienda.value.ubigeo}<br />`
-                                    : ""
-                            }
-
-                            ${
-                                telefonoEmisor.value
-                                    ? `Teléfono: ${telefonoEmisor.value}<br />`
-                                    : ""
-                            }
-
-                        </div>
-                    </div>
-
-                    <div class="divider"></div>
-
-                    <div class="text-center">
-
-                        <div class="ticket-title">
-                            ${
-                                venta.value.tipo_comprobante?.nombre ||
-                                venta.value.tipoComprobante?.nombre ||
-                                "BOLETA DE VENTA ELECTRÓNICA"
-                            }
-                        </div>
-
-                        <div class="bold-text text-md">
-                            ${numeroComprobante.value}
-                        </div>
-
-                    </div>
-
-                    <div class="divider"></div>
-
-                    <table class="info-table">
-                        <tbody>
-
-                            <tr>
-                                <td class="bold-text">
-                                    Fecha/Hora:
-                                </td>
-
-                                <td>
-                                    ${fechaFormateada.value}
-                                </td>
-                            </tr>
-
-                            <tr>
-                                <td class="bold-text">
-                                    Cajero/a:
-                                </td>
-
-                                <td>
-                                    ${nombreCajero.value}
-                                </td>
-                            </tr>
-
-                            <tr>
-                                <td class="bold-text">
-                                    Cliente:
-                                </td>
-
-                                <td>
-                                    ${nombreCliente.value}
-                                </td>
-                            </tr>
-
-                            <tr>
-                                <td class="bold-text">
-                                    ${tipoDocumentoCliente.value}:
-                                </td>
-
-                                <td>
-                                    ${numeroDocumentoCliente.value}
-                                </td>
-                            </tr>
-
-                            ${
-                                direccionCliente.value
-                                    ? `
-                                        <tr>
-                                            <td class="bold-text">
-                                                Dirección:
-                                            </td>
-
-                                            <td>
-                                                ${direccionCliente.value}
-                                            </td>
-                                        </tr>
-                                    `
-                                    : ""
-                            }
-
-                        </tbody>
-                    </table>
-
-                    <div class="double-divider"></div>
-
-                    <table class="items-table">
-
-                        <thead>
-                            <tr>
-                                <th class="text-left">
-                                    Cant. Descrip.
-                                </th>
-
-                                <th class="text-right">
-                                    P.Unit
-                                </th>
-
-                                <th class="text-right">
-                                    Total
-                                </th>
-                            </tr>
-                        </thead>
-
-                        <tbody>
-                            ${detallesHtml}
-                        </tbody>
-
-                    </table>
-
-                    <div class="divider"></div>
-
-                   
-                <table class="totals-table">
-                  <tbody>
-                     ${
-                            descuentoVenta.value > 0
-                            ? `
-                    <tr>
-                        <td class="text-left">Descuento:</td>
-                        <td class="text-right">- ${formatoMoneda(descuentoVenta.value)}</td>
-                    </tr>
-                            `
-                    : ""
-                }
-
-                <tr class="total-final">
-                <td class="text-left">TOTAL A PAGAR:</td>
-                <td class="text-right">${formatoMoneda(totalVenta.value)}</td>
-                </tr>
-
-            <tr>
-                <td colspan="2" class="amount-in-words">${importeEnLetras.value}</td>
-             </tr>
-        </tbody>
-        </table>
-
-                    <div class="divider"></div>
-
-                    <div class="payment-methods">
-
-                        <div class="bold-text text-left">
-                            Forma de Pago:
-                        </div>
-
-                        <table class="info-table">
-
-                            <tbody>
-
-                                <tr>
-                                    <td>
-                                        - ${nombreFormaPago.value}:
-                                    </td>
-
-                                    <td class="text-right">
-                                        ${formatoMoneda(totalVenta.value)}
-                                    </td>
-                                </tr>
-
-                                ${
-                                    montoRecibido.value > 0
-                                        ? `
-                                            <tr class="border-top-dashed">
-                                                <td class="bold-text">
-                                                    - Entregado:
-                                                </td>
-
-                                                <td class="text-right bold-text">
-                                                    ${formatoMoneda(
-                                                        montoRecibido.value,
-                                                    )}
-                                                </td>
-                                            </tr>
-                                        `
-                                        : ""
-                                }
-
-                                ${
-                                    vuelto.value > 0
-                                        ? `
-                                            <tr>
-                                                <td class="bold-text">
-                                                    - Vuelto:
-                                                </td>
-
-                                                <td class="text-right bold-text">
-                                                    ${formatoMoneda(
-                                                        vuelto.value,
-                                                    )}
-                                                </td>
-                                            </tr>
-                                        `
-                                        : ""
-                                }
-
-                            </tbody>
-
-                        </table>
-
-                    </div>
-
-                    <div class="double-divider"></div>
-
-                    <div class="footer text-center">
-
-                        <div>
-                            Representación impresa de la Boleta de Venta
-                            Electrónica.
-                        </div>
-
-                        <div class="bold-text mt-1">
-                            ¡Gracias por su compra!
-                        </div>
-
-                    </div>
-
-                </div>
-            </body>
-        </html>
-    `;
-};
-
-let ventanaImpresion = null;
-let colaImpresion = [];
-let indiceImpresion = 0;
-let impresionEnCurso = false;
-
-const imprimirSiguienteTicket = () => {
-    const comprobante = colaImpresion[indiceImpresion];
-
-    if (!comprobante || !ventanaImpresion) {
-        impresionEnCurso = false;
-        ventanaImpresion?.close();
-        nuevaVenta();
-        return;
-    }
-
-    ventaActualParaImprimir.value = comprobante;
-    ventanaImpresion.document.open();
-    ventanaImpresion.document.write(buildTicketHtml());
-    ventanaImpresion.document.close();
-    ventanaImpresion.focus();
-
-    setTimeout(() => {
-        ventanaImpresion?.print();
-    }, 500);
-};
-
-const terminarImpresionActual = () => {
-    indiceImpresion += 1;
-    imprimirSiguienteTicket();
-};
-
-const imprimirTicket = () => {
-    if (impresionEnCurso) {
-        return;
-    }
-
-    colaImpresion =
-        props.comprobantes.length > 0 ? props.comprobantes : [props.venta];
-    indiceImpresion = 0;
-    impresionEnCurso = true;
-
-    const ancho = 800;
-    const alto = 900;
-
-    const izquierda = Math.max(0, (window.screen.width - ancho) / 2);
-
-    const arriba = Math.max(0, (window.screen.height - alto) / 2);
-
-    ventanaImpresion = window.open(
-        "",
-        "Comprobante",
-        `
-            width=${ancho},
-            height=${alto},
-            left=${izquierda},
-            top=${arriba},
-            resizable=yes,
-            scrollbars=yes
-        `,
-    );
-
-    if (!ventanaImpresion) {
-        impresionEnCurso = false;
-        alert(
-            "El navegador bloqueó la ventana de impresión. Permite ventanas emergentes para esta aplicación.",
-        );
-
-        return;
-    }
-
-    ventanaImpresion.onafterprint = terminarImpresionActual;
-    imprimirSiguienteTicket();
-};
+const imprimirTicket = () => window.print();
 
 /*
 |--------------------------------------------------------------------------
@@ -1142,15 +573,6 @@ const nuevaVenta = () => {
     });
 };
 
-/*
-|--------------------------------------------------------------------------
-| REDIRECCIÓN DESPUÉS DE IMPRIMIR
-|--------------------------------------------------------------------------
-*/
-
-onBeforeUnmount(() => {
-    ventanaImpresion?.close();
-});
 </script>
 
 <template>
@@ -1163,7 +585,7 @@ onBeforeUnmount(() => {
             <Card class="shadow-sm">
                 <template #content>
                     <div
-                        class="flex flex-col md:flex-row md:items-center md:justify-between gap-4 mb-5"
+                        class="flex flex-col md:flex-row md:items-center md:justify-between gap-4 mb-5 no-print"
                     >
                         <div class="flex gap-2 no-print">
                             <Button
@@ -1182,6 +604,7 @@ onBeforeUnmount(() => {
                         </div>
                     </div>
                     <div class="flex justify-center">
+                        <div class="receipt-list">
                         <div class="ticket-container">
                             <!-- EMISOR -->
 
@@ -1483,6 +906,18 @@ onBeforeUnmount(() => {
                                 </div>
                             </div>
                         </div>
+
+                        <div
+                            v-for="comprobante in comprobantesAdicionales"
+                            :key="comprobante.id"
+                            class="receipt-additional-ticket"
+                        >
+                            <ComprobanteTicket
+                                :venta="comprobante"
+                                :tienda="props.tienda"
+                            />
+                        </div>
+                        </div>
                     </div>
                 </template>
             </Card>
@@ -1492,9 +927,9 @@ onBeforeUnmount(() => {
 
 <style scoped>
 .ticket-container {
-    width: 72mm;
-    max-width: 72mm;
-    min-width: 72mm;
+    width: 80mm;
+    max-width: 80mm;
+    min-width: 80mm;
     background: #ffffff;
     padding: 4mm;
     font-family: "Courier New", Courier, monospace;
@@ -1504,6 +939,17 @@ onBeforeUnmount(() => {
     box-sizing: border-box;
     box-shadow: 0 4px 14px rgba(0, 0, 0, 0.18);
     margin: 0 auto;
+}
+
+.receipt-list {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 16px;
+}
+
+.receipt-additional-ticket {
+    display: block;
 }
 
 .text-center {
@@ -1664,16 +1110,36 @@ onBeforeUnmount(() => {
     body {
         margin: 0 !important;
         padding: 0 !important;
+        height: auto !important;
+        min-height: 0 !important;
         width: 80mm !important;
         background: #ffffff !important;
     }
 
+    :global(.v-application),
+    :global(.v-application__wrap),
+    :global(.v-main),
+    :global(.page-content) {
+        display: block !important;
+        height: auto !important;
+        min-height: 0 !important;
+        margin: 0 !important;
+        padding: 0 !important;
+        overflow: visible !important;
+    }
+
+    :global(.topbar),
+    :global(.v-navigation-drawer) {
+        display: none !important;
+    }
+
     @page {
-        size: 80mm auto;
+        size: 80mm 200mm;
         margin: 0;
     }
 
     .receipt-print-scope {
+        position: static !important;
         width: 80mm !important;
         min-width: 80mm !important;
         max-width: 80mm !important;
@@ -1681,6 +1147,12 @@ onBeforeUnmount(() => {
         padding: 0 !important;
         background: #ffffff !important;
         box-shadow: none !important;
+    }
+
+    .receipt-print-scope :deep(.p-card-body),
+    .receipt-print-scope :deep(.p-card-content) {
+        margin: 0 !important;
+        padding: 0 !important;
     }
 
     .receipt-print-scope > div,
@@ -1694,17 +1166,27 @@ onBeforeUnmount(() => {
     }
 
     .ticket-container {
-        width: 72mm !important;
-        max-width: 72mm !important;
-        min-width: 72mm !important;
+        width: 80mm !important;
+        max-width: 80mm !important;
+        min-width: 80mm !important;
         margin: 0 auto !important;
-        padding: 4mm !important;
+        padding: 2mm 4mm 4mm !important;
         box-shadow: none !important;
         box-sizing: border-box;
         font-size: 11px;
         position: relative;
         left: 0;
         top: 0;
+    }
+
+    .receipt-list {
+        display: block !important;
+    }
+
+    .receipt-additional-ticket {
+        display: block;
+        break-before: page;
+        page-break-before: always;
     }
 
     .ticket-container,

@@ -1,5 +1,5 @@
 <script setup>
-import { ref, onMounted, computed } from "vue";
+import { ref, computed, watch } from "vue";
 import { router } from "@inertiajs/vue3";
 
 import AppLayout from "@/Layouts/AppLayout.vue";
@@ -55,6 +55,14 @@ const search = ref(props.filters.search || "");
 const tipo = ref(props.filters.tipo || "");
 const estado = ref(props.filters.estado || "");
 
+watch(tipo, () => {
+    aplicarFiltros();
+});
+
+watch(estado, () => {
+    aplicarFiltros();
+});
+
 const estados = [
     {
         label: "Todas",
@@ -92,12 +100,18 @@ const tiposOptions = computed(() => [
 function formatearTipo(tipo) {
     if (!tipo) return "";
 
-    return tipo
-        .replaceAll("_", " ")
-        .replace(/\b\w/g, (letra) => letra.toUpperCase());
+    const nombres = {
+        stock_bajo: "Stock bajo",
+        vencimiento: "Próximo a vencer",
+        vencido: "Producto vencido",
+    };
+
+    return nombres[tipo] || tipo;
 }
 
-function buscar() {
+let searchTimeout = null;
+
+function aplicarFiltros() {
     router.get(
         route("notificaciones.index"),
         {
@@ -108,8 +122,17 @@ function buscar() {
         {
             preserveState: true,
             preserveScroll: true,
+            replace: true,
         },
     );
+}
+
+function buscar() {
+    clearTimeout(searchTimeout);
+
+    searchTimeout = setTimeout(() => {
+        aplicarFiltros();
+    }, 400);
 }
 
 function limpiarFiltros() {
@@ -146,6 +169,7 @@ function solucionar(notificacion) {
         {},
         {
             preserveScroll: true,
+            preserveState: false,
         },
     );
 }
@@ -265,207 +289,71 @@ const items = ref([
             <!-- CONTENIDO -->
             <template #content>
                 <!-- ============================== -->
-                <!-- RESUMEN -->
-                <!-- ============================== -->
-                <div class="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
-                    <!-- TOTAL -->
-                    <Card>
-                        <template #content>
-                            <div class="flex items-center gap-4">
-                                <div
-                                    class="w-11 h-11 rounded-xl bg-indigo-100 flex items-center justify-center"
-                                >
-                                    <Bell class="text-indigo-600" :size="22" />
-                                </div>
-
-                                <div>
-                                    <p class="text-sm text-slate-500">Total</p>
-
-                                    <p
-                                        class="text-2xl font-bold text-slate-800"
-                                    >
-                                        {{ notificaciones.total }}
-                                    </p>
-                                </div>
-                            </div>
-                        </template>
-                    </Card>
-
-                    <!-- SIN LEER -->
-                    <Card>
-                        <template #content>
-                            <div class="flex items-center gap-4">
-                                <div
-                                    class="w-11 h-11 rounded-xl bg-blue-100 flex items-center justify-center"
-                                >
-                                    <CircleAlert
-                                        class="text-blue-600"
-                                        :size="22"
-                                    />
-                                </div>
-
-                                <div>
-                                    <p class="text-sm text-slate-500">
-                                        Sin leer
-                                    </p>
-
-                                    <p
-                                        class="text-2xl font-bold text-slate-800"
-                                    >
-                                        {{ noLeidas }}
-                                    </p>
-                                </div>
-                            </div>
-                        </template>
-                    </Card>
-
-                    <!-- SOLUCIONADAS -->
-                    <Card>
-                        <template #content>
-                            <div class="flex items-center gap-4">
-                                <div
-                                    class="w-11 h-11 rounded-xl bg-emerald-100 flex items-center justify-center"
-                                >
-                                    <CircleCheck
-                                        class="text-emerald-600"
-                                        :size="22"
-                                    />
-                                </div>
-
-                                <div>
-                                    <p class="text-sm text-slate-500">
-                                        Solucionadas
-                                    </p>
-
-                                    <p
-                                        class="text-2xl font-bold text-slate-800"
-                                    >
-                                        {{
-                                            notificaciones.data.filter(
-                                                (n) => n.solucionada,
-                                            ).length
-                                        }}
-                                    </p>
-                                </div>
-                            </div>
-                        </template>
-                    </Card>
-                </div>
-
-                <!-- ============================== -->
                 <!-- FILTROS -->
                 <!-- ============================== -->
-                <div class="mb-6">
-                    <Card>
-                        <template #content>
-                            <div class="grid grid-cols-1 md:grid-cols-4 gap-4">
-                                <!-- BUSCAR -->
-                                <div class="md:col-span-2">
-                                    <label
-                                        class="block text-sm font-medium text-slate-600 mb-2"
-                                    >
-                                        Buscar
-                                    </label>
 
-                                    <InputText
-                                        v-model="search"
-                                        placeholder="Buscar notificación..."
-                                        class="w-full"
-                                        @keyup.enter="buscar"
-                                    />
-                                </div>
+                <div class="flex flex-col md:flex-row gap-3 mb-6">
+                    <!-- BUSCADOR -->
+                    <IconField class="w-full md:flex-1">
+                        <InputIcon class="pi pi-search" />
 
-                                <!-- TIPO -->
-                                <div>
-                                    <label
-                                        class="block text-sm font-medium text-slate-600 mb-2"
-                                    >
-                                        Tipo
-                                    </label>
+                        <InputText
+                            v-model="search"
+                            placeholder="Buscar producto o código..."
+                            class="w-full"
+                            @input="buscar"
+                        />
+                    </IconField>
 
-                                    <Select
-                                        v-model="tipo"
-                                        :options="tiposOptions"
-                                        optionLabel="label"
-                                        optionValue="value"
-                                        class="w-full"
-                                    />
-                                </div>
+                    <!-- TIPO -->
+                    <Select
+                        v-model="tipo"
+                        :options="tiposOptions"
+                        optionLabel="label"
+                        optionValue="value"
+                        placeholder="Todos los tipos"
+                        class="w-full md:w-64"
+                    />
 
-                                <!-- ESTADO -->
-                                <div>
-                                    <label
-                                        class="block text-sm font-medium text-slate-600 mb-2"
-                                    >
-                                        Estado
-                                    </label>
-
-                                    <Select
-                                        v-model="estado"
-                                        :options="estados"
-                                        optionLabel="label"
-                                        optionValue="value"
-                                        class="w-full"
-                                    />
-                                </div>
-                            </div>
-
-                            <!-- BOTONES -->
-                            <div class="flex justify-end gap-2 mt-4">
-                                <Button
-                                    label="Limpiar"
-                                    severity="secondary"
-                                    text
-                                    @click="limpiarFiltros"
-                                />
-
-                                <Button
-                                    label="Buscar"
-                                    icon="pi pi-search"
-                                    @click="buscar"
-                                />
-                            </div>
-                        </template>
-                    </Card>
+                    <!-- ESTADO -->
+                    <Select
+                        v-model="estado"
+                        :options="estados"
+                        optionLabel="label"
+                        optionValue="value"
+                        placeholder="Todos los estados"
+                        class="w-full md:w-64"
+                    />
                 </div>
 
                 <!-- ============================== -->
                 <!-- LISTA DE NOTIFICACIONES -->
                 <!-- ============================== -->
-                <Card>
-                    <template #content>
-                        <!-- SIN NOTIFICACIONES -->
-                        <div
-                            v-if="notificaciones.data.length === 0"
-                            class="py-16 text-center"
+                <div>
+                    <!-- SIN NOTIFICACIONES -->
+                    <div
+                        v-if="notificaciones.data.length === 0"
+                        class="py-16 text-center"
+                    >
+                        <Bell :size="48" class="mx-auto text-slate-300 mb-4" />
+
+                        <h3 class="text-lg font-semibold text-slate-700">
+                            No hay notificaciones
+                        </h3>
+
+                        <p class="text-sm text-slate-400 mt-1">
+                            No encontramos notificaciones con los filtros
+                            seleccionados.
+                        </p>
+                    </div>
+
+                    <!-- NOTIFICACIONES -->
+                    <div v-else class="space-y-3">
+                        <Card
+                            v-for="notificacion in notificaciones.data"
+                            :key="notificacion.id"
                         >
-                            <Bell
-                                :size="48"
-                                class="mx-auto text-slate-300 mb-4"
-                            />
-
-                            <h3 class="text-lg font-semibold text-slate-700">
-                                No hay notificaciones
-                            </h3>
-
-                            <p class="text-sm text-slate-400 mt-1">
-                                No encontramos notificaciones con los filtros
-                                seleccionados.
-                            </p>
-                        </div>
-
-                        <!-- NOTIFICACIONES -->
-                        <div v-else class="space-y-3">
-                            <div
-                                v-for="notificacion in notificaciones.data"
-                                :key="notificacion.id"
-                                class="border rounded-xl p-4 transition-all"
-                                :class="[
-                                    !notificacion.leida
-                                        ? 'bg-indigo-50/40 border-indigo-200'
-                                        : 'bg-white border-slate-200',
-                                ]"
-                            >
+                            <template #content>
                                 <div class="flex gap-4">
                                     <!-- ICONO -->
                                     <div
@@ -591,40 +479,42 @@ const items = ref([
                                         </div>
                                     </div>
                                 </div>
-                            </div>
-                        </div>
+                            </template>
+                        </Card>
+                    </div>
+                </div>
 
-                        <!-- PAGINACIÓN -->
-                        <div
-                            v-if="notificaciones.last_page > 1"
-                            class="flex justify-center mt-6"
-                        >
-                            <Paginator
-                                :rows="notificaciones.per_page"
-                                :totalRecords="notificaciones.total"
-                                :first="
-                                    (notificaciones.current_page - 1) *
-                                    notificaciones.per_page
-                                "
-                                @page="
-                                    (event) => {
-                                        router.get(
-                                            route('notificaciones.index'),
-                                            {
-                                                ...props.filters,
-                                                page: event.page + 1,
-                                            },
-                                            {
-                                                preserveState: true,
-                                                preserveScroll: true,
-                                            },
-                                        );
-                                    }
-                                "
-                            />
-                        </div>
-                    </template>
-                </Card>
+                <!-- PAGINACIÓN -->
+                <div
+                    v-if="notificaciones.last_page > 1"
+                    class="flex justify-center mt-6"
+                >
+                    <Paginator
+                        :rows="notificaciones.per_page"
+                        :totalRecords="notificaciones.total"
+                        :first="
+                            (notificaciones.current_page - 1) *
+                            notificaciones.per_page
+                        "
+                        @page="
+                            (event) => {
+                                router.get(
+                                    route('notificaciones.index'),
+                                    {
+                                        search: search || undefined,
+                                        tipo: tipo || undefined,
+                                        estado: estado || undefined,
+                                        page: event.page + 1,
+                                    },
+                                    {
+                                        preserveState: true,
+                                        preserveScroll: true,
+                                    },
+                                );
+                            }
+                        "
+                    />
+                </div>
             </template>
         </Card>
     </v-container>

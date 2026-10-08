@@ -23,6 +23,11 @@ class Cliente extends Model
         'activo' => 'boolean',
     ];
 
+    protected $appends = [
+        'nombre_completo',
+    ];
+
+
     //Relaciones
     public function ventas()
     {
@@ -38,13 +43,13 @@ class Cliente extends Model
     public function getNombreCompletoAttribute()
     {
         if ($this->tipo_documento === 'RUC') {
-            return $this->razon_social_nombre;
+            return $this->razon_social_nombre ?? '';
         }
 
         return trim(
-            $this->nombres . ' ' .
-                $this->ap_paterno . ' ' .
-                $this->ap_materno
+            ($this->nombres ?? '') . ' ' .
+                ($this->ap_paterno ?? '') . ' ' .
+                ($this->ap_materno ?? '')
         );
     }
 }

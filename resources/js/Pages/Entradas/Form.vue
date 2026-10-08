@@ -1,6 +1,6 @@
 <script setup>
 import { computed, ref, watch } from "vue";
-import { useForm } from "@inertiajs/vue3";
+import { router, useForm } from "@inertiajs/vue3";
 
 import Swal from "sweetalert2";
 
@@ -73,6 +73,8 @@ const productoBusqueda = ref(null);
 
 const productosFiltrados = ref([]);
 
+const buscandoProducto = ref(false);
+
 /*
 |--------------------------------------------------------------------------
 | TIPOS DE COMPROBANTE
@@ -108,8 +110,13 @@ const tiposComprobante = [
 |--------------------------------------------------------------------------
 */
 
-const fechaMinima = new Date();
-fechaMinima.setHours(0, 0, 0, 0);
+const fechaMinima = computed(() => {
+    const hoy = new Date();
+
+    hoy.setDate(hoy.getDate() + 1);
+
+    return hoy;
+});
 
 /*
 |--------------------------------------------------------------------------
@@ -334,22 +341,42 @@ watch(
 |--------------------------------------------------------------------------
 */
 
+let temporizadorBusqueda = null;
+
 const buscarProducto = (event) => {
-    const query = String(event.query ?? "").toLowerCase();
+    const query = String(event.query ?? "").trim();
 
-    productosFiltrados.value = props.productos.filter((producto) => {
-        const nombre = String(producto.nombre ?? "").toLowerCase();
+    clearTimeout(temporizadorBusqueda);
 
-        const codigo = String(producto.codigo ?? "").toLowerCase();
+    if (!query) {
+        productosFiltrados.value = [];
 
-        const codigoBarras = String(producto.codigo_barras ?? "").toLowerCase();
+        return;
+    }
 
-        return (
-            nombre.includes(query) ||
-            codigo.includes(query) ||
-            codigoBarras.includes(query)
+    temporizadorBusqueda = setTimeout(() => {
+        buscandoProducto.value = true;
+
+        router.get(
+            route("entradas.index"),
+            {
+                buscar_producto: query,
+            },
+            {
+                preserveState: true,
+                preserveScroll: true,
+                replace: true,
+                only: ["productos"],
+
+                onSuccess: (page) => {
+                    productosFiltrados.value = page.props.productos ?? [];
+                },
+                onFinish: () => {
+                    buscandoProducto.value = false;
+                },
+            },
         );
-    });
+    }, 150);
 };
 
 /*

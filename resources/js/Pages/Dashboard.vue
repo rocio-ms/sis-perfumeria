@@ -41,9 +41,7 @@ const props = defineProps({
     },
 });
 
-/* =====================================================
-   FILTRO DE PERIODO
-===================================================== */
+//Filtro de periodo (7, 15 y 30 días)
 
 const periodos = ref([
     { label: "7 días", value: 7 },
@@ -53,6 +51,8 @@ const periodos = ref([
 
 const periodoSeleccionado = ref(7);
 
+
+//Función para cambiar entre periodo
 const cambiarPeriodo = () => {
     router.reload({
         data: { dias: periodoSeleccionado.value },
@@ -61,9 +61,7 @@ const cambiarPeriodo = () => {
     });
 };
 
-/* =====================================================
-   GRAFICO
-===================================================== */
+//Gráfico
 
 const chartData = computed(() => {
     return {
@@ -73,9 +71,9 @@ const chartData = computed(() => {
             {
                 label: "Ventas",
                 data: props.graficoVentas.map((item) => item.cantidad),
-                borderColor: "#3949ab",
-                backgroundColor: "rgba(57, 73, 171, 0.12)",
-                pointBackgroundColor: "#3949ab",
+                borderColor: "#9f3154",
+                backgroundColor: "rgba(159, 49, 84, 0.12)",
+                pointBackgroundColor: "#9f3154",
                 pointBorderColor: "#fff",
                 pointBorderWidth: 2,
                 pointRadius: 4,
@@ -121,18 +119,15 @@ const chartOptions = ref({
     },
 });
 
-/* =====================================================
-   NAVEGACIÓN
-===================================================== */
+//Navegación
 
 const irVentas = () => router.visit(route("ventas.index"));
+const registrarVenta = () => router.visit(route("ventas.create"));
 const irProductos = () => router.visit(route("productos.index"));
 const irStock = () => router.visit(route("productos.index"));
 const verVenta = (venta) => router.visit(route("ventas.show", venta.id));
 
-/* =====================================================
-   HELPERS
-===================================================== */
+//Helpers
 
 const obtenerSeveridadStock = (stock) => {
     if (stock <= 2) return "danger";
@@ -144,6 +139,7 @@ const porcentajeStock = (stock) => {
     return Math.min(100, Math.round((stock / 10) * 100));
 };
 
+//Formatera moneda
 const formatoMoneda = (valor) => {
     return new Intl.NumberFormat("es-PE", {
         style: "currency",
@@ -172,14 +168,10 @@ const iniciales = (texto) => {
 
 <template>
     <v-container fluid class="dashboard-container">
-        <!-- =====================================================
-             HEADER
-        ====================================================== -->
 
         <div class="dashboard-header">
             <div>
-            
-                <p class="dashboard-subtitle">Resumen general de tu negocio</p>
+                <p class="dashboard-subtitle text-xl">Resumen general de tu negocio</p>
             </div>
 
             <SelectButton
@@ -192,9 +184,7 @@ const iniciales = (texto) => {
             />
         </div>
 
-        <!-- =====================================================
-             STATS GRID
-        ====================================================== -->
+        <!-- Grid de cards -->
 
         <div class="stats-grid">
             <!-- INGRESOS - destacada -->
@@ -248,9 +238,7 @@ const iniciales = (texto) => {
             </div>
         </div>
 
-        <!-- =====================================================
-             FILA: GRAFICO + MÁS VENDIDOS
-        ====================================================== -->
+        <!-- Graficos y má vendidos -->
 
         <div class="dashboard-grid">
             <!-- GRAFICO -->
@@ -349,9 +337,7 @@ const iniciales = (texto) => {
             </Card>
         </div>
 
-        <!-- =====================================================
-             FILA: ÚLTIMAS VENTAS + STOCK BAJO
-        ====================================================== -->
+        <!-- Últimas ventas y stock bajo -->
 
         <div class="dashboard-grid">
             <!-- ÚLTIMAS VENTAS -->
@@ -411,7 +397,7 @@ const iniciales = (texto) => {
                             label="Registrar venta"
                             size="small"
                             icon="pi pi-plus"
-                            @click="irVentas"
+                            @click="registrarVenta"
                         />
                     </div>
                 </template>
@@ -1026,7 +1012,10 @@ const iniciales = (texto) => {
 /* =====================================================
    BOTONES PRIMEVUE
 ===================================================== */
-
+.dashboard-container {
+    padding: 16px;
+    background: #fcf5f7;
+}
 .dashboard-container
     :deep(.p-button:not(.p-button-text):not(.p-button-outlined)) {
     background: #7f1d3a;

@@ -29,6 +29,21 @@ const dialogVisible = computed({
 
 /*
 |--------------------------------------------------------------------------
+| UTILIDADES
+|--------------------------------------------------------------------------
+| Redondeo a 2 decimales para evitar errores de coma flotante
+| (ej: 36.900000000000006 vs 36.90 dejaba el botón deshabilitado).
+*/
+const redondear = (valor) =>
+    Math.round((Number(valor || 0) + Number.EPSILON) * 100) / 100;
+
+const totalRedondeado = computed(() => redondear(props.total));
+
+// Convierte cualquier valor (null, número, string) a string sin espacios
+const texto = (valor) => String(valor ?? "").trim();
+
+/*
+|--------------------------------------------------------------------------
 | COMPROBANTE (Boleta / Factura)
 |--------------------------------------------------------------------------
 */
@@ -44,197 +59,322 @@ const buscandoCliente = ref(false);
 const mensajeCliente = ref("");
 const clienteEncontrado = ref(false);
 const clienteEncontradoEnAPI = ref(false);
+const consultaClienteRealizada = ref(false);
+
+// Último documento que se consultó (BD/API). Sirve para invalidar
+// el id y los mensajes si el usuario modifica el número después.
+const documentoConsultado = ref("");
 
 const cliente = ref({
     id: null,
     tipo_documento: "DNI",
     numero_documento: "",
     nombre: "",
+    razon_social_nombre: "",
+    ap_paterno: "",
+    ap_materno: "",
+    nombres: "",
+    direccion: "",
 });
 
 const largoDocumentoEsperado = computed(() => {
-    return cliente.value.tipo_documento === "RUC" ? 11 : 8;
+    return texto(cliente.value.tipo_documento).toUpperCase() === "RUC" ? 11 : 8;
 });
 
-const buscarCliente = async () => {
-    const documento = cliente.value.numero_documento.trim();
+const limpiarEstadoBusqueda = () => {
+    clienteEncontrado.value = false;
+    clienteEncontradoEnAPI.value = false;
+    consultaClienteRealizada.value = false;
+    mensajeCliente.value = "";
+    documentoConsultado.value = "";
+};
 
+/**
+ * Opción 1: cliente anónimo (checkbox marcado)
+ */
+const establecerClienteVarios = () => {
+    esClienteVarios.value = true;
+
+    cliente.value = {
+        id: null,
+        tipo_documento: "DNI",
+        numero_documento: "00000000",
+        nombre: "CLIENTES VARIOS",
+        razon_social_nombre: "CLIENTES VARIOS",
+        ap_paterno: "",
+        ap_materno: "",
+        nombres: "CLIENTES VARIOS",
+        direccion: "",
+    };
+
+    limpiarEstadoBusqueda();
+};
+
+/**
+ * Opciones 2 y 3: cliente identificado (API o manual)
+ */
+const activarClienteIdentificado = () => {
+    esClienteVarios.value = false;
+
+    cliente.value = {
+        id: null,
+        tipo_documento: comprobante.value === "Factura" ? "RUC" : "DNI",
+        numero_documento: "",
+        nombre: "",
+        razon_social_nombre: "",
+        ap_paterno: "",
+        ap_materno: "",
+        nombres: "",
+        direccion: "",
+    };
+
+    limpiarEstadoBusqueda();
+};
+
+const alternarClienteVarios = (marcado) => {
+    if (marcado) {
+        establecerClienteVarios();
+    } else {
+        activarClienteIdentificado();
+    }
+};
+
+/**
+ * Cambio de tipo de documento (DNI <-> RUC) hecho por el usuario.
+ * Se maneja aquí y no con un watch para que no se dispare
+ * cuando el código cambia el tipo por dentro.
+ */
+const cambiarTipoDocumento = () => {
+    cliente.value.id = null;
+    cliente.value.numero_documento = "";
+    cliente.value.nombre = "";
+    cliente.value.razon_social_nombre = "";
+    cliente.value.ap_paterno = "";
+    cliente.value.ap_materno = "";
+    cliente.value.nombres = "";
+    cliente.value.direccion = "";
+
+    limpiarEstadoBusqueda();
+};
+
+// Solo dígitos en el documento + invalidar la consulta anterior si cambia
+watch(
+    () => cliente.value.numero_documento,
+    (valor) => {
+        if (esClienteVarios.value) return;
+
+        const soloDigitos = String(valor ?? "").replace(/\D/g, "");
+
+        if (soloDigitos !== valor) {
+            cliente.value.numero_documento = soloDigitos;
+            return;
+        }
+
+        if (soloDigitos !== documentoConsultado.value) {
+            cliente.value.id = null;
+            clienteEncontrado.value = false;
+            clienteEncontradoEnAPI.value = false;
+            consultaClienteRealizada.value = false;
+            mensajeCliente.value = "";
+        }
+    },
+);
+
+/**
+ * Opción 2: buscar en BD y luego en la API (RENIEC / SUNAT)
+ * Si falla, el usuario puede escribir el nombre manualmente (opción 3).
+ */
+const buscarCliente = async () => {
+    const documento = texto(cliente.value.numero_documento);
+
+    // Validar longitud
     if (documento.length !== largoDocumentoEsperado.value) {
+        mensajeCliente.value = `El ${cliente.value.tipo_documento} debe tener ${largoDocumentoEsperado.value} dígitos.`;
+        consultaClienteRealizada.value = true;
         return;
     }
 
     buscandoCliente.value = true;
     mensajeCliente.value = "";
+    consultaClienteRealizada.value = false;
+    clienteEncontrado.value = false;
+    clienteEncontradoEnAPI.value = false;
+    documentoConsultado.value = documento;
+
+    const tipoDocumento = cliente.value.tipo_documento;
 
     try {
-        // =====================================================
         // 1. PRIMERO BUSCAMOS EN NUESTRA BASE DE DATOS
-        // =====================================================
+        const urlBD =
+            `${route("clientes.buscar-documento")}` +
+            `?tipo_documento=${encodeURIComponent(tipoDocumento)}` +
+            `&numero_documento=${encodeURIComponent(documento)}`;
 
-        const responseBD = await fetch(
-            `${route("clientes.buscar-documento")}?tipo_documento=${encodeURIComponent(
-                cliente.value.tipo_documento,
-            )}&numero_documento=${encodeURIComponent(documento)}`,
-            {
-                method: "GET",
-                headers: {
-                    Accept: "application/json",
-                    "X-Requested-With": "XMLHttpRequest",
-                },
+        const responseBD = await fetch(urlBD, {
+            method: "GET",
+            headers: {
+                Accept: "application/json",
+                "X-Requested-With": "XMLHttpRequest",
             },
-        );
+        });
 
-        if (!responseBD.ok) {
-            throw new Error(`Error BD HTTP ${responseBD.status}`);
+        if (responseBD.ok) {
+            const dataBD = await responseBD.json();
+
+            if (dataBD.success && dataBD.cliente) {
+                // Normalizamos tipos: la BD puede devolver número o null
+                cliente.value = {
+                    id: dataBD.cliente.id ?? null,
+                    tipo_documento:
+                        texto(dataBD.cliente.tipo_documento).toUpperCase() ||
+                        tipoDocumento,
+                    numero_documento:
+                        texto(dataBD.cliente.numero_documento) || documento,
+                    nombre: texto(dataBD.cliente.nombre),
+
+                    razon_social_nombre: texto(
+                        dataBD.cliente.razon_social_nombre ??
+                            dataBD.cliente.razon_social,
+                    ),
+
+                    ap_paterno: texto(
+                        dataBD.cliente.ap_paterno ??
+                            dataBD.cliente.apellido_paterno,
+                    ),
+
+                    ap_materno: texto(
+                        dataBD.cliente.ap_materno ??
+                            dataBD.cliente.apellido_materno,
+                    ),
+                    nombres: texto(dataBD.cliente.nombres),
+
+                    direccion: texto(dataBD.cliente.direccion),
+                };
+
+                clienteEncontrado.value = true;
+                consultaClienteRealizada.value = true;
+                mensajeCliente.value =
+                    "Cliente encontrado en tu base de datos.";
+
+                return;
+            }
         }
 
-        const dataBD = await responseBD.json();
-
-        // =====================================================
-        // 2. SI EXISTE EN BD
-        // =====================================================
-
-        if (dataBD.success && dataBD.cliente) {
-            cliente.value = {
-                id: dataBD.cliente.id,
-                tipo_documento: dataBD.cliente.tipo_documento,
-                numero_documento: dataBD.cliente.numero_documento,
-                nombre: dataBD.cliente.nombre,
-            };
-
-            clienteEncontrado.value = true;
-            clienteEncontradoEnAPI.value = false;
-            mensajeCliente.value = "Cliente encontrado en tu base de datos.";
-
-            return;
-        }
-
-        // =====================================================
-        // 3. NO EXISTE → CONSULTAMOS JSON.PE
-        // =====================================================
-
+        // 2. NO EXISTE EN BD → CONSULTAR API
         const responseAPI = await fetch(route("clientes.consultar-dni"), {
             method: "POST",
             headers: {
                 "Content-Type": "application/json",
                 Accept: "application/json",
                 "X-Requested-With": "XMLHttpRequest",
-                "X-CSRF-TOKEN": document
-                    .querySelector('meta[name="csrf-token"]')
-                    ?.getAttribute("content"),
+                "X-CSRF-TOKEN":
+                    document
+                        .querySelector('meta[name="csrf-token"]')
+                        ?.getAttribute("content") || "",
             },
             body: JSON.stringify({
                 numero_documento: documento,
+                tipo_documento: tipoDocumento,
             }),
         });
 
-        const textoAPI = await responseAPI.text();
-
-        let dataAPI;
+        let dataAPI = null;
 
         try {
-            dataAPI = JSON.parse(textoAPI);
-        } catch (e) {
-            console.error("Respuesta no JSON de JSON.pe:", textoAPI);
-            throw new Error(`Respuesta inválida HTTP ${responseAPI.status}`);
+            dataAPI = await responseAPI.json();
+        } catch (error) {
+            dataAPI = null;
         }
 
-        if (!responseAPI.ok) {
-            console.error(
-                "Error consultando JSON.pe:",
-                responseAPI.status,
-                dataAPI,
-            );
-
-            throw new Error(`Error HTTP ${responseAPI.status}`);
-        }
-
-        // =====================================================
-        // 4. JSON.PE ENCONTRÓ EL DOCUMENTO
-        // =====================================================
-
-        if (dataAPI.success && dataAPI.data) {
+        // 3. API RESPONDIÓ CORRECTAMENTE
+        if (responseAPI.ok && dataAPI?.success && dataAPI?.data) {
             const datos = dataAPI.data;
 
-            cliente.value = {
-                id: null,
-                tipo_documento: cliente.value.tipo_documento,
-                numero_documento: documento,
-                nombre:
-                    datos.nombre_completo ||
-                    `${datos.nombres ?? ""} ${datos.apellido_paterno ?? ""} ${datos.apellido_materno ?? ""}`.trim(),
-            };
+            const nombre =
+                datos.nombre_completo ||
+                datos.razon_social ||
+                datos.nombre ||
+                [datos.nombres, datos.apellido_paterno, datos.apellido_materno]
+                    .filter(Boolean)
+                    .join(" ")
+                    .trim();
 
-            clienteEncontrado.value = false;
-            clienteEncontradoEnAPI.value = true;
-            mensajeCliente.value =
-                "Datos obtenidos de RENIEC/SUNAT. Se guardarán al confirmar.";
-        } else {
-            cliente.value.id = null;
-            cliente.value.nombre = "";
+            if (nombre) {
+                cliente.value = {
+                    id: null,
+                    tipo_documento: tipoDocumento,
+                    numero_documento: documento,
+                    nombre: nombre,
 
-            clienteEncontrado.value = false;
-            clienteEncontradoEnAPI.value = false;
-            mensajeCliente.value =
-                "No se encontró el documento. Ingresa el nombre manualmente.";
+                    razon_social_nombre:
+                        datos.razon_social ||
+                        (tipoDocumento === "RUC" ? nombre : ""),
+
+                    ap_paterno: datos.apellido_paterno || "",
+
+                    ap_materno: datos.apellido_materno || "",
+
+                    nombres: datos.nombres || "",
+
+                    direccion: datos.direccion || "",
+                };
+
+                clienteEncontradoEnAPI.value = true;
+                consultaClienteRealizada.value = true;
+                mensajeCliente.value =
+                    "Datos obtenidos correctamente. Puedes continuar con la venta.";
+
+                return;
+            }
         }
+
+        // 4. LA API NO DEVOLVIÓ DATOS → ENTRADA MANUAL
+        // No borramos el documento: el usuario escribe el nombre a mano.
+        cliente.value.id = null;
+        consultaClienteRealizada.value = true;
+        mensajeCliente.value =
+            "No se pudieron obtener los datos automáticamente. Puedes ingresar el nombre manualmente.";
     } catch (error) {
         console.error("Error buscando cliente:", error);
 
         cliente.value.id = null;
-        cliente.value.nombre = "";
-
-        clienteEncontrado.value = false;
-        clienteEncontradoEnAPI.value = false;
+        consultaClienteRealizada.value = true;
         mensajeCliente.value =
-            "No se pudo validar el documento. Ingresa el nombre manualmente.";
+            "No se pudo consultar el documento. Puedes ingresar los datos manualmente.";
     } finally {
         buscandoCliente.value = false;
     }
 };
-
-const modoPagoActivo = computed(() => {
-    return calculadoraActiva.value && metodoPago.value === "efectivo";
-});
-
-const mostrarContenidoSecundario = computed(() => {
-    return !modoPagoActivo.value;
-});
 
 /*
 |--------------------------------------------------------------------------
 | FACTURA REQUIERE RUC
 |--------------------------------------------------------------------------
 */
-watch(comprobante, (valor) => {
+watch(comprobante, (valor, anterior) => {
     if (valor === "Factura") {
-        esClienteVarios.value = false;
-
-        cliente.value.tipo_documento = "RUC";
-        cliente.value.numero_documento = "";
-        cliente.value.nombre = "";
-    }
-
-    if (valor === "Boleta") {
-        esClienteVarios.value = true;
-
-        cliente.value.tipo_documento = "DNI";
-        cliente.value.numero_documento = "";
-        cliente.value.nombre = "";
+        activarClienteIdentificado(); // deja tipo RUC vacío
+    } else if (anterior === "Factura") {
+        establecerClienteVarios();
     }
 });
 
 const clienteValido = computed(() => {
+    // Cliente anónimo
     if (esClienteVarios.value) {
         return true;
     }
 
-    return (
-        cliente.value.id !== null &&
-        cliente.value.numero_documento.length ===
-            largoDocumentoEsperado.value &&
-        cliente.value.nombre.trim().length > 2
-    );
+    // Documento válido: solo dígitos y largo exacto (8 DNI / 11 RUC)
+    const documento = texto(cliente.value.numero_documento);
+    const documentoValido =
+        /^\d+$/.test(documento) &&
+        documento.length === largoDocumentoEsperado.value;
+
+    // Nombre válido (viene de la API o escrito a mano)
+    const nombreValido = texto(cliente.value.nombre).length >= 3;
+
+    return documentoValido && nombreValido;
 });
 
 /*
@@ -264,11 +404,23 @@ const metodoPago = ref("efectivo");
 
 const montoRecibido = ref(null);
 const montoCalculadora = ref("");
+const calculadoraActiva = ref(false);
+
+/**
+ * Modo compacto: al usar la calculadora se colapsan Comprobante y
+ * Método de pago para dar espacio. El bloque de CLIENTE nunca se
+ * colapsa, así siempre se ve qué falta para habilitar el botón.
+ */
+const modoPagoActivo = computed(() => {
+    return calculadoraActiva.value && metodoPago.value === "efectivo";
+});
+
+const expandirSecciones = () => {
+    calculadoraActiva.value = false;
+};
 
 /**
  * Sincroniza el texto de la calculadora con el monto recibido.
- * Se ejecuta automáticamente cada vez que cambia el input,
- * por lo que no hace falta un botón para "confirmar" el monto.
  */
 watch(montoCalculadora, (valor) => {
     if (valor === "" || valor === null) {
@@ -297,6 +449,12 @@ const agregarNumero = (numero) => {
         return;
     }
 
+    // "." al inicio → "0."
+    if (numero === "." && valor === "") {
+        montoCalculadora.value = "0.";
+        return;
+    }
+
     // Limitar a 2 decimales
     if (valor.includes(".")) {
         const decimales = valor.split(".")[1];
@@ -304,11 +462,18 @@ const agregarNumero = (numero) => {
         if (decimales.length >= 2) {
             return;
         }
+
+        // "00" con un solo decimal: solo agregar lo que quepa
+        if (numero === "00" && decimales.length === 1) {
+            numero = "0";
+        }
     }
 
     // Evitar ceros innecesarios al inicio
     if (valor === "0" && numero !== ".") {
-        valor = numero;
+        valor = numero === "00" ? "0" : numero;
+    } else if (valor === "" && numero === "00") {
+        valor = "0";
     } else {
         valor += numero;
     }
@@ -316,77 +481,70 @@ const agregarNumero = (numero) => {
     montoCalculadora.value = valor;
 };
 
-/**
- * Borrar último número
- */
 const borrarNumero = () => {
     montoCalculadora.value = montoCalculadora.value.slice(0, -1);
 };
 
-/**
- * Limpiar completamente el monto
- */
 const limpiarMonto = () => {
     montoCalculadora.value = "";
 };
-
-const calculadoraActiva = ref(false);
 
 /**
  * Establecer un monto directamente (billetes rápidos, pago exacto)
  */
 const establecerMonto = (monto) => {
-    montoCalculadora.value = Number(monto).toFixed(2);
+    montoCalculadora.value = redondear(monto).toFixed(2);
 };
 
 /**
  * Pagar el monto exacto del total, sin dar vuelto.
  */
 const pagarExacto = () => {
-    if (!props.total || props.total <= 0) return;
+    if (totalRedondeado.value <= 0) return;
 
-    establecerMonto(props.total);
+    establecerMonto(totalRedondeado.value);
 };
 
 const esMontoExacto = computed(() => {
     return (
         montoRecibido.value !== null &&
-        Number(montoRecibido.value).toFixed(2) ===
-            Number(props.total || 0).toFixed(2)
+        redondear(montoRecibido.value) === totalRedondeado.value
     );
 });
 
 const montosRapidos = computed(() => {
-    const total = Number(props.total || 0);
+    const total = totalRedondeado.value;
 
     if (total <= 0) {
         return [];
     }
 
-    // Billetes que quieres mostrar
-    const billetes = [50, 100, 200];
-
-    // Mostrar únicamente los billetes
-    // que alcancen para cubrir el total
-    return billetes.filter((billete) => billete >= total);
+    // Solo billetes que alcanzan para cubrir el total
+    return [50, 100, 200].filter((billete) => billete >= total);
 });
 
 const vuelto = computed(() => {
     if (metodoPago.value !== "efectivo") return 0;
 
-    return Math.max(Number(montoRecibido.value || 0) - props.total, 0);
+    return redondear(
+        Math.max(redondear(montoRecibido.value) - totalRedondeado.value, 0),
+    );
 });
 
 const faltante = computed(() => {
     if (metodoPago.value !== "efectivo") return 0;
 
-    return Math.max(props.total - Number(montoRecibido.value || 0), 0);
+    return redondear(
+        Math.max(totalRedondeado.value - redondear(montoRecibido.value), 0),
+    );
 });
 
 const pagoEfectivoValido = computed(() => {
     if (metodoPago.value !== "efectivo") return true;
 
-    return Number(montoRecibido.value || 0) >= props.total;
+    if (montoRecibido.value === null) return false;
+
+    return redondear(montoRecibido.value) >= totalRedondeado.value;
 });
 
 /*
@@ -419,27 +577,43 @@ const formatearMoneda = (valor) =>
 |--------------------------------------------------------------------------
 */
 const formularioValido = computed(() => {
-    if (props.procesando) {
-        return false;
-    }
+    if (props.procesando) return false;
+    if (totalRedondeado.value <= 0) return false;
+    if (!props.carrito || props.carrito.length === 0) return false;
+    if (!clienteValido.value) return false;
+    if (!pagoEfectivoValido.value) return false;
 
-    if (!props.total || Number(props.total) <= 0) {
-        return false;
+    return true;
+});
+
+/**
+ * Explica por qué el botón está deshabilitado
+ */
+const motivoBloqueo = computed(() => {
+    if (props.procesando || formularioValido.value) return "";
+
+    if (!props.carrito || props.carrito.length === 0) {
+        return "El carrito está vacío.";
     }
 
     if (!clienteValido.value) {
-        return false;
+        if (
+            texto(cliente.value.numero_documento).length !==
+            largoDocumentoEsperado.value
+        ) {
+            return `Ingresa un ${cliente.value.tipo_documento} de ${largoDocumentoEsperado.value} dígitos o marca "Cliente anónimo".`;
+        }
+
+        return "Busca el documento o escribe el nombre del cliente.";
     }
 
     if (!pagoEfectivoValido.value) {
-        return false;
+        return montoRecibido.value === null
+            ? "Ingresa el monto recibido en efectivo."
+            : `Faltan ${formatearMoneda(faltante.value)} para completar el pago.`;
     }
 
-    if (!props.carrito || props.carrito.length === 0) {
-        return false;
-    }
-
-    return true;
+    return "";
 });
 
 const confirmar = () => {
@@ -449,14 +623,30 @@ const confirmar = () => {
 
     const datosCliente = esClienteVarios.value
         ? {
+              id: null,
               tipo_documento: "DNI",
               numero_documento: "00000000",
               nombre: "CLIENTES VARIOS",
+              razon_social_nombre: "CLIENTES VARIOS",
+              ap_paterno: "",
+              ap_materno: "",
+              nombres: "CLIENTES VARIOS",
+              direccion: "",
           }
         : {
-              tipo_documento: cliente.value.tipo_documento,
-              numero_documento: cliente.value.numero_documento,
-              nombre: cliente.value.nombre.trim(),
+              id: cliente.value.id,
+              tipo_documento: texto(cliente.value.tipo_documento).toUpperCase(),
+              numero_documento: texto(cliente.value.numero_documento),
+              nombre: texto(cliente.value.nombre),
+              razon_social_nombre: texto(cliente.value.razon_social_nombre),
+
+              ap_paterno: texto(cliente.value.ap_paterno),
+
+              ap_materno: texto(cliente.value.ap_materno),
+
+              nombres: texto(cliente.value.nombres),
+
+              direccion: texto(cliente.value.direccion),
           };
 
     emit("confirmar", {
@@ -468,12 +658,12 @@ const confirmar = () => {
 
         monto_recibido:
             metodoPago.value === "efectivo"
-                ? Number(montoRecibido.value || 0)
-                : Number(props.total),
+                ? redondear(montoRecibido.value)
+                : totalRedondeado.value,
 
-        vuelto: metodoPago.value === "efectivo" ? Number(vuelto.value || 0) : 0,
+        vuelto: metodoPago.value === "efectivo" ? vuelto.value : 0,
 
-        total: Number(props.total),
+        total: totalRedondeado.value,
 
         items: props.carrito.map((item) => ({
             producto_id: item.producto_id,
@@ -492,7 +682,7 @@ const cerrar = () => {
 
 /*
 |--------------------------------------------------------------------------
-| REINICIAR FORMULARIO
+| REINICIAR FORMULARIO AL ABRIR
 |--------------------------------------------------------------------------
 */
 watch(
@@ -502,36 +692,13 @@ watch(
 
         comprobante.value = "Boleta";
 
-        esClienteVarios.value = true;
-
-        cliente.value = {
-            id: null,
-            tipo_documento: "DNI",
-            numero_documento: "",
-            nombre: "",
-        };
+        establecerClienteVarios();
 
         metodoPago.value = "efectivo";
 
         montoRecibido.value = null;
         montoCalculadora.value = "";
-
-        mensajeCliente.value = "";
-        clienteEncontrado.value = false;
-        clienteEncontradoEnAPI.value = false;
-    },
-);
-
-watch(
-    () => cliente.value.tipo_documento,
-    () => {
-        cliente.value.id = null;
-        cliente.value.numero_documento = "";
-        cliente.value.nombre = "";
-
-        clienteEncontrado.value = false;
-        clienteEncontradoEnAPI.value = false;
-        mensajeCliente.value = "";
+        calculadoraActiva.value = false;
     },
 );
 </script>
@@ -574,8 +741,9 @@ watch(
                 :class="modoPagoActivo ? 'opacity-70' : ''"
             >
                 <div
-                    class="flex items-center justify-between cursor-pointer"
-                    @click="modoPagoActivo && (calculadoraActiva = false)"
+                    class="flex items-center justify-between"
+                    :class="modoPagoActivo ? 'cursor-pointer' : ''"
+                    @click="modoPagoActivo && expandirSecciones()"
                 >
                     <label
                         class="text-xs font-semibold text-gray-500 uppercase tracking-wide"
@@ -592,83 +760,49 @@ watch(
                     </span>
                 </div>
 
-                <div v-if="!modoPagoActivo" class="grid grid-cols-2 gap-2 mt-2">
+                <div v-if="!modoPagoActivo" class="w-full mt-2">
                     <button
-                        v-for="tipo in ['Boleta', 'Factura']"
-                        :key="tipo"
                         type="button"
-                        class="border rounded-lg py-2 text-sm font-medium transition-all"
-                        :class="
-                            comprobante === tipo
-                                ? 'border-rose-700 bg-rose-50 text-rose-800'
-                                : 'border-gray-200 text-gray-500 hover:border-rose-300 hover:text-rose-700'
-                        "
-                        @click="comprobante = tipo"
+                        class="border rounded-lg py-2 text-sm font-medium w-full
+                                border-rose-700 bg-rose-50 text-rose-800"
+                        @click="comprobante = 'Boleta'"
                     >
-                        {{ tipo }}
+                        Boleta
                     </button>
                 </div>
             </div>
 
-            <!-- CLIENTE -->
-            <div
-                class="border border-gray-200 rounded-xl transition-all duration-300"
-                :class="modoPagoActivo ? 'px-3 py-2 bg-gray-50/70' : 'p-3'"
-            >
+            <!-- CLIENTE (siempre visible) -->
+            <div class="border border-gray-200 rounded-xl p-3">
                 <!-- ENCABEZADO -->
-                <div
-                    class="flex items-center justify-between"
-                    :class="!modoPagoActivo ? 'mb-2' : ''"
-                >
+                <div class="flex items-center justify-between mb-2">
                     <div class="flex items-center gap-2">
                         <Checkbox
-                            v-if="!modoPagoActivo"
-                            v-model="esClienteVarios"
+                            :modelValue="esClienteVarios"
                             :binary="true"
                             :disabled="comprobante === 'Factura'"
                             inputId="cliVarios"
+                            @update:modelValue="alternarClienteVarios"
                         />
 
                         <label
-                            v-if="!modoPagoActivo"
                             for="cliVarios"
                             class="text-xs font-semibold text-gray-700 cursor-pointer"
                         >
                             Cliente anónimo
                         </label>
-
-                        <span
-                            v-else
-                            class="text-xs font-semibold text-gray-600"
-                        >
-                            Cliente
-                        </span>
                     </div>
 
                     <span
-                        v-if="modoPagoActivo"
-                        class="text-[11px] text-gray-400"
-                    >
-                        {{
-                            esClienteVarios
-                                ? "Clientes varios"
-                                : cliente.nombre || "Cliente identificado"
-                        }}
-                    </span>
-
-                    <span
-                        v-if="!modoPagoActivo && comprobante === 'Factura'"
+                        v-if="comprobante === 'Factura'"
                         class="text-[11px] text-amber-600"
                     >
                         La factura requiere RUC
                     </span>
                 </div>
 
-                <!-- DATOS DEL CLIENTE -->
-                <div
-                    v-if="!modoPagoActivo && !esClienteVarios"
-                    class="flex flex-col gap-2"
-                >
+                <!-- DATOS DEL CLIENTE (API o manual) -->
+                <div v-if="!esClienteVarios" class="flex flex-col gap-2">
                     <div class="flex gap-2">
                         <Select
                             v-model="cliente.tipo_documento"
@@ -679,19 +813,21 @@ watch(
                             "
                             :disabled="comprobante === 'Factura'"
                             class="w-28"
+                            @change="cambiarTipoDocumento"
                         />
 
                         <IconField class="w-full">
                             <InputText
                                 v-model="cliente.numero_documento"
                                 :maxlength="largoDocumentoEsperado"
+                                inputmode="numeric"
                                 :placeholder="
                                     cliente.tipo_documento === 'RUC'
                                         ? 'RUC (11 dígitos)'
                                         : 'DNI (8 dígitos)'
                                 "
                                 class="w-full"
-                                @keydown.enter="buscarCliente"
+                                @keydown.enter.prevent="buscarCliente"
                             />
 
                             <InputIcon
@@ -700,7 +836,7 @@ watch(
                                         ? 'pi pi-spin pi-spinner'
                                         : 'pi pi-search cursor-pointer hover:text-rose-700'
                                 "
-                                @click="buscarCliente"
+                                @click="!buscandoCliente && buscarCliente()"
                             />
                         </IconField>
                     </div>
@@ -734,22 +870,31 @@ watch(
                         ></i>
                         {{ mensajeCliente }}
                     </p>
+
+                    <p
+                        v-else-if="
+                            texto(cliente.numero_documento).length !==
+                            largoDocumentoEsperado
+                        "
+                        class="text-[11px] text-gray-400 m-0"
+                    >
+                        Presiona Enter o la lupa para buscar, o escribe el
+                        nombre manualmente.
+                    </p>
                 </div>
 
-                <p
-                    v-if="!modoPagoActivo && esClienteVarios"
-                    class="text-xs text-gray-400 m-0"
-                >
+                <p v-else class="text-xs text-gray-400 m-0">
                     Se registrará como "Clientes varios".
                 </p>
             </div>
 
             <!-- MÉTODO DE PAGO -->
-            <div
-                class="transition-all duration-300"
-                :class="modoPagoActivo ? 'mt-0' : ''"
-            >
-                <div class="flex items-center justify-between">
+            <div class="transition-all duration-300">
+                <div
+                    class="flex items-center justify-between"
+                    :class="modoPagoActivo ? 'cursor-pointer' : ''"
+                    @click="modoPagoActivo && expandirSecciones()"
+                >
                     <label
                         class="text-xs font-semibold text-gray-500 uppercase tracking-wide"
                     >
@@ -758,12 +903,13 @@ watch(
 
                     <span
                         v-if="modoPagoActivo"
-                        class="text-[11px] font-medium text-rose-700"
+                        class="text-[11px] font-medium text-rose-700 flex items-center gap-1"
                     >
                         {{
                             metodosPago.find((m) => m.value === metodoPago)
                                 ?.label
                         }}
+                        <i class="pi pi-chevron-down text-[9px]"></i>
                     </span>
                 </div>
 
@@ -827,7 +973,6 @@ watch(
                                 autocomplete="off"
                                 class="!w-40 !text-right !text-2xl !font-bold !text-rose-800"
                                 placeholder="0.00"
-                                @input="calculadoraActiva = true"
                             />
                         </div>
                     </div>
@@ -835,7 +980,6 @@ watch(
                     <!-- MONTOS RÁPIDOS -->
                     <div v-if="!modoPagoActivo" class="px-3 pt-3">
                         <div class="flex gap-2 flex-wrap">
-                            <!-- Pagar exacto: siempre visible primero, es la opción más común -->
                             <button
                                 type="button"
                                 class="flex-1 min-w-[75px] text-xs font-semibold px-3 py-2 rounded-lg border transition"
@@ -928,7 +1072,7 @@ watch(
                             .
                         </button>
 
-                        <!-- 00: ocupa el espacio restante, sin un tercer botón que confunda -->
+                        <!-- 00 -->
                         <button
                             type="button"
                             class="col-span-2 h-12 rounded-lg bg-white border border-gray-200 text-lg font-semibold text-gray-700 hover:bg-rose-50 hover:border-rose-200 hover:text-rose-800 active:scale-95 transition"
@@ -987,7 +1131,6 @@ watch(
             <div
                 class="w-full rounded-lg bg-gray-50 border border-gray-200 p-3"
             >
-                <!-- Encabezado -->
                 <div class="flex items-center justify-between mb-2">
                     <span
                         class="text-xs font-semibold text-gray-500 uppercase tracking-wide"
@@ -1002,14 +1145,12 @@ watch(
                     </span>
                 </div>
 
-                <!-- Lista de productos -->
                 <div class="flex flex-col gap-1 max-h-32 overflow-y-auto pr-1">
                     <div
                         v-for="item in carrito"
                         :key="item.producto_id"
                         class="flex items-center justify-between gap-3 py-1"
                     >
-                        <!-- Producto + cantidad + precio -->
                         <div class="min-w-0 flex-1 flex items-center gap-2">
                             <span class="shrink-0 text-[11px] text-gray-400">
                                 {{ item.cantidad }} ×
@@ -1024,7 +1165,6 @@ watch(
                             </p>
                         </div>
 
-                        <!-- Subtotal -->
                         <span
                             class="shrink-0 text-xs font-semibold text-gray-700"
                         >
@@ -1033,7 +1173,6 @@ watch(
                     </div>
                 </div>
 
-                <!-- Total -->
                 <div
                     class="flex items-center justify-between border-t border-gray-200 mt-2 pt-2"
                 >
@@ -1050,24 +1189,34 @@ watch(
 
         <!-- FOOTER -->
         <template #footer>
-            <div class="flex gap-2 w-full">
-                <Button
-                    label="Cancelar"
-                    severity="secondary"
-                    text
-                    :disabled="procesando"
-                    class="flex-1"
-                    @click="cerrar"
-                />
+            <div class="flex flex-col gap-2 w-full">
+                <p
+                    v-if="motivoBloqueo"
+                    class="text-[11px] text-amber-600 m-0 flex items-center gap-1"
+                >
+                    <i class="pi pi-info-circle"></i>
+                    {{ motivoBloqueo }}
+                </p>
 
-                <Button
-                    label="Confirmar venta"
-                    icon="pi pi-check"
-                    :loading="procesando"
-                    :disabled="!formularioValido"
-                    class="flex-1 !bg-rose-800 !border-rose-800 hover:!bg-rose-900 hover:!border-rose-900"
-                    @click="confirmar"
-                />
+                <div class="flex gap-2 w-full">
+                    <Button
+                        label="Cancelar"
+                        severity="secondary"
+                        text
+                        :disabled="procesando"
+                        class="flex-1"
+                        @click="cerrar"
+                    />
+
+                    <Button
+                        label="Confirmar venta"
+                        icon="pi pi-check"
+                        :loading="procesando"
+                        :disabled="!formularioValido"
+                        class="flex-1 !bg-rose-800 !border-rose-800 hover:!bg-rose-900 hover:!border-rose-900"
+                        @click="confirmar"
+                    />
+                </div>
             </div>
         </template>
     </Dialog>

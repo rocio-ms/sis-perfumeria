@@ -1,6 +1,6 @@
 <script setup>
 import { computed, ref, watch } from "vue";
-import { useForm } from "@inertiajs/vue3";
+import { router, useForm } from "@inertiajs/vue3";
 import Swal from "sweetalert2";
 
 const props = defineProps({
@@ -60,15 +60,10 @@ const tiposSalida = [
 |--------------------------------------------------------------------------
 */
 
-const productosDisponibles = computed(() => {
-    if (!Array.isArray(props.productos)) {
-        return [];
-    }
-
-    return props.productos;
-});
-
 const productosFiltrados = ref([]);
+const buscandoProducto = ref(false);
+
+let temporizadorBusqueda = null;
 
 /*
 |--------------------------------------------------------------------------
@@ -105,31 +100,39 @@ const cantidad = ref(1);
 */
 
 const buscarProductos = (event) => {
-    const query = String(event.query ?? "")
-        .toLowerCase()
-        .trim();
+    const query = String(event.query ?? "").trim();
+
+    clearTimeout(temporizadorBusqueda);
 
     if (!query) {
-        productosFiltrados.value = productosDisponibles.value;
-
+        productosFiltrados.value = [];
         return;
     }
 
-    productosFiltrados.value = productosDisponibles.value.filter((producto) => {
-        const nombre = String(producto.nombre ?? "").toLowerCase();
+    temporizadorBusqueda = setTimeout(() => {
+        buscandoProducto.value = true;
 
-        const codigo = String(producto.codigo ?? "").toLowerCase();
+        router.get(
+            route("salidas.index"),
+            {
+                buscar_producto: query,
+            },
+            {
+                preserveState: true,
+                preserveScroll: true,
+                replace: true,
+                only: ["productos"],
 
-        const codigoBarras = String(
-            producto.codigo_barras ?? producto.codigoBarras ?? "",
-        ).toLowerCase();
+                onSuccess: (page) => {
+                    productosFiltrados.value = page.props.productos ?? [];
+                },
 
-        return (
-            nombre.includes(query) ||
-            codigo.includes(query) ||
-            codigoBarras.includes(query)
+                onFinish: () => {
+                    buscandoProducto.value = false;
+                },
+            },
         );
-    });
+    }, 150);
 };
 
 /*
@@ -215,62 +218,71 @@ const escanearCodigoBarras = (event) => {
         return;
     }
 
-    /*
-     * Buscar coincidencia EXACTA por código de barras.
-     */
-    const producto = productosDisponibles.value.find((producto) => {
-        const codigoProducto = String(
-            producto.codigo_barras ?? producto.codigoBarras ?? "",
-        ).trim();
+    buscandoProducto.value = true;
 
-        return codigoProducto === codigo;
-    });
+    clearTimeout(temporizadorBusqueda);
 
-    /*
-     * Si encontramos el producto:
-     */
-    if (producto) {
-        seleccionarProducto(producto);
+    router.get(
+        route("salidas.index"),
+        {
+            buscar_producto: codigo,
+        },
+        {
+            preserveState: true,
+            preserveScroll: true,
+            replace: true,
+            only: ["productos"],
 
-        /*
-         * No agregamos a form.detalles.
-         *
-         * El usuario todavía debe:
-         * - revisar lote
-         * - modificar cantidad
-         * - presionar Agregar producto
-         */
+            onSuccess: (page) => {
+                const productos = page.props.productos ?? [];
 
-        return;
-    }
+                productosFiltrados.value = productos;
 
-    /*
-     * Si no encontramos el código,
-     * comprobamos si realmente parece un código
-     * de barras.
-     *
-     * Si simplemente escribió texto para buscar,
-     * dejamos que AutoComplete funcione normalmente.
-     */
-    const esCodigoNumerico = /^\d+$/.test(codigo);
+                /*
+                |--------------------------------------------------------------------------
+                | Buscar coincidencia exacta por código de barras
+                |--------------------------------------------------------------------------
+                */
 
-    if (!esCodigoNumerico) {
-        return;
-    }
+                const producto = productos.find((producto) => {
+                    const codigoProducto = String(
+                        producto.codigo_barras ?? producto.codigoBarras ?? "",
+                    ).trim();
 
-    Swal.fire({
-        title: "Producto no encontrado",
-        text: `No existe un producto con el código de barras ${codigo}.`,
-        icon: "warning",
-        confirmButtonText: "Aceptar",
-    });
+                    return codigoProducto === codigo;
+                });
 
-    /*
-     * Limpiar búsqueda.
-     */
-    busquedaProducto.value = "";
+                if (producto) {
+                    seleccionarProducto(producto);
+                    return;
+                }
 
-    productosFiltrados.value = [];
+                /*
+                |--------------------------------------------------------------------------
+                | Si no existe
+                |--------------------------------------------------------------------------
+                */
+
+                const esCodigoNumerico = /^\d+$/.test(codigo);
+
+                if (esCodigoNumerico) {
+                    Swal.fire({
+                        title: "Producto no encontrado",
+                        text: `No existe un producto con el código de barras ${codigo}.`,
+                        icon: "warning",
+                        confirmButtonText: "Aceptar",
+                    });
+
+                    busquedaProducto.value = "";
+                    productosFiltrados.value = [];
+                }
+            },
+
+            onFinish: () => {
+                buscandoProducto.value = false;
+            },
+        },
+    );
 };
 
 /*
@@ -423,7 +435,7 @@ const agregarDetalle = () => {
         if (nuevaCantidad > stockDisponible.value) {
             Swal.fire({
                 title: "Stock insuficiente",
-                text: `No puedes superar las ${stock} unidades disponibles de este lote.`,
+                text: `No puedes superar las ${stockDisponible.value} unidades disponibles de este lote.`,
                 icon: "warning",
                 confirmButtonText: "Aceptar",
             });

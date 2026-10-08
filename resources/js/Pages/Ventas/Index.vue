@@ -5,6 +5,7 @@ import { router } from "@inertiajs/vue3";
 import Card from "@/Components/Card.vue";
 import AppLayout from "@/Layouts/AppLayout.vue";
 import DataTableBase from "@/Components/DataTableBase.vue";
+import ComprobanteTicket from "./ComprobanteTicket.vue";
 
 import Swal from "sweetalert2";
 
@@ -36,6 +37,11 @@ const props = defineProps({
             search: "",
         }),
     },
+
+    tienda: {
+        type: Object,
+        default: () => ({}),
+    },
 });
 
 /*
@@ -53,8 +59,8 @@ const filtros = ref({
 
 //Dialogs
 const mostrarDetalle = ref(false);
-const ventaSeleccionada = ref(null);
 const mostrarComprobantes = ref(false);
+const ventaSeleccionada = ref(null);
 
 /*
 |--------------------------------------------------------------------------
@@ -107,12 +113,6 @@ const columns = [
         objectField: "razon_social_nombre",
     },
 
-    {
-        field: "tipo_comprobante.nombre",
-        header: "Comprobante",
-        type: "object",
-        objectField: "nombre",
-    },
 
     {
         field: "importe_total",
@@ -138,6 +138,7 @@ const verVenta = (venta) => {
     });
 
     ventaSeleccionada.value = venta;
+    mostrarComprobantes.value = false;
     mostrarDetalle.value = true;
 };
 const formatearFecha = (fecha) => {
@@ -163,8 +164,94 @@ const verComprobante = () => {
     mostrarComprobantes.value = true;
 };
 
-const abrirComprobante = (comprobante) => {
-    window.open(route("ventas.comprobante", comprobante.id), "_blank");
+const volverAlDetalle = () => {
+    mostrarComprobantes.value = false;
+};
+
+const imprimirComprobantes = async () => {
+    const ticket = document.querySelector(
+        ".receipts-print-area .ticket-page",
+    );
+
+    if (!(ticket instanceof HTMLElement)) return;
+
+    const iframe = document.createElement("iframe");
+    iframe.title = "Vista previa del comprobante";
+    Object.assign(iframe.style, {
+        position: "fixed",
+        left: "-10000px",
+        top: "0",
+        width: "80mm",
+        height: "200mm",
+        border: "0",
+        opacity: "0",
+    });
+    document.body.append(iframe);
+
+    const printDocument = iframe.contentDocument;
+    const printWindow = iframe.contentWindow;
+
+    if (!printDocument || !printWindow) {
+        iframe.remove();
+        return;
+    }
+
+    printDocument.open();
+    printDocument.write(
+        "<!doctype html><html><head><meta charset=\"utf-8\"><title>Comprobante</title></head><body></body></html>",
+    );
+    printDocument.close();
+
+    document
+        .querySelectorAll('link[rel="stylesheet"]')
+        .forEach((stylesheet) => {
+            const link = printDocument.createElement("link");
+            link.rel = "stylesheet";
+            link.href = stylesheet.href;
+            printDocument.head.append(link);
+        });
+
+    document.querySelectorAll("style").forEach((stylesheet) => {
+        printDocument.head.append(stylesheet.cloneNode(true));
+    });
+
+    const printStyles = printDocument.createElement("style");
+    printStyles.textContent = `
+        @page { size: 80mm 200mm; margin: 0; }
+        html, body { width: 80mm; margin: 0; padding: 0; background: #fff; }
+        .ticket-page { margin: 0 !important; break-inside: avoid; page-break-inside: avoid; }
+    `;
+    printDocument.head.append(printStyles);
+    printDocument.body.append(ticket.cloneNode(true));
+
+    await Promise.all(
+        Array.from(printDocument.querySelectorAll('link[rel="stylesheet"]')).map(
+            (link) =>
+                link.sheet
+                    ? Promise.resolve()
+                    : new Promise((resolve) => {
+                          link.addEventListener("load", resolve, { once: true });
+                          link.addEventListener("error", resolve, { once: true });
+                      }),
+        ),
+    );
+
+    await Promise.all(
+        Array.from(printDocument.images).map((image) =>
+            image.complete
+                ? Promise.resolve()
+                : new Promise((resolve) => {
+                      image.addEventListener("load", resolve, { once: true });
+                      image.addEventListener("error", resolve, { once: true });
+                  }),
+        ),
+    );
+
+    printWindow.addEventListener("afterprint", () => iframe.remove(), {
+        once: true,
+    });
+    printWindow.focus();
+    printWindow.print();
 };
 
 /*
@@ -233,7 +320,7 @@ const boletasVenta = computed(() => {
           : [];
 
     return Array.from(
-        new Map(boletas.map((boleta) => [boleta.id, boleta])).values(),
+        new Map(boletas.map((boleta) => [String(boleta.id), boleta])).values(),
     );
 });
 
@@ -306,11 +393,12 @@ const totalVenta = computed(() => {
         <Dialog
             v-model:visible="mostrarDetalle"
             modal
-            header="Detalle de venta"
-            :style="{ width: '900px' }"
+            :header="mostrarComprobantes ? 'Comprobantes emitidos' : 'Detalle de venta'"
+            :style="{ width: mostrarComprobantes ? '760px' : '900px', maxHeight: '90vh' }"
             :breakpoints="{ '1199px': '80vw', '575px': '95vw' }"
+            @hide="mostrarComprobantes = false"
         >
-            <div v-if="ventaSeleccionada" class="space-y-6">
+            <div v-if="ventaSeleccionada && !mostrarComprobantes" class="space-y-6">
                 <!-- Información de la venta -->
                 <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
                     <div>
@@ -469,38 +557,115 @@ const totalVenta = computed(() => {
                 <!-- Botón de boletas -->
                 <div class="flex justify-end border-t pt-4">
                     <Button
-                        label="Ver boletas emitidas"
+                        :label="
+                            boletasVenta.length > 1
+                                ? 'Ver todos los comprobantes'
+                                : 'Ver comprobante'
+                        "
                         icon="pi pi-receipt"
                         severity="info"
                         @click="verComprobante"
                     />
                 </div>
             </div>
-        </Dialog>
 
-        <Dialog
-            v-model:visible="mostrarComprobantes"
-            modal
-            header="Boletas emitidas"
-            :style="{ width: '520px' }"
-            :breakpoints="{ '575px': '95vw' }"
-        >
-            <p class="text-sm text-gray-500 mb-4">
-                Esta venta generó {{ boletasVenta.length }} boleta(s).
-            </p>
+            <div v-else-if="ventaSeleccionada" class="space-y-4">
+                <div class="flex justify-between gap-3 no-print">
+                    <Button
+                        label="Volver al detalle"
+                        icon="pi pi-arrow-left"
+                        severity="secondary"
+                        outlined
+                        @click="volverAlDetalle"
+                    />
+                    <Button
+                        label="Imprimir comprobante"
+                        icon="pi pi-print"
+                        @click="imprimirComprobantes"
+                    />
+                </div>
 
-            <div class="flex flex-col gap-2">
-                <Button
-                    v-for="boleta in boletasVenta"
-                    :key="boleta.id"
-                    :label="`${boleta.tipo_comprobante?.nombre ?? 'Boleta'} ${boleta.serie}-${boleta.correlativo}`"
-                    icon="pi pi-external-link"
-                    severity="info"
-                    outlined
-                    class="justify-start"
-                    @click="abrirComprobante(boleta)"
-                />
+                <div class="receipts-print-area">
+                    <ComprobanteTicket
+                        v-if="ventaSeleccionada"
+                        :key="ventaSeleccionada.id"
+                        :venta="ventaSeleccionada"
+                        :tienda="props.tienda"
+                    />
+                </div>
             </div>
         </Dialog>
+
     </v-container>
 </template>
+
+<style scoped>
+@media print {
+    :global(body.printing-receipts #app) {
+        display: none !important;
+    }
+
+    :global(body.printing-receipts .receipts-print-area) {
+        position: absolute !important;
+        top: 0 !important;
+        left: 0 !important;
+        display: block !important;
+        width: 80mm;
+        max-height: none !important;
+        overflow: visible !important;
+        margin: 0 !important;
+    }
+
+    :global(body.printing-receipts .p-dialog-mask) {
+        position: static !important;
+        display: block !important;
+        overflow: visible !important;
+        background: transparent !important;
+    }
+
+    :global(body.printing-receipts .p-dialog) {
+        position: static !important;
+        width: 80mm !important;
+        max-height: none !important;
+        margin: 0 !important;
+        box-shadow: none !important;
+        transform: none !important;
+    }
+
+    :global(body.printing-receipts .p-dialog-header),
+    :global(body.printing-receipts .p-dialog-footer) {
+        display: none !important;
+    }
+
+    :global(body.printing-receipts .no-print) {
+        display: none !important;
+    }
+
+    :global(body.printing-receipts .p-dialog-content) {
+        display: block !important;
+        width: 80mm !important;
+        margin: 0 !important;
+        padding: 0 !important;
+        max-height: none !important;
+        overflow: visible !important;
+    }
+
+    :global(body.printing-receipts .receipts-print-area > .ticket-page) {
+        margin: 0 !important;
+        break-inside: avoid;
+        page-break-inside: avoid;
+    }
+
+    :global(html),
+    :global(body.printing-receipts) {
+        margin: 0 !important;
+        padding: 0 !important;
+        width: 80mm !important;
+    }
+
+    @page {
+        size: 80mm 200mm;
+        margin: 0;
+    }
+}
+</style>

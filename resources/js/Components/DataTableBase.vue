@@ -760,7 +760,7 @@ const estadoTag = (valor, columna) => {
                     <!-- TEXTO -->
 
                     <template v-else>
-                        {{ obtenerValor(data, columna.field) ?? "—" }}
+                        {{ obtenerValor(data, columna.field) ?? "N/A" }}
                     </template>
                 </template>
             </Column>

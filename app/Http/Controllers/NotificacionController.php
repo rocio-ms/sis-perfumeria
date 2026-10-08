@@ -14,20 +14,84 @@ class NotificacionController extends Controller
     public function index(Request $request)
     {
         $query = Notificacion::query()
+            ->with([
+                'referencia',
+            ])
             ->orderByDesc('created_at');
 
         /*
-        |--------------------------------------------------------------------------
-        | Búsqueda
-        |--------------------------------------------------------------------------
-        */
-
+    |--------------------------------------------------------------------------
+    | BUSCADOR
+    |--------------------------------------------------------------------------
+    |
+    | Busca por:
+    | - título de la notificación
+    | - mensaje
+    | - nombre del producto
+    | - código del producto
+    | - código de barras
+    |
+    */
         if ($request->filled('search')) {
-            $search = $request->search;
+
+            $search = trim($request->search);
 
             $query->where(function ($q) use ($search) {
+
+                // Buscar en título
                 $q->where('titulo', 'like', "%{$search}%")
-                    ->orWhere('mensaje', 'like', "%{$search}%");
+
+                    // Buscar en mensaje
+                    ->orWhere('mensaje', 'like', "%{$search}%")
+
+                    // Buscar producto relacionado
+                    ->orWhereHasMorph(
+                        'referencia',
+                        [\App\Models\Producto::class],
+                        function ($productoQuery) use ($search) {
+                            $productoQuery
+                                ->where('nombre', 'like', "%{$search}%")
+                                ->orWhere('codigo', 'like', "%{$search}%")
+                                ->orWhere(
+                                    'codigo_barras',
+                                    'like',
+                                    "%{$search}%"
+                                );
+                        }
+                    )
+
+                    // Buscar producto cuando la referencia es un Lote
+                    ->orWhereHasMorph(
+                        'referencia',
+                        [\App\Models\Lote::class],
+                        function ($loteQuery) use ($search) {
+
+                            $loteQuery->whereHas(
+                                'detalleEntrada.producto',
+                                function ($productoQuery) use ($search) {
+
+                                    $productoQuery->where(function ($q) use ($search) {
+
+                                        $q->where(
+                                            'nombre',
+                                            'like',
+                                            "%{$search}%"
+                                        )
+                                            ->orWhere(
+                                                'codigo',
+                                                'like',
+                                                "%{$search}%"
+                                            )
+                                            ->orWhere(
+                                                'codigo_barras',
+                                                'like',
+                                                "%{$search}%"
+                                            );
+                                    });
+                                }
+                            );
+                        }
+                    );
             });
         }
 
@@ -42,28 +106,44 @@ class NotificacionController extends Controller
         }
 
         /*
-        |--------------------------------------------------------------------------
-        | Filtro por estado de lectura
-        |--------------------------------------------------------------------------
-        */
+    |--------------------------------------------------------------------------
+    | FILTRO POR ESTADO
+    |--------------------------------------------------------------------------
+    */
 
         if ($request->filled('estado')) {
 
             switch ($request->estado) {
+
                 case 'no_leidas':
-                    $query->where('leida', false);
+
+                    $query->where('leida', false)
+                        ->where('solucionada', false);
+
                     break;
+
                 case 'leidas':
-                    $query->where('leida', true);
+
+                    $query->where('leida', true)
+                        ->where('solucionada', false);
+
                     break;
+
                 case 'pendientes':
+
                     $query->where('solucionada', false);
+
                     break;
+
                 case 'solucionadas':
+
                     $query->where('solucionada', true);
+
                     break;
             }
         }
+
+        // Paginación
 
         $notificaciones = $query
             ->paginate(10)
@@ -75,7 +155,9 @@ class NotificacionController extends Controller
         |--------------------------------------------------------------------------
         */
 
-        $noLeidas = Notificacion::where('leida', false)->count();
+        $noLeidas = Notificacion::where('leida', false)
+            ->where('solucionada', false)
+            ->count();
         $pendientes = Notificacion::where('solucionada', false)->count();
         $solucionadas = Notificacion::where('solucionada', true)->count();
 
@@ -85,11 +167,11 @@ class NotificacionController extends Controller
         |--------------------------------------------------------------------------
         */
 
-        $tipos = Notificacion::query()
-            ->select('tipo')
-            ->distinct()
-            ->orderBy('tipo')
-            ->pluck('tipo');
+        $tipos = [
+            'stock_bajo',
+            'vencimiento',
+            'vencido',
+        ];
 
         return Inertia::render('Notificaciones/Index', [
             'notificaciones' => $notificaciones,
@@ -125,6 +207,7 @@ class NotificacionController extends Controller
     public function marcarTodasLeidas()
     {
         Notificacion::where('leida', false)
+            ->where('solucionada', false)
             ->update([
                 'leida' => true,
                 'leida_at' => now(),
@@ -139,6 +222,8 @@ class NotificacionController extends Controller
     public function solucionar(Notificacion $notificacion)
     {
         $notificacion->update([
+            'leida' => true,
+            'leida_at' => now(),
             'solucionada' => true,
             'solucionada_at' => now(),
         ]);

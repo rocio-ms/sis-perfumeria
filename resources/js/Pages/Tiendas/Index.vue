@@ -44,6 +44,8 @@ const form = useForm({
     logo: null,
 });
 
+const logoPreview = ref(null);
+
 const esEdicion = computed(() => {
     return props.tienda !== null;
 });
@@ -51,6 +53,8 @@ const esEdicion = computed(() => {
 watch(
     () => props.tienda,
     (tienda) => {
+
+        console.log("TIENDA RECIBIDA:", tienda);
         if (tienda) {
             form.ruc = tienda.ruc ?? "";
             form.razon_social = tienda.razon_social ?? "";
@@ -62,6 +66,14 @@ watch(
             form.telefono = tienda.telefono ?? "";
             form.email = tienda.email ?? "";
             form.logo = null;
+
+            if (tienda.logo_url) {
+                logoPreview.value = `/storage/${tienda.logo_url}`;
+            } else {
+                logoPreview.value = null;
+            }
+        } else {
+            logoPreview.value = null;
         }
     },
     {
@@ -74,6 +86,8 @@ const seleccionarLogo = (event) => {
 
     if (file) {
         form.logo = file;
+
+        logoPreview.value = URL.createObjectURL(file);
     }
 };
 
@@ -358,20 +372,58 @@ const guardar = () => {
 
                     <Divider />
 
-                    <div class="flex flex-col gap-3">
-                        <FileUpload
-                            mode="basic"
-                            name="logo"
-                            accept="image/*"
-                            :maxFileSize="2000000"
-                            @select="seleccionarLogo"
-                            chooseLabel="Seleccionar archivo"
-                            chooseIcon="pi pi-image"
-                        />
+                    <div
+                        class="grid grid-cols-1 md:grid-cols-2 gap-6 items-center"
+                    >
+                        <!-- PREVISUALIZACIÓN -->
+                        <div class="flex flex-col gap-2">
+                            <span class="text-sm font-medium text-gray-700">
+                                Vista previa
+                            </span>
 
-                        <small class="text-gray-500">
-                            Formatos permitidos: JPG, PNG. Máximo 2 MB.
-                        </small>
+                            <div
+                                class="w-full h-48 flex items-center justify-center border border-gray-200 rounded-xl bg-gray-50 overflow-hidden"
+                            >
+                                <!-- Hay logo -->
+                                <img
+                                    v-if="logoPreview"
+                                    :src="logoPreview"
+                                    alt="Logo de la tienda"
+                                    class="max-w-full max-h-full object-contain p-4"
+                                />
+
+                                <!-- No hay logo -->
+                                <div
+                                    v-else
+                                    class="flex flex-col items-center justify-center gap-2 text-gray-400"
+                                >
+                                    <i class="pi pi-image text-4xl"></i>
+
+                                    <span class="text-sm"> Sin logo </span>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- SELECCIONAR ARCHIVO -->
+                        <div class="flex flex-col gap-3">
+                            <span class="text-sm font-medium text-gray-700">
+                                Seleccionar logo
+                            </span>
+
+                            <FileUpload
+                                mode="basic"
+                                name="logo"
+                                accept="image/*"
+                                :maxFileSize="2000000"
+                                @select="seleccionarLogo"
+                                chooseLabel="Seleccionar archivo"
+                                chooseIcon="pi pi-image"
+                            />
+
+                            <small class="text-gray-500">
+                                Formatos permitidos: JPG, PNG. Máximo 2 MB.
+                            </small>
+                        </div>
                     </div>
 
                     <!-- BOTÓN -->

@@ -1,14 +1,24 @@
 <script setup>
-import { ref, computed, nextTick } from "vue";
-import { router } from "@inertiajs/vue3";
+import {
+    ref,
+    computed,
+    nextTick,
+    watch,
+    onBeforeUnmount,
+    onMounted,
+} from "vue";
+import { usePage, router } from "@inertiajs/vue3";
 import AppLayout from "@/Layouts/AppLayout.vue";
 import Card from "@/Components/Card.vue";
 import PagoDialog from "./PagoDialog.vue";
+import ComprobanteTicket from "./ComprobanteTicket.vue";
 import Swal from "sweetalert2";
 
 defineOptions({
     layout: AppLayout,
 });
+
+const page = usePage();
 
 const props = defineProps({
     sesionCaja: {
@@ -18,6 +28,18 @@ const props = defineProps({
     productos: {
         type: Array,
         default: () => [],
+    },
+    cajaAbierta: {
+        type: Boolean,
+        default: false,
+    },
+    comprobantesEmitidos: {
+        type: Array,
+        default: () => [],
+    },
+    tienda: {
+        type: Object,
+        default: () => ({}),
     },
 });
 
@@ -48,6 +70,13 @@ const items = ref([
 
 const busqueda = ref("");
 const inputBusqueda = ref(null);
+const productosBuscados = ref(props.productos);
+const buscandoProductos = ref(false);
+const errorBusqueda = ref("");
+
+let temporizadorBusqueda = null;
+let controladorBusqueda = null;
+let busquedaPendiente = 0;
 
 /*
 |--------------------------------------------------------------------------
@@ -58,6 +87,8 @@ const inputBusqueda = ref(null);
 const carrito = ref([]);
 const mostrarPago = ref(false);
 const procesandoVenta = ref(false);
+const mostrarComprobantesEmitidos = ref(false);
+const comprobantesEmitidos = ref([]);
 
 /*
 |--------------------------------------------------------------------------
@@ -66,7 +97,7 @@ const procesandoVenta = ref(false);
 */
 
 const productosDisponibles = computed(() => {
-    return props.productos.filter(
+    return productosBuscados.value.filter(
         (producto) => Number(producto.stock_actual ?? 0) > 0,
     );
 });
@@ -84,23 +115,76 @@ const productosDisponibles = computed(() => {
 */
 
 const productosFiltrados = computed(() => {
-    const texto = busqueda.value.trim().toLowerCase();
+    return productosDisponibles.value;
+});
 
-    if (!texto) {
-        return productosDisponibles.value;
-    }
+const solicitarProductos = async (texto = "") => {
+    controladorBusqueda?.abort();
 
-    return productosDisponibles.value.filter((producto) => {
-        const nombre = String(producto.nombre ?? "").toLowerCase();
-        const codigo = String(producto.codigo ?? "").toLowerCase();
-        const codigoBarras = String(producto.codigo_barras ?? "").toLowerCase();
+    const controlador = new AbortController();
+    controladorBusqueda = controlador;
+    const solicitud = ++busquedaPendiente;
+    buscandoProductos.value = true;
+    errorBusqueda.value = "";
 
-        return (
-            nombre.includes(texto) ||
-            codigo.includes(texto) ||
-            codigoBarras.includes(texto)
+    try {
+        const response = await fetch(
+            route("ventas.productos.buscar", { search: texto }),
+            {
+                headers: { Accept: "application/json" },
+                signal: controlador.signal,
+            },
         );
-    });
+
+        const data = await response.json();
+
+        if (!response.ok) {
+            throw new Error(data.message ?? "No se pudieron buscar productos.");
+        }
+
+        if (solicitud !== busquedaPendiente) return [];
+
+        productosBuscados.value = Array.isArray(data.productos)
+            ? data.productos
+            : [];
+
+        return productosBuscados.value;
+    } catch (error) {
+        if (error.name !== "AbortError" && solicitud === busquedaPendiente) {
+            errorBusqueda.value =
+                "No se pudo consultar el catálogo. Intenta nuevamente.";
+            productosBuscados.value = [];
+        }
+
+        return [];
+    } finally {
+        if (solicitud === busquedaPendiente) {
+            buscandoProductos.value = false;
+        }
+    }
+};
+
+watch(busqueda, (valor) => {
+    clearTimeout(temporizadorBusqueda);
+
+    const termino = valor.trim();
+    const solicitud = ++busquedaPendiente;
+
+    controladorBusqueda?.abort();
+
+    temporizadorBusqueda = setTimeout(
+        () => {
+            if (solicitud === busquedaPendiente) {
+                solicitarProductos(termino);
+            }
+        },
+        termino ? 180 : 0,
+    );
+});
+
+onBeforeUnmount(() => {
+    clearTimeout(temporizadorBusqueda);
+    controladorBusqueda?.abort();
 });
 
 /*
@@ -109,38 +193,32 @@ const productosFiltrados = computed(() => {
 |--------------------------------------------------------------------------
 */
 
-const buscarYAgregarProducto = () => {
-    const texto = busqueda.value.trim().toLowerCase();
+const buscarYAgregarProducto = async () => {
+    const texto = busqueda.value.trim();
+    const textoNormalizado = texto.toLowerCase();
 
     if (!texto) {
         return;
     }
 
-    const productoExacto = productosDisponibles.value.find((producto) => {
+    clearTimeout(temporizadorBusqueda);
+
+    const resultados = await solicitarProductos(texto);
+    const productoExacto = resultados.find((producto) => {
         const nombre = String(producto.nombre ?? "").toLowerCase();
         const codigo = String(producto.codigo ?? "").toLowerCase();
         const codigoBarras = String(producto.codigo_barras ?? "").toLowerCase();
 
-        return codigo === texto || codigoBarras === texto || nombre === texto;
+        return (
+            codigo === textoNormalizado ||
+            codigoBarras === textoNormalizado ||
+            nombre === textoNormalizado
+        );
     });
 
-    const productoEncontrado =
-        productoExacto ||
-        productosDisponibles.value.find((producto) => {
-            const nombre = String(producto.nombre ?? "").toLowerCase();
-            const codigo = String(producto.codigo ?? "").toLowerCase();
-            const codigoBarras = String(
-                producto.codigo_barras ?? "",
-            ).toLowerCase();
+    if (!productoExacto) {
+        if (resultados.length > 0 || errorBusqueda.value) return;
 
-            return (
-                nombre.includes(texto) ||
-                codigo.includes(texto) ||
-                codigoBarras.includes(texto)
-            );
-        });
-
-    if (!productoEncontrado) {
         Swal.fire({
             icon: "warning",
             title: "Producto no encontrado",
@@ -151,7 +229,7 @@ const buscarYAgregarProducto = () => {
         return;
     }
 
-    agregarAlCarrito(productoEncontrado);
+    agregarAlCarrito(productoExacto);
 
     limpiarBusqueda();
 };
@@ -376,7 +454,6 @@ const totalVenta = computed(() => {
     }, 0);
 });
 
-
 const cantidadProductos = computed(() => {
     return carrito.value.reduce((total, item) => {
         return total + Number(item.cantidad || 0);
@@ -398,6 +475,23 @@ const formatearMoneda = (valor) => {
         style: "currency",
         currency: "PEN",
     }).format(Number(valor || 0));
+};
+
+const cerrarDialogoComprobantes = () => {
+    mostrarComprobantesEmitidos.value = false;
+    comprobantesEmitidos.value = [];
+};
+
+const imprimirComprobantesEmitidos = () => {
+    const limpiarModoImpresion = () => {
+        document.body.classList.remove("printing-emitted-receipts");
+    };
+
+    document.body.classList.add("printing-emitted-receipts");
+    window.addEventListener("afterprint", limpiarModoImpresion, {
+        once: true,
+    });
+    window.print();
 };
 
 /*
@@ -440,6 +534,8 @@ const procesarVenta = (datosPago) => {
         {
             cliente_id: clienteId,
 
+            cliente: datosPago.cliente,
+
             sesion_caja_id: props.sesionCaja.id,
 
             tipo_comprobante_id: datosPago.comprobante === "Factura" ? 2 : 1,
@@ -476,19 +572,24 @@ const procesarVenta = (datosPago) => {
         {
             preserveScroll: true,
 
-            onSuccess: () => {
+            onSuccess: async (page) => {
                 mostrarPago.value = false;
 
                 carrito.value = [];
 
-                limpiarBusqueda();
+                comprobantesEmitidos.value = Array.isArray(
+                    page.props.comprobantesEmitidos,
+                )
+                    ? page.props.comprobantesEmitidos
+                    : [];
 
-                Swal.fire({
-                    icon: "success",
-                    title: "¡Venta registrada!",
-                    text: "La venta se registró correctamente.",
-                    confirmButtonText: "Aceptar",
-                });
+                mostrarComprobantesEmitidos.value =
+                    comprobantesEmitidos.value.length > 0;
+
+                //Actualizar catálogo después de registrar la venta
+                await solicitarProductos(busqueda.value.trim());
+
+                limpiarBusqueda();
             },
 
             onError: (errors) => {
@@ -510,6 +611,23 @@ const procesarVenta = (datosPago) => {
         },
     );
 };
+
+onMounted(() => {
+    if (!props.cajaAbierta) {
+        Swal.fire({
+            icon: "warning",
+            title: "Caja no abierta",
+            text: "Debes abrir una caja antes de realizar una venta.",
+            confirmButtonText: "Ir a abrir caja",
+            allowOutsideClick: false,
+            allowEscapeKey: false,
+        }).then((result) => {
+            if (result.isConfirmed) {
+                router.visit(route("sesiones-caja.index"));
+            }
+        });
+    }
+});
 </script>
 
 <template>
@@ -542,7 +660,7 @@ const procesarVenta = (datosPago) => {
                         <i class="pi pi-box text-[#7F1D3F]"></i>
 
                         <span class="text-sm font-medium">
-                            {{ productosDisponibles.length }} productos
+                            {{ productosDisponibles.length }} resultados
                         </span>
                     </div>
                 </div>
@@ -587,15 +705,15 @@ const procesarVenta = (datosPago) => {
                                             <p
                                                 class="text-xs text-gray-500 mt-0.5"
                                             >
-                                                Selecciona un producto para
-                                                agregarlo a la venta
+                                                Busca productos para agregarlos
+                                                a la venta
                                             </p>
                                         </div>
                                     </div>
                                 </div>
 
                                 <Tag
-                                    :value="`${productosDisponibles.length} disponibles`"
+                                    :value="`${productosDisponibles.length} resultados`"
                                     severity="info"
                                     class="!bg-[#FDF2F5] !text-[#7F1D3F] !border !border-[#F5DCE4]"
                                 />
@@ -604,7 +722,13 @@ const procesarVenta = (datosPago) => {
                             <!-- BUSCADOR -->
                             <div class="flex gap-2 mt-5">
                                 <IconField class="w-full">
-                                    <InputIcon class="pi pi-barcode" />
+                                    <InputIcon
+                                        :class="
+                                            buscandoProductos
+                                                ? 'pi pi-spin pi-spinner'
+                                                : 'pi pi-barcode'
+                                        "
+                                    />
 
                                     <InputText
                                         ref="inputBusqueda"
@@ -638,11 +762,12 @@ const procesarVenta = (datosPago) => {
                                 <i class="pi pi-info-circle text-[#7F1D3F]"></i>
 
                                 <span>
-                                    Escanea el código de barras o escribe el
-                                    nombre y presiona
+                                    Escanea un código para agregarlo o busca por
+                                    nombre y selecciona un resultado. Presiona
                                     <strong class="text-[#7F1D3F]">
                                         Enter
                                     </strong>
+                                    para agregar una coincidencia exacta.
                                 </span>
                             </div>
                         </div>
@@ -767,7 +892,10 @@ const procesarVenta = (datosPago) => {
                                 </div>
 
                                 <p class="font-medium text-gray-600 m-0">
-                                    Sin coincidencias para "{{ busqueda }}"
+                                    {{
+                                        errorBusqueda ||
+                                        `Sin coincidencias para "${busqueda}"`
+                                    }}
                                 </p>
 
                                 <small class="mt-1">
@@ -1032,7 +1160,6 @@ const procesarVenta = (datosPago) => {
                                     </span>
                                 </div>
 
-
                                 <!-- TOTAL -->
                                 <div
                                     class="rounded-xl bg-[#FDF2F5] border border-[#F5DCE4] px-4 py-4"
@@ -1075,6 +1202,43 @@ const procesarVenta = (datosPago) => {
             :procesando="procesandoVenta"
             @confirmar="procesarVenta"
         />
+
+        <Dialog
+            v-model:visible="mostrarComprobantesEmitidos"
+            modal
+            :header="`Comprobantes emitidos (${comprobantesEmitidos.length})`"
+            :style="{ width: '900px', maxHeight: '90vh' }"
+            :breakpoints="{ '1199px': '80vw', '575px': '95vw' }"
+            @hide="comprobantesEmitidos = []"
+        >
+            <p class="mb-4 text-sm text-gray-600">
+                Se emitieron {{ comprobantesEmitidos.length }}
+                comprobante{{ comprobantesEmitidos.length === 1 ? '' : 's' }}.
+            </p>
+
+            <div class="emitted-receipts-print-area">
+                <ComprobanteTicket
+                    v-for="comprobante in comprobantesEmitidos"
+                    :key="comprobante.id"
+                    :venta="comprobante"
+                    :tienda="props.tienda"
+                />
+            </div>
+
+            <template #footer>
+                <Button
+                    label="Cerrar"
+                    severity="secondary"
+                    outlined
+                    @click="cerrarDialogoComprobantes"
+                />
+                <Button
+                    label="Imprimir todos"
+                    icon="pi pi-print"
+                    @click="imprimirComprobantesEmitidos"
+                />
+            </template>
+        </Dialog>
     </v-container>
 </template>
 
@@ -1090,5 +1254,83 @@ const procesarVenta = (datosPago) => {
 }
 .cart-row-leave-active {
     position: absolute;
+}
+
+.emitted-receipts-print-area {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    max-height: 65vh;
+    overflow-y: auto;
+}
+
+@media print {
+    :global(body.printing-emitted-receipts #app) {
+        display: none !important;
+    }
+
+    :global(body.printing-emitted-receipts .emitted-receipts-print-area),
+    :global(body.printing-emitted-receipts .emitted-receipts-print-area *) {
+        visibility: visible !important;
+    }
+
+    :global(body.printing-emitted-receipts .emitted-receipts-print-area) {
+        position: absolute !important;
+        top: 0 !important;
+        left: 0 !important;
+        display: block;
+        width: 80mm;
+        max-height: none;
+        overflow: visible;
+    }
+
+    :global(body.printing-emitted-receipts .p-dialog-mask) {
+        position: static !important;
+        display: block !important;
+        overflow: visible !important;
+        background: transparent !important;
+    }
+
+    :global(body.printing-emitted-receipts .p-dialog) {
+        position: static !important;
+        width: 80mm !important;
+        max-height: none !important;
+        margin: 0 !important;
+        box-shadow: none !important;
+        transform: none !important;
+    }
+
+    :global(body.printing-emitted-receipts .p-dialog-header),
+    :global(body.printing-emitted-receipts .p-dialog-footer),
+    :global(body.printing-emitted-receipts .no-print) {
+        display: none !important;
+    }
+
+    :global(body.printing-emitted-receipts .p-dialog-content) {
+        display: block !important;
+        width: 80mm !important;
+        margin: 0 !important;
+        padding: 0 !important;
+        max-height: none !important;
+        overflow: visible !important;
+    }
+
+    :global(body.printing-emitted-receipts .emitted-receipts-print-area > .ticket-page) {
+        margin: 0 !important;
+        break-inside: avoid;
+        page-break-inside: avoid;
+    }
+
+    :global(html),
+    :global(body.printing-emitted-receipts) {
+        margin: 0 !important;
+        padding: 0 !important;
+        width: 80mm !important;
+    }
+
+    @page {
+        size: 80mm 200mm;
+        margin: 0;
+    }
 }
 </style>

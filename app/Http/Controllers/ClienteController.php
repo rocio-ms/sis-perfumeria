@@ -35,6 +35,21 @@ class ClienteController extends Controller
             ->orderByDesc('id')
             ->paginate(10)
             ->withQueryString();
+        // Crear el nombre completo para cada cliente
+        $clientes->getCollection()->transform(function ($cliente) {
+
+            if ($cliente->tipo_documento === 'RUC') {
+                $cliente->nombre_completo = $cliente->razon_social_nombre;
+            } else {
+                $cliente->nombre_completo = trim(
+                    ($cliente->nombres ?? '') . ' ' .
+                        ($cliente->ap_paterno ?? '') . ' ' .
+                        ($cliente->ap_materno ?? '')
+                );
+            }
+
+            return $cliente;
+        });
 
         return Inertia::render(
             'Clientes/Index',

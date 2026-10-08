@@ -176,8 +176,8 @@ Route::middleware([
     Route::put('/productos/{producto}', [ProductoController::class, 'update'])
         // ->middleware('permission:productos.update')
         ->name('productos.update');
-    
-    
+
+
     /*
 
     |--------------------------------------------------------------------------
@@ -344,6 +344,13 @@ Route::middleware([
     |--------------------------------------------------------------------------
     */
 
+    Route::get(
+        '/ventas/productos/buscar',
+        [VentaController::class, 'buscarProductos']
+    )
+        ->middleware('permission:ventas.crear')
+        ->name('ventas.productos.buscar');
+
     // Listar ventas
     Route::get(
         '/ventas',
@@ -438,8 +445,25 @@ Route::middleware([
     // Empresas
 
     Route::resource('/empresas', EmpresaController::class);
+    Route::get(
+        '/sesiones-caja/verificar-abierta',
+        function () {
+            $abierta = \App\Models\SesionCaja::where('user_id', Auth::id())
+                ->where('estado', 'abierta')
+                ->exists();
 
-    //Reportes
+            return response()->json([
+                'abierta' => $abierta,
+            ]);
+        }
+    )->name('sesiones-caja.verificar-abierta');
+    // Página principal de reportes
     Route::get('/reportes', [ReporteController::class, 'index'])
         ->name('reportes.index');
+    Route::get('/reportes/ventas', [ReporteController::class, 'ventas'])->name('reportes.ventas');
+
+    Route::get(
+        '/reportes/empresa/{empresa}/ventas-pdf',
+        [ReporteController::class, 'ventasEmpresaPdf']
+    )->name('reportes.empresa.ventas.pdf');
 });

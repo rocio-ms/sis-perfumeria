@@ -58,8 +58,7 @@ class HandleInertiaRequests extends Middleware
             'notificaciones' => function () {
                 app(NotificacionService::class)->sincronizar();
 
-                $items = Notificacion::where('leida', false)
-                    ->where('solucionada', false)
+                $items = Notificacion::where('solucionada', false)
                     ->orderByDesc('created_at')
                     ->limit(10)
                     ->get()

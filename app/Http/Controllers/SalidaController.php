@@ -18,8 +18,50 @@ class SalidaController extends Controller
     /**
      * Mostrar listado de salidas.
      */
-    public function index()
+    public function index(Request $request)
     {
+
+        $buscarProducto = trim($request->input('buscar_producto', ''));
+
+        // Búsqueda rápida de productos
+        if ($request->has('buscar_producto')) {
+
+            $productos = collect();
+
+            if ($buscarProducto !== '') {
+
+                $productos = Producto::with([
+                    'lotes' => function ($query) {
+                        $query
+                            ->where('cantidad_actual', '>', 0)
+                            ->with('detalleEntrada')
+                            ->orderBy('id');
+                    },
+                ])
+                    ->where('activo', true)
+                    ->where(function ($query) use ($buscarProducto) {
+
+                        $query->where('codigo_barras', 'like', "{$buscarProducto}%")
+                            ->orWhere('codigo', 'like', "{$buscarProducto}%")
+                            ->orWhere('nombre', 'like', "{$buscarProducto}%");
+                    })
+                    ->orderBy('nombre')
+                    ->limit(20)
+                    ->get([
+                        'id',
+                        'codigo',
+                        'codigo_barras',
+                        'nombre',
+                        'stock_actual',
+                    ]);
+            }
+
+            return Inertia::render('Salidas/Index', [
+                'productos' => $productos,
+            ]);
+        }
+
+
         // Salidas registradas
         $salidas = Salida::with([
             'cliente',
@@ -30,24 +72,8 @@ class SalidaController extends Controller
             ->orderByDesc('id')
             ->paginate(10);
 
-        // Productos activos con sus lotes que todavía tienen stock
-        $productos = Producto::with([
-            'lotes' => function ($query) {
-                $query
-                    ->where('cantidad_actual', '>', 0)
-                    ->with('detalleEntrada')
-                    ->orderBy('id');
-            },
-        ])
-            ->where('activo', true)
-            ->orderBy('nombre')
-            ->get([
-                'id',
-                'codigo',
-                'codigo_barras',
-                'nombre',
-                'stock_actual',
-            ]);
+        // Productos
+        $productos = collect();
 
         // Clientes activos
         $clientes = Cliente::where('activo', true)

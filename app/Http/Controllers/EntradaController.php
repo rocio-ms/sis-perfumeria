@@ -26,8 +26,42 @@ class EntradaController extends Controller
     |--------------------------------------------------------------------------
     */
 
-    public function index()
+    public function index(Request $request)
     {
+
+        $buscarProducto = trim($request->input('buscar_producto', ''));
+
+        // Busqueda rápida de productos
+
+        if ($request->has('buscar_producto')) {
+
+            $productos = collect();
+
+            if ($buscarProducto !== '') {
+
+                $productos = Producto::where('activo', true)
+                    ->where(function ($query) use ($buscarProducto) {
+                        $query->where('nombre', 'like', "{$buscarProducto}%")
+                            ->orWhere('codigo', 'like', "{$buscarProducto}%")
+                            ->orWhere('codigo_barras', 'like', "{$buscarProducto}%");
+                    })
+                    ->select([
+                        'id',
+                        'nombre',
+                        'codigo',
+                        'codigo_barras',
+                        'unidad_medida',
+                        'stock_actual',
+                    ])
+                    ->limit(20)
+                    ->get();
+            }
+
+            return Inertia::render('Entradas/Index', [
+                'productos' => $productos,
+            ]);
+        }
+
         $entradas = Entrada::with([
             'proveedor',
             'user',
@@ -39,8 +73,12 @@ class EntradaController extends Controller
 
         $proveedores = Proveedor::where('activo', true)
             ->get();
+        $categorias = Categoria::where('activo', true)
+            ->orderBy('nombre')
+            ->get();
 
-        $productos = Producto::where('activo', true)
+        $marcas = Marca::where('activo', true)
+            ->orderBy('nombre')
             ->get();
 
         $ultimoId = Entrada::max('id') ?? 0;
@@ -55,7 +93,7 @@ class EntradaController extends Controller
         return Inertia::render('Entradas/Index', [
             'entradas' => $entradas,
             'proveedores' => $proveedores,
-            'productos' => $productos,
+            'productos' => collect(),
             'categorias' => Categoria::where('activo', true)
                 ->orderBy('nombre')
                 ->get(),
@@ -65,7 +103,6 @@ class EntradaController extends Controller
             'codigoIngreso' => $codigoIngreso,
         ]);
     }
-
 
     /*
     |--------------------------------------------------------------------------
@@ -224,6 +261,7 @@ class EntradaController extends Controller
             'detalles.*.fecha_vencimiento' => [
                 'nullable',
                 'date',
+                'after:today',
             ],
         ]);
 
@@ -623,6 +661,7 @@ class EntradaController extends Controller
             'detalles.*.fecha_vencimiento' => [
                 'nullable',
                 'date',
+                'after:today',
             ],
         ]);
 
