@@ -6,6 +6,7 @@ import AppLayout from "@/Layouts/AppLayout.vue";
 import Card from "@/Components/Card.vue";
 
 import Select from "primevue/select";
+import DatePicker from "primevue/datepicker";
 import Button from "primevue/button";
 import DataTable from "primevue/datatable";
 import Column from "primevue/column";
@@ -77,6 +78,8 @@ const props = defineProps({
         default: () => ({
             empresa_id: null,
             tipo_pago_id: null,
+            periodo_ventas_empresa: "mes",
+            fecha_referencia_ventas_empresa: null,
         }),
     },
 });
@@ -106,6 +109,41 @@ const items = ref([
 const empresaId = ref(props.filtros?.empresa_id ?? 0);
 
 const tipoPagoId = ref(props.filtros?.tipo_pago_id ?? null);
+const periodoVentasEmpresa = ref(
+    props.filtros?.periodo_ventas_empresa ?? "mes",
+);
+const fechaReferenciaVentasEmpresa = ref(
+    parseFechaReferencia(
+        props.filtros?.fecha_referencia_ventas_empresa,
+    ),
+);
+
+const periodosVentasEmpresa = [
+    { label: "Día", value: "dia" },
+    { label: "Semana", value: "semana" },
+    { label: "Mes", value: "mes" },
+];
+
+function parseFechaReferencia(fecha) {
+    if (fecha instanceof Date && !Number.isNaN(fecha.getTime())) {
+        return new Date(fecha.getFullYear(), fecha.getMonth(), fecha.getDate());
+    }
+
+    if (typeof fecha === "string" && /^\d{4}-\d{2}-\d{2}$/.test(fecha)) {
+        const [year, month, day] = fecha.split("-").map(Number);
+        return new Date(year, month - 1, day);
+    }
+
+    return new Date();
+}
+
+function fechaReferenciaComoTexto(fecha) {
+    const year = fecha.getFullYear();
+    const month = String(fecha.getMonth() + 1).padStart(2, "0");
+    const day = String(fecha.getDate()).padStart(2, "0");
+
+    return `${year}-${month}-${day}`;
+}
 
 /*
 |--------------------------------------------------------------------------
@@ -147,6 +185,10 @@ function aplicarFiltros() {
         {
             empresa_id: empresaId.value || null,
             tipo_pago_id: tipoPagoId.value || null,
+            periodo_ventas_empresa: periodoVentasEmpresa.value,
+            fecha_referencia_ventas_empresa: fechaReferenciaComoTexto(
+                fechaReferenciaVentasEmpresa.value,
+            ),
         },
         {
             preserveState: true,
@@ -156,9 +198,17 @@ function aplicarFiltros() {
     );
 }
 
-watch([empresaId, tipoPagoId], () => {
-    aplicarFiltros();
-});
+watch(
+    [
+        empresaId,
+        tipoPagoId,
+        periodoVentasEmpresa,
+        fechaReferenciaVentasEmpresa,
+    ],
+    () => {
+        aplicarFiltros();
+    },
+);
 
 /*
 |--------------------------------------------------------------------------
@@ -267,6 +317,28 @@ function exportarProximosVencerPdf() {
 | REPORTE COMPLETO DE EMPRESA
 |--------------------------------------------------------------------------
 */
+
+function exportarVentasEmpresaPdf(empresaId) {
+    if (!empresaId) {
+        return;
+    }
+
+    const params = new URLSearchParams({
+        periodo_ventas_empresa: periodoVentasEmpresa.value,
+        fecha_referencia_ventas_empresa: fechaReferenciaComoTexto(
+            fechaReferenciaVentasEmpresa.value,
+        ),
+    });
+
+    if (tipoPagoId.value) {
+        params.set("tipo_pago_id", tipoPagoId.value);
+    }
+
+    window.open(
+        `${route("reportes.empresa.ventas.pdf", { empresa: empresaId })}?${params.toString()}`,
+        "_blank",
+    );
+}
 
 function exportarReporteEmpresaPdf() {
     if (!empresaId.value) {
@@ -852,14 +924,49 @@ const totalVentasCaja = computed(() => {
                 <!-- ================================================= -->
 
                 <div class="mb-8">
-                    <div class="mb-4">
-                        <h2 class="text-lg font-semibold text-slate-800">
-                            Detalle de ventas por empresa
-                        </h2>
+                    <div
+                        class="flex flex-col lg:flex-row lg:items-end justify-between gap-4 mb-4"
+                    >
+                        <div>
+                            <h2 class="text-lg font-semibold text-slate-800">
+                                Detalle de ventas por empresa
+                            </h2>
 
-                        <p class="text-sm text-slate-500">
-                            Resumen detallado de las ventas realizadas.
-                        </p>
+                            <p class="text-sm text-slate-500">
+                                Resumen detallado de las ventas realizadas.
+                            </p>
+                        </div>
+
+                        <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                            <FloatLabel variant="on">
+                                <Select
+                                    v-model="periodoVentasEmpresa"
+                                    inputId="periodo-ventas-empresa"
+                                    :options="periodosVentasEmpresa"
+                                    optionLabel="label"
+                                    optionValue="value"
+                                    class="w-full"
+                                />
+                                <label for="periodo-ventas-empresa">
+                                    Periodo
+                                </label>
+                            </FloatLabel>
+
+                            <FloatLabel variant="on">
+                                <DatePicker
+                                    v-model="fechaReferenciaVentasEmpresa"
+                                    inputId="fecha-referencia-ventas-empresa"
+                                    dateFormat="dd/mm/yy"
+                                    showIcon
+                                    class="w-full"
+                                    inputClass="w-full"
+                                />
+                                <label for="fecha-referencia-ventas-empresa">
+                                    Fecha de referencia
+                                </label>
+                            </FloatLabel>
+
+                        </div>
                     </div>
 
                     <DataTable
@@ -878,6 +985,24 @@ const totalVentasCaja = computed(() => {
                                 <span class="font-semibold">
                                     {{ moneda(data.total) }}
                                 </span>
+                            </template>
+                        </Column>
+
+                        <Column header="Detalle PDF">
+                            <template #body="{ data }">
+                                <Button
+                                    v-if="data.empresa_id"
+                                    label="PDF"
+                                    icon="pi pi-file-pdf"
+                                    size="small"
+                                    class="!bg-[#7F1D3F] !border-[#7F1D3F] !text-white hover:!bg-[#64152F] hover:!border-[#64152F]"
+                                    @click="
+                                        exportarVentasEmpresaPdf(
+                                            data.empresa_id,
+                                        )
+                                    "
+                                />
+                                <span v-else class="text-slate-400">—</span>
                             </template>
                         </Column>
                     </DataTable>

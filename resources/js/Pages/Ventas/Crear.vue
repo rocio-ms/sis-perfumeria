@@ -1260,8 +1260,8 @@ onMounted(() => {
     display: flex;
     flex-direction: column;
     align-items: center;
-    max-height: 65vh;
-    overflow-y: auto;
+    max-height: none !important;
+    overflow: visible !important;
 }
 
 @media print {

@@ -33,7 +33,7 @@ const form = useForm({
     descripcion: "",
     unidad_medida: null,
     tiene_descuento: false,
-    descuento: 0,
+    descuento: null,
     stock_minimo: null,
     stock_actual: 0,
     volumen_ml: 0,
@@ -88,7 +88,7 @@ const limpiarFormulario = () => {
     form.precio_venta = null;
 
     form.tiene_descuento = false;
-    form.descuento = 0;
+    form.descuento = null;
 
     form.stock_minimo = null;
     form.stock_actual = 0;

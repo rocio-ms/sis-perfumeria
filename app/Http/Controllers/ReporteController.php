@@ -20,6 +20,24 @@ class ReporteController extends Controller
 
         $empresaId = $request->input('empresa_id');
         $tipoPagoId = $request->input('tipo_pago_id');
+        $periodoProductos = $request->input('periodo_productos', 'mes');
+        $fechaReferencia = $request->input('fecha_referencia', Carbon::today()->toDateString());
+        $periodoVentasEmpresa = $request->input('periodo_ventas_empresa') ?: 'mes';
+        $fechaReferenciaVentasEmpresa = $request->input(
+            'fecha_referencia_ventas_empresa'
+        ) ?: Carbon::today()->toDateString();
+
+        $request->validate([
+            'periodo_productos' => 'nullable|in:dia,semana,mes',
+            'fecha_referencia' => 'nullable|date',
+            'periodo_ventas_empresa' => 'nullable|in:dia,semana,mes',
+            'fecha_referencia_ventas_empresa' => 'nullable|date',
+        ]);
+
+        [$inicioVentasEmpresa, $finVentasEmpresa] = $this->rangoProductos(
+            $periodoVentasEmpresa,
+            Carbon::parse($fechaReferenciaVentasEmpresa)
+        );
 
         $hoyInicio = Carbon::today();
         $hoyFin = Carbon::today()->endOfDay();
@@ -113,8 +131,8 @@ class ReporteController extends Controller
 
         $ventasPorEmpresa = (clone $ventasQuery)
             ->whereBetween('fecha_emision', [
-                $mesInicio,
-                $mesFin,
+                $inicioVentasEmpresa,
+                $finVentasEmpresa,
             ])
             ->select(
                 'empresa_emisora_id',
@@ -242,6 +260,14 @@ class ReporteController extends Controller
                 ];
             })
             ->values();
+
+        $productosVendidosEmpresa = $empresaId
+            ? $this->obtenerProductosVendidosPorEmpresa(
+                (int) $empresaId,
+                $periodoProductos,
+                $fechaReferencia
+            )
+            : collect();
 
         $stockBajo = Producto::query()
             ->where('activo', true)
@@ -448,6 +474,8 @@ class ReporteController extends Controller
 
             'productosMasVendidos' => $productosMasVendidos,
 
+            'productosVendidosEmpresa' => $productosVendidosEmpresa,
+
 
             /*
             |--------------------------------------------------------------------------
@@ -488,9 +516,93 @@ class ReporteController extends Controller
             'filtros' => [
                 'empresa_id' => $empresaId,
                 'tipo_pago_id' => $tipoPagoId,
+                'periodo_productos' => $periodoProductos,
+                'fecha_referencia' => $fechaReferencia,
+                'periodo_ventas_empresa' => $periodoVentasEmpresa,
+                'fecha_referencia_ventas_empresa' => $fechaReferenciaVentasEmpresa,
             ]
         ]);
     }
+
+    public function productosEmpresaPdf(Request $request)
+    {
+        $filtros = $request->validate([
+            'empresa_id' => 'required|exists:empresas,id',
+            'periodo_productos' => 'required|in:dia,semana,mes',
+            'fecha_referencia' => 'required|date',
+        ]);
+
+        $empresa = Empresa::findOrFail($filtros['empresa_id']);
+        $productos = $this->obtenerProductosVendidosPorEmpresa(
+            (int) $empresa->id,
+            $filtros['periodo_productos'],
+            $filtros['fecha_referencia']
+        );
+
+        $periodo = $filtros['periodo_productos'];
+        [$inicio, $fin] = $this->rangoProductos(
+            $periodo,
+            Carbon::parse($filtros['fecha_referencia'])
+        );
+
+        return Pdf::loadView('reportes.productos-empresa', [
+            'empresa' => $empresa,
+            'productos' => $productos,
+            'periodo' => ucfirst($periodo),
+            'fechaInicio' => $inicio->format('d/m/Y'),
+            'fechaFin' => $fin->format('d/m/Y'),
+            'totalUnidades' => $productos->sum('cantidad'),
+            'totalImporte' => $productos->sum('total'),
+        ])->setPaper('a4', 'portrait')->stream(
+            'productos-vendidos-' . str($empresa->razon_social)->slug() . '.pdf'
+        );
+    }
+
+    private function obtenerProductosVendidosPorEmpresa(
+        int $empresaId,
+        string $periodo,
+        string $fechaReferencia
+    ) {
+        [$inicio, $fin] = $this->rangoProductos(
+            $periodo,
+            Carbon::parse($fechaReferencia)
+        );
+
+        return DB::table('detalle_ventas')
+            ->join('ventas', 'ventas.id', '=', 'detalle_ventas.venta_id')
+            ->join('productos', 'productos.id', '=', 'detalle_ventas.producto_id')
+            ->where('detalle_ventas.empresa_id', $empresaId)
+            ->where('ventas.activo', true)
+            ->whereBetween('ventas.fecha_emision', [$inicio, $fin])
+            ->select(
+                'productos.codigo',
+                'productos.nombre',
+                DB::raw('SUM(detalle_ventas.cantidad) as cantidad'),
+                DB::raw('SUM(detalle_ventas.subtotal) as total')
+            )
+            ->groupBy('productos.id', 'productos.codigo', 'productos.nombre')
+            ->orderByDesc('cantidad')
+            ->get()
+            ->map(fn ($producto) => [
+                'codigo' => $producto->codigo,
+                'producto' => $producto->nombre,
+                'cantidad' => (int) $producto->cantidad,
+                'total' => round((float) $producto->total, 2),
+            ])
+            ->values();
+    }
+
+    private function rangoProductos(string $periodo, Carbon $fechaReferencia): array
+    {
+        $fechaReferencia = $fechaReferencia->copy();
+
+        return match ($periodo) {
+            'dia' => [$fechaReferencia->copy()->startOfDay(), $fechaReferencia->copy()->endOfDay()],
+            'semana' => [$fechaReferencia->copy()->startOfWeek(), $fechaReferencia->copy()->endOfWeek()],
+            default => [$fechaReferencia->copy()->startOfMonth(), $fechaReferencia->copy()->endOfMonth()],
+        };
+    }
+
     /**
      * Reporte de ventas
      */
@@ -782,235 +894,83 @@ class ReporteController extends Controller
 
     public function ventasEmpresaPdf(Request $request, Empresa $empresa)
     {
-        /*
-    |--------------------------------------------------------------------------
-    | OBTENER VENTAS DE LA EMPRESA
-    |--------------------------------------------------------------------------
-    |
-    | La empresa se determina desde detalle_ventas.empresa_id.
-    |
-    */
+        $filtros = $request->validate([
+            'periodo_ventas_empresa' => 'required|in:dia,semana,mes',
+            'fecha_referencia_ventas_empresa' => 'required|date',
+            'tipo_pago_id' => 'nullable|exists:tipo_pagos,id',
+        ]);
+
+        $periodo = $filtros['periodo_ventas_empresa'];
+        $fechaReferencia = Carbon::parse(
+            $filtros['fecha_referencia_ventas_empresa']
+        );
+        [$inicio, $fin] = $this->rangoProductos($periodo, $fechaReferencia);
 
         $ventas = Venta::query()
-            ->where('ventas.activo', true)
-            ->whereExists(function ($query) use ($empresa) {
-                $query->select(DB::raw(1))
-                    ->from('detalle_ventas')
-                    ->whereColumn(
-                        'detalle_ventas.venta_id',
-                        'ventas.id'
-                    )
-                    ->where(
-                        'detalle_ventas.empresa_id',
-                        $empresa->id
-                    );
+            ->where('activo', true)
+            ->whereBetween('fecha_emision', [$inicio, $fin])
+            ->when(
+                $filtros['tipo_pago_id'] ?? null,
+                fn ($query, $tipoPagoId) => $query->where(
+                    'tipo_pago_id',
+                    $tipoPagoId
+                )
+            )
+            ->whereHas('detalles', function ($query) use ($empresa) {
+                $query->where('empresa_id', $empresa->id);
             })
             ->with([
+                'cliente',
                 'tipoPago',
+                'detalles' => function ($query) use ($empresa) {
+                    $query->where('empresa_id', $empresa->id)
+                        ->with('producto');
+                },
             ])
-            ->orderBy('ventas.created_at', 'asc')
-            ->get();
+            ->orderBy('fecha_emision')
+            ->get()
+            ->map(function (Venta $venta) {
+                $cliente = $venta->cliente;
 
-
-        /*
-    |--------------------------------------------------------------------------
-    | OBTENER DETALLE DE CADA VENTA
-    |--------------------------------------------------------------------------
-    */
-
-        $ventasReporte = [];
-
-        foreach ($ventas as $venta) {
-
-            $detalles = DB::table('detalle_ventas')
-                ->join(
-                    'productos',
-                    'productos.id',
-                    '=',
-                    'detalle_ventas.producto_id'
-                )
-                ->where(
-                    'detalle_ventas.venta_id',
-                    $venta->id
-                )
-                ->where(
-                    'detalle_ventas.empresa_id',
-                    $empresa->id
-                )
-                ->select([
-                    'detalle_ventas.id',
-                    'detalle_ventas.producto_id',
-                    'detalle_ventas.cantidad',
-                    'detalle_ventas.precio_unitario',
-                    'detalle_ventas.subtotal',
-
-                    'productos.codigo',
-                    'productos.nombre',
-                ])
-                ->get();
-
-
-            /*
-        |--------------------------------------------------------------------------
-        | SI ESTA VENTA TIENE PRODUCTOS DE ESTA EMPRESA
-        |--------------------------------------------------------------------------
-        */
-
-            if ($detalles->isEmpty()) {
-                continue;
-            }
-
-
-            /*
-        |--------------------------------------------------------------------------
-        | TOTAL DE LA VENTA PARA ESTA EMPRESA
-        |--------------------------------------------------------------------------
-        */
-
-            $totalVenta = $detalles->sum(function ($detalle) {
-                return (float) ($detalle->subtotal ?? 0);
+                return [
+                    'id' => $venta->id,
+                    'fecha' => $venta->fecha_emision?->format('d/m/Y') ?? '—',
+                    'hora' => $venta->fecha_emision?->format('H:i:s') ?? '—',
+                    'fecha_original' => $venta->fecha_emision,
+                    'comprobante' => trim(
+                        ($venta->serie ?? '') . '-' . ($venta->correlativo ?? ''),
+                        '-'
+                    ) ?: ('VENTA #' . $venta->id),
+                    'cliente' => $cliente?->razon_social_nombre
+                        ?? $cliente?->nombre
+                        ?? $cliente?->nombres
+                        ?? 'CLIENTES VARIOS',
+                    'tipo_pago' => $venta->tipoPago?->nombre ?? 'No especificado',
+                    'detalles' => $venta->detalles,
+                    'total' => $venta->detalles->sum(
+                        fn ($detalle) => (float) $detalle->subtotal
+                    ),
+                ];
             });
 
+        $ventasPorDia = $ventas->groupBy('fecha');
+        $totalGeneral = $ventas->sum('total');
+        $totalProductos = $ventas
+            ->flatMap(fn ($venta) => $venta['detalles'])
+            ->sum(fn ($detalle) => (float) $detalle->cantidad);
 
-            /*
-        |--------------------------------------------------------------------------
-        | FECHA Y HORA
-        |--------------------------------------------------------------------------
-        */
-
-            $fecha = optional($venta->created_at)->format('d/m/Y');
-            $hora = optional($venta->created_at)->format('H:i:s');
-
-
-            /*
-        |--------------------------------------------------------------------------
-        | CLIENTE
-        |--------------------------------------------------------------------------
-        */
-
-            $cliente = 'CLIENTES VARIOS';
-
-            if (!empty($venta->cliente_nombre)) {
-                $cliente = $venta->cliente_nombre;
-            } elseif (!empty($venta->cliente_id)) {
-
-                /*
-            | Si tu venta tiene relación cliente,
-            | puedes reemplazar esto por $venta->cliente->...
-            */
-
-                $cliente = 'Cliente registrado';
-            }
-
-
-            /*
-        |--------------------------------------------------------------------------
-        | COMPROBANTE
-        |--------------------------------------------------------------------------
-        */
-
-            $comprobante = $venta->numero_comprobante
-                ?? $venta->serie_comprobante
-                ?? ('VENTA #' . $venta->id);
-
-
-            /*
-        |--------------------------------------------------------------------------
-        | TIPO DE PAGO
-        |--------------------------------------------------------------------------
-        */
-
-            $tipoPago = 'No especificado';
-
-            if ($venta->tipoPago) {
-                $tipoPago = $venta->tipoPago->nombre;
-            }
-
-
-            /*
-        |--------------------------------------------------------------------------
-        | GUARDAR INFORMACIÓN
-        |--------------------------------------------------------------------------
-        */
-
-            $ventasReporte[] = [
-                'id' => $venta->id,
-
-                'fecha' => $fecha,
-
-                'hora' => $hora,
-
-                'fecha_original' => $venta->created_at,
-
-                'comprobante' => $comprobante,
-
-                'cliente' => $cliente,
-
-                'tipo_pago' => $tipoPago,
-
-                'detalles' => $detalles,
-
-                'total' => $totalVenta,
-            ];
-        }
-
-
-        /*
-    |--------------------------------------------------------------------------
-    | AGRUPAR POR DÍA
-    |--------------------------------------------------------------------------
-    */
-
-        $ventasPorDia = collect($ventasReporte)
-            ->groupBy(function ($venta) {
-                return $venta['fecha'];
-            });
-
-
-        /*
-    |--------------------------------------------------------------------------
-    | TOTALES
-    |--------------------------------------------------------------------------
-    */
-
-        $cantidadVentas = count($ventasReporte);
-
-        $totalGeneral = collect($ventasReporte)
-            ->sum('total');
-
-        $totalProductos = collect($ventasReporte)
-            ->flatMap(function ($venta) {
-                return $venta['detalles'];
-            })
-            ->sum(function ($detalle) {
-                return (float) $detalle->cantidad;
-            });
-
-
-        /*
-    |--------------------------------------------------------------------------
-    | GENERAR PDF
-    |--------------------------------------------------------------------------
-    */
-
-        $pdf = Pdf::loadView(
-            'reportes.empresa-ventas',
-            [
-                'empresa' => $empresa,
-                'ventasPorDia' => $ventasPorDia,
-                'cantidadVentas' => $cantidadVentas,
-                'totalGeneral' => $totalGeneral,
-                'totalProductos' => $totalProductos,
-            ]
-        );
-
-        $pdf->setPaper('a4', 'portrait');
-
-        return $pdf->stream(
-            'reporte-ventas-' .
-                str($empresa->razon_social)
-                ->slug() .
-                '.pdf'
+        return Pdf::loadView('reportes.empresa-ventas', [
+            'empresa' => $empresa,
+            'ventasPorDia' => $ventasPorDia,
+            'cantidadVentas' => $ventas->count(),
+            'totalGeneral' => $totalGeneral,
+            'totalProductos' => $totalProductos,
+            'periodo' => ucfirst($periodo),
+            'fechaInicio' => $inicio->format('d/m/Y'),
+            'fechaFin' => $fin->format('d/m/Y'),
+        ])->setPaper('a4', 'portrait')->stream(
+            'reporte-ventas-' . str($empresa->razon_social)->slug() . '-' .
+                $periodo . '-' . $fechaReferencia->format('Y-m-d') . '.pdf'
         );
     }
 }

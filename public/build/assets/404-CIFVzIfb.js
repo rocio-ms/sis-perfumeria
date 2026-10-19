@@ -1,1 +1,0 @@
-import{N as e,l as t}from"./runtime-core.esm-bundler-C8qHIgUv.js";import{t as n}from"./ErrorPage-DHXUimUv.js";var r={__name:`404`,setup(r){return(r,i)=>(e(),t(n,{code:`404`,title:`Página no encontrada`,message:`La página que estás buscando no existe o la dirección ingresada no es válida.`,icon:`pi pi-search`}))}};export{r as default};

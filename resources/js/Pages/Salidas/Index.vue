@@ -6,6 +6,9 @@ import Card from "@/Components/Card.vue";
 import AppLayout from "@/Layouts/AppLayout.vue";
 
 import Form from "./Form.vue";
+import ComprobanteTicket from "@/Pages/Ventas/ComprobanteTicket.vue";
+import Button from "primevue/button";
+import Dialog from "primevue/dialog";
 import Swal from "sweetalert2";
 
 defineOptions({
@@ -28,11 +31,29 @@ const props = defineProps({
         type: Array,
         default: () => [],
     },
+    tienda: {
+        type: Object,
+        default: () => ({}),
+    },
 });
 
 const mostrarForm = ref(false);
+const mostrarComprobanteVenta = ref(false);
 const salidaSeleccionada = ref(null);
+const ventaSeleccionada = ref(null);
 const salidasFiltradas = computed(() => props.salidas?.data ?? []);
+const comprobantesVenta = computed(() => {
+    const comprobantes = ventaSeleccionada.value?.comprobantes ?? [];
+    const ventas = comprobantes.length
+        ? comprobantes
+        : ventaSeleccionada.value
+          ? [ventaSeleccionada.value]
+          : [];
+
+    return Array.from(
+        new Map(ventas.map((venta) => [String(venta.id), venta])).values(),
+    );
+});
 /*
 |--------------------------------------------------------------------------
 | COLUMNAS
@@ -136,15 +157,23 @@ const verSalida = (salida) => {
     | SI ES VENTA
     |--------------------------------------------------------------------------
     |
-    | La venta se consulta desde el Historial de Ventas.
+    | Mostrar los comprobantes de la venta directamente en un diálogo.
     |
     */
 
     if (salida.tipo_salida === "venta") {
-        if (salida.venta_id) {
-            window.location.href = route("ventas.show", salida.venta_id);
+        if (!salida.venta) {
+            Swal.fire({
+                title: "Comprobante no disponible",
+                text: "No se encontró la venta asociada a esta salida.",
+                icon: "error",
+                confirmButtonText: "Aceptar",
+            });
+            return;
         }
 
+        ventaSeleccionada.value = salida.venta;
+        mostrarComprobanteVenta.value = true;
         return;
     }
 
@@ -160,6 +189,27 @@ const verSalida = (salida) => {
 
     salidaSeleccionada.value = salida;
     mostrarForm.value = true;
+};
+
+const cerrarDialogoComprobante = () => {
+    mostrarComprobanteVenta.value = false;
+    ventaSeleccionada.value = null;
+};
+
+const imprimirComprobantesVenta = () => {
+    if (!comprobantesVenta.value.length) {
+        return;
+    }
+
+    const limpiarModoImpresion = () => {
+        document.body.classList.remove("printing-salida-receipts");
+    };
+
+    document.body.classList.add("printing-salida-receipts");
+    window.addEventListener("afterprint", limpiarModoImpresion, {
+        once: true,
+    });
+    window.print();
 };
 
 /*
@@ -257,5 +307,119 @@ const formularioGuardado = async (tipo) => {
             @saved="formularioGuardado"
             @cancel="cerrarForm"
         />
+
+        <Dialog
+            v-model:visible="mostrarComprobanteVenta"
+            modal
+            :header="`Comprobantes emitidos (${comprobantesVenta.length})`"
+            :style="{ width: '900px', maxHeight: '90vh' }"
+            :breakpoints="{ '1199px': '80vw', '575px': '95vw' }"
+            @hide="cerrarDialogoComprobante"
+        >
+            <p class="mb-4 text-sm text-gray-600">
+                Se emitieron {{ comprobantesVenta.length }}
+                comprobante{{ comprobantesVenta.length === 1 ? "" : "s" }}.
+            </p>
+
+            <div class="salida-receipts-print-area">
+                <ComprobanteTicket
+                    v-for="comprobante in comprobantesVenta"
+                    :key="comprobante.id"
+                    :venta="comprobante"
+                    :tienda="props.tienda"
+                />
+            </div>
+
+            <template #footer>
+                <Button
+                    label="Cerrar"
+                    severity="secondary"
+                    outlined
+                    @click="cerrarDialogoComprobante"
+                />
+                <Button
+                    label="Imprimir todos"
+                    icon="pi pi-print"
+                    @click="imprimirComprobantesVenta"
+                />
+            </template>
+        </Dialog>
     </v-container>
 </template>
+
+<style scoped>
+.salida-receipts-print-area {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+}
+
+@media print {
+    :global(body.printing-salida-receipts #app) {
+        display: none !important;
+    }
+
+    :global(body.printing-salida-receipts .salida-receipts-print-area),
+    :global(body.printing-salida-receipts .salida-receipts-print-area *) {
+        visibility: visible !important;
+    }
+
+    :global(body.printing-salida-receipts .salida-receipts-print-area) {
+        position: absolute !important;
+        top: 0 !important;
+        left: 0 !important;
+        display: block !important;
+        width: 80mm !important;
+        max-height: none !important;
+        overflow: visible !important;
+    }
+
+    :global(body.printing-salida-receipts .p-dialog-mask) {
+        position: static !important;
+        display: block !important;
+        overflow: visible !important;
+        background: transparent !important;
+    }
+
+    :global(body.printing-salida-receipts .p-dialog) {
+        position: static !important;
+        width: 80mm !important;
+        max-height: none !important;
+        margin: 0 !important;
+        box-shadow: none !important;
+        transform: none !important;
+    }
+
+    :global(body.printing-salida-receipts .p-dialog-header),
+    :global(body.printing-salida-receipts .p-dialog-footer) {
+        display: none !important;
+    }
+
+    :global(body.printing-salida-receipts .p-dialog-content) {
+        display: block !important;
+        width: 80mm !important;
+        margin: 0 !important;
+        padding: 0 !important;
+        max-height: none !important;
+        overflow: visible !important;
+    }
+
+    :global(body.printing-salida-receipts .salida-receipts-print-area > .ticket-page) {
+        margin: 0 !important;
+        break-inside: avoid;
+        page-break-inside: avoid;
+    }
+
+    :global(html),
+    :global(body.printing-salida-receipts) {
+        margin: 0 !important;
+        padding: 0 !important;
+        width: 80mm !important;
+    }
+
+    @page {
+        size: 80mm 200mm;
+        margin: 0;
+    }
+}
+</style>

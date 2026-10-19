@@ -6,6 +6,7 @@ use App\Models\Cliente;
 use App\Models\Producto;
 use App\Models\Salida;
 use App\Models\Kardex;
+use App\Models\Tienda;
 use App\Models\TipoMovimiento;
 use App\Models\DetalleSalida;
 use App\Models\Lote;
@@ -68,6 +69,18 @@ class SalidaController extends Controller
             'usuario',
             'detalles.producto',
             'detalles.lote',
+            'venta.cliente',
+            'venta.usuario',
+            'venta.tipoComprobante',
+            'venta.tipoPago',
+            'venta.empresaEmisora',
+            'venta.detalles.producto',
+            'venta.comprobantes.cliente',
+            'venta.comprobantes.usuario',
+            'venta.comprobantes.tipoComprobante',
+            'venta.comprobantes.tipoPago',
+            'venta.comprobantes.empresaEmisora',
+            'venta.comprobantes.detalles.producto',
         ])
             ->orderByDesc('id')
             ->paginate(10);
@@ -84,6 +97,7 @@ class SalidaController extends Controller
             'salidas' => $salidas,
             'productos' => $productos,
             'clientes' => $clientes,
+            'tienda' => Tienda::first(),
         ]);
     }
 

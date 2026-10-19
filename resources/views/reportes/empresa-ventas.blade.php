@@ -194,6 +194,10 @@
             {{ $empresa->razon_social }}
         </div>
 
+        <div class="subtitulo">
+            Periodo: {{ $periodo }} ({{ $fechaInicio }} - {{ $fechaFin }})
+        </div>
+
         @if(!empty($empresa->ruc))
             <div class="subtitulo">
                 RUC: {{ $empresa->ruc }}
@@ -386,11 +390,11 @@
                             <tr>
 
                                 <td>
-                                    {{ $detalle->codigo }}
+                                    {{ $detalle->producto?->codigo ?? '—' }}
                                 </td>
 
                                 <td>
-                                    {{ $detalle->nombre }}
+                                    {{ $detalle->producto?->nombre ?? $detalle->descripcion }}
                                 </td>
 
                                 <td>
@@ -453,7 +457,7 @@
 
         <div style="text-align:center; padding:40px; color:#6b7280;">
 
-            No existen ventas registradas para esta empresa.
+            No existen ventas registradas para esta empresa en el periodo seleccionado.
 
         </div>
 

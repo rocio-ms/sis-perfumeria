@@ -460,6 +460,8 @@ Route::middleware([
     // Página principal de reportes
     Route::get('/reportes', [ReporteController::class, 'index'])
         ->name('reportes.index');
+    Route::get('/reportes/productos-empresa/pdf', [ReporteController::class, 'productosEmpresaPdf'])
+        ->name('reportes.productos-empresa.pdf');
     Route::get('/reportes/ventas', [ReporteController::class, 'ventas'])->name('reportes.ventas');
 
     Route::get(
