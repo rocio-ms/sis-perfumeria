@@ -113,9 +113,7 @@ const tiposComprobante = [
 const fechaMinima = computed(() => {
     const hoy = new Date();
 
-    hoy.setDate(hoy.getDate() + 1);
-
-    return hoy;
+    return new Date(hoy.getFullYear(), hoy.getMonth(), 1);
 });
 
 /*
@@ -1215,11 +1213,12 @@ const cerrar = () => {
                                     <DatePicker
                                         v-else
                                         v-model="detalle.fecha_vencimiento"
-                                        dateFormat="dd/mm/yy"
+                                        view="month"
+                                        dateFormat="mm/yy"
                                         showIcon
                                         class="w-full"
                                         :minDate="fechaMinima"
-                                        placeholder="Fecha de vencimiento"
+                                        placeholder="Mes/año de vencimiento"
                                     />
                                 </div>
                             </td>

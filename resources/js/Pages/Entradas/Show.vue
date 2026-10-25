@@ -94,6 +94,23 @@ const formatearFecha = (fecha) => {
     });
 };
 
+const formatearMesAnio = (fecha) => {
+    if (!fecha) {
+        return "—";
+    }
+
+    const date = new Date(fecha);
+
+    if (isNaN(date.getTime())) {
+        return "—";
+    }
+
+    return date.toLocaleDateString("es-PE", {
+        month: "2-digit",
+        year: "numeric",
+    });
+};
+
 const formatearFechaHora = (fecha) => {
     if (!fecha) {
         return "—";
@@ -683,7 +700,7 @@ const cerrar = () => {
                                                     class="font-medium text-gray-700"
                                                 >
                                                     {{
-                                                        formatearFecha(
+                                                        formatearMesAnio(
                                                             loteDeDetalle(
                                                                 detalle,
                                                             ).fecha_vencimiento,

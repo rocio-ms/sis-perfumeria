@@ -31,6 +31,7 @@ const form = useForm({
     codigo_barras: "",
     nombre: "",
     descripcion: "",
+    ubicacion: "",
     unidad_medida: null,
     tiene_descuento: false,
     descuento: null,
@@ -89,6 +90,7 @@ const limpiarFormulario = () => {
     form.codigo_barras = "";
     form.nombre = "";
     form.descripcion = "";
+    form.ubicacion = "";
     form.unidad_medida = null;
     form.precio_venta = null;
 
@@ -118,6 +120,7 @@ const cargarProducto = (producto) => {
     form.codigo_barras = producto.codigo_barras ?? "";
     form.nombre = producto.nombre ?? "";
     form.descripcion = producto.descripcion ?? "";
+    form.ubicacion = producto.ubicacion ?? "";
     form.unidad_medida = producto.unidad_medida ?? null;
     form.precio_venta = producto.precio_venta ?? null;
 
@@ -360,6 +363,24 @@ const cerrar = () => {
 
                 <small v-if="form.errors.categoria_id" class="text-red-500">
                     {{ form.errors.categoria_id }}
+                </small>
+            </div>
+
+            <!-- Ubicación -->
+            <div class="flex flex-col gap-1">
+                <FloatLabel variant="on">
+                    <InputText
+                        id="ubicacion"
+                        v-model="form.ubicacion"
+                        class="w-full"
+                        :invalid="!!form.errors.ubicacion"
+                    />
+
+                    <label for="ubicacion">Ubicación</label>
+                </FloatLabel>
+
+                <small v-if="form.errors.ubicacion" class="text-red-500">
+                    {{ form.errors.ubicacion }}
                 </small>
             </div>
 

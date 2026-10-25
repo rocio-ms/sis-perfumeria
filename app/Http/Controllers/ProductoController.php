@@ -94,6 +94,8 @@ class ProductoController extends Controller
 
             'descripcion' => 'nullable|string',
 
+            'ubicacion' => 'nullable|string|max:150',
+
             'unidad_medida' =>
             'required|in:und,caja,pqt,blister,frasco,botella,ml,l,gr,kg,kit,par',
 
@@ -210,6 +212,8 @@ class ProductoController extends Controller
 
             'descripcion' => 'nullable|string',
 
+            'ubicacion' => 'nullable|string|max:150',
+
             'unidad_medida' =>
             'required|in:und,caja,pqt,blister,frasco,botella,ml,l,gr,kg,kit,par',
 
@@ -293,6 +297,7 @@ class ProductoController extends Controller
                 'codigo_barras' => $validated['codigo_barras'] ?? null,
                 'nombre' => $validated['nombre'],
                 'descripcion' => $validated['descripcion'] ?? null,
+                'ubicacion' => $validated['ubicacion'] ?? null,
                 'unidad_medida' => $validated['unidad_medida'],
                 'stock_minimo' => $validated['stock_minimo'],
                 'stock_actual' => $validated['stock_actual'],

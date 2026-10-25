@@ -12,6 +12,7 @@ class Producto extends Model
         'codigo_barras',
         'nombre',
         'descripcion',
+        'ubicacion',
         'unidad_medida',
         'stock_actual',
         'stock_minimo',

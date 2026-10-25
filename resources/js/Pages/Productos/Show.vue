@@ -107,6 +107,7 @@ const formatearMoneda = (valor) =>
                 <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
                     <div class="border border-gray-100 rounded-lg p-3 bg-gray-50/50"><span class="text-xs text-gray-500 block mb-1">Código de barras</span><span class="font-medium text-sm text-gray-800">{{ producto.codigo_barras || "Sin código" }}</span></div>
                     <div class="border border-gray-100 rounded-lg p-3 bg-gray-50/50"><span class="text-xs text-gray-500 block mb-1">Categoría</span><span class="font-medium text-sm text-gray-800">{{ producto.categoria?.nombre || "—" }}</span></div>
+                    <div class="border border-gray-100 rounded-lg p-3 bg-gray-50/50"><span class="text-xs text-gray-500 block mb-1">Ubicación</span><span class="font-medium text-sm text-gray-800">{{ producto.ubicacion || "Sin ubicación" }}</span></div>
                     <div class="border border-gray-100 rounded-lg p-3 bg-gray-50/50"><span class="text-xs text-gray-500 block mb-1">Marca</span><span class="font-medium text-sm text-gray-800">{{ producto.marca?.nombre || "Sin marca" }}</span></div>
                     <div class="border border-gray-100 rounded-lg p-3 bg-gray-50/50"><span class="text-xs text-gray-500 block mb-1">Unidad de medida</span><span class="font-medium text-sm text-gray-800">{{ unidadMedida }}</span></div>
                 </div>

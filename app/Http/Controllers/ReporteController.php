@@ -390,7 +390,7 @@ class ReporteController extends Controller
                     'producto' => $lote->nombre,
                     'lote' => $lote->numero_lote,
                     'stock_actual' => (int) $lote->cantidad_actual,
-                    'fecha_vencimiento' => $fechaVencimiento->format('d/m/Y'),
+                    'fecha_vencimiento' => $fechaVencimiento->format('m/Y'),
                     'dias_restantes' => $hoy->diffInDays($fechaVencimiento),
                 ];
             })

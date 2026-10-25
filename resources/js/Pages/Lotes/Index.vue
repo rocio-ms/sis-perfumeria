@@ -45,6 +45,7 @@ const columns = [
         field: "fecha_vencimiento",
         header: "Fecha de vencimiento",
         type: "date",
+        dateFormat: "month-year",
         default: "Sin vencimiento",
     },
     {

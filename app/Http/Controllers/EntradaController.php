@@ -181,7 +181,7 @@ class EntradaController extends Controller
                     $detalles[$index]['fecha_vencimiento'] =
                         Carbon::parse(
                             $detalle['fecha_vencimiento']
-                        )->format('Y-m-d');
+                        )->endOfMonth()->format('Y-m-d');
                 }
             }
 
@@ -581,7 +581,7 @@ class EntradaController extends Controller
                     !empty($detalle['fecha_vencimiento'])
                     ? Carbon::parse(
                         $detalle['fecha_vencimiento']
-                    )->format('Y-m-d')
+                    )->endOfMonth()->format('Y-m-d')
                     : null;
             }
 

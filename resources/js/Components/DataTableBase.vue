@@ -402,6 +402,23 @@ const formatearFecha = (valor) => {
     });
 };
 
+const formatearMesAnio = (valor) => {
+    if (!valor) {
+        return "—";
+    }
+
+    const fecha = new Date(valor);
+
+    if (isNaN(fecha.getTime())) {
+        return "—";
+    }
+
+    return fecha.toLocaleDateString("es-PE", {
+        month: "2-digit",
+        year: "numeric",
+    });
+};
+
 /*
 |--------------------------------------------------------------------------
 | TIPO DE SALIDA
@@ -698,7 +715,15 @@ const estadoTag = (valor, columna) => {
                     <!-- FECHA -->
 
                     <template v-else-if="columna.type === 'date'">
-                        {{ formatearFecha(obtenerValor(data, columna.field)) }}
+                        {{
+                            columna.dateFormat === "month-year"
+                                ? formatearMesAnio(
+                                      obtenerValor(data, columna.field),
+                                  )
+                                : formatearFecha(
+                                      obtenerValor(data, columna.field),
+                                  )
+                        }}
                     </template>
 
                     <!-- MONEDA -->
