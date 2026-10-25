@@ -42,6 +42,7 @@ class ProductoController extends Controller
         return Inertia::render('Productos/Index', [
             'productos' => $productos,
             'categorias' => $categorias,
+            'ubicaciones' => Producto::UBICACIONES,
             'marcas' => $marcas,
             'empresas' => $empresas,
             'siguienteCodigo' => $this->generarCodigoInterno(),
@@ -55,6 +56,7 @@ class ProductoController extends Controller
             'categorias' => Categoria::where('activo', true)
                 ->orderBy('nombre')
                 ->get(),
+            'ubicaciones' => Producto::UBICACIONES,
             'marcas' => Marca::where('activo', true)
                 ->orderBy('nombre')
                 ->get(),
@@ -94,7 +96,7 @@ class ProductoController extends Controller
 
             'descripcion' => 'nullable|string',
 
-            'ubicacion' => 'nullable|string|max:150',
+            'ubicacion' => ['nullable', Rule::in(Producto::UBICACIONES)],
 
             'unidad_medida' =>
             'required|in:und,caja,pqt,blister,frasco,botella,ml,l,gr,kg,kit,par',
@@ -177,7 +179,7 @@ class ProductoController extends Controller
             'categorias' => Categoria::where('activo', true)
                 ->orderBy('nombre')
                 ->get(),
-
+            'ubicaciones' => Producto::UBICACIONES,
             'marcas' => Marca::where('activo', true)
                 ->orderBy('nombre')
                 ->get(),
@@ -212,7 +214,7 @@ class ProductoController extends Controller
 
             'descripcion' => 'nullable|string',
 
-            'ubicacion' => 'nullable|string|max:150',
+            'ubicacion' => ['nullable', Rule::in(Producto::UBICACIONES)],
 
             'unidad_medida' =>
             'required|in:und,caja,pqt,blister,frasco,botella,ml,l,gr,kg,kit,par',

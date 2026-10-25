@@ -13,6 +13,11 @@ const props = defineProps({
         default: () => [],
     },
 
+    ubicaciones: {
+        type: Array,
+        default: () => [],
+    },
+
     marcas: {
         type: Array,
         default: () => [],
@@ -25,6 +30,8 @@ const props = defineProps({
 const visible = defineModel("visible");
 
 const emit = defineEmits(["update:visible", "saved", "cancel"]);
+
+const ubicacionesSugeridas = ref([]);
 
 const form = useForm({
     codigo: "",
@@ -80,6 +87,13 @@ const subtitulo = computed(() => {
 });
 
 const descripcionLength = computed(() => form.nombre?.length ?? 0);
+
+const buscarUbicaciones = ({ query }) => {
+    const busqueda = query.trim().toLocaleLowerCase();
+    ubicacionesSugeridas.value = props.ubicaciones.filter((ubicacion) =>
+        ubicacion.toLocaleLowerCase().includes(busqueda),
+    );
+};
 
 //Limpiar form
 const limpiarFormulario = () => {
@@ -369,10 +383,14 @@ const cerrar = () => {
             <!-- Ubicación -->
             <div class="flex flex-col gap-1">
                 <FloatLabel variant="on">
-                    <InputText
+                    <AutoComplete
                         id="ubicacion"
                         v-model="form.ubicacion"
+                        :suggestions="ubicacionesSugeridas"
                         class="w-full"
+                        dropdown
+                        forceSelection
+                        @complete="buscarUbicaciones"
                         :invalid="!!form.errors.ubicacion"
                     />
 
