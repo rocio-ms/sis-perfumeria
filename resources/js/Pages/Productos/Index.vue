@@ -26,6 +26,11 @@ const props = defineProps({
         default: () => [],
     },
 
+    subcategorias: {
+        type: Array,
+        default: () => [],
+    },
+
     marcas: {
         type: Array,
         default: () => [],
@@ -212,6 +217,7 @@ const eliminarProducto = async (producto) => {
             v-model:visible="mostrarForm"
             :producto="productoSeleccionado"
             :categorias="props.categorias"
+            :subcategorias="props.subcategorias"
             :marcas="props.marcas"
             :codigo-inicial="siguienteCodigo"
             @saved="formularioGuardado"

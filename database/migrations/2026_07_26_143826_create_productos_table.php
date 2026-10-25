@@ -18,18 +18,22 @@ return new class extends Migration
             $table->string('nombre');
             $table->text('descripcion')->nullable();
             $table->enum('unidad_medida', [
-                'und',
-                'caja',
-                'pqt',
-                'blister', 
-                'frasco',
-                'botella', 
+                'unidad',
+                'pieza',
+                'juego',
+                'set', 
+                'par',
+                'coleccion', 
+                'paquete',
                 'ml',
-                'l',
+                'tubo',
+                'equipo',
+                'docena',
+                'frasco',
+                'bolsita',
                 'gr',
-                'kg',
                 'kit',
-                'par'
+                'cajita',
             ]);
             $table->integer('stock_minimo')->default(0);
             $table->integer('stock_actual')->default(0);

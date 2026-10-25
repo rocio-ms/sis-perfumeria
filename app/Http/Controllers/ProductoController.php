@@ -7,6 +7,7 @@ use App\Models\Marca;
 use App\Models\Producto;
 use App\Models\PrecioProducto;
 use App\Models\Empresa;
+use App\Models\Subcategoria;
 
 use Illuminate\Http\Request;
 use Inertia\Inertia;
@@ -20,6 +21,7 @@ class ProductoController extends Controller
     {
         $productos = Producto::with([
             'categoria',
+            'subcategoria',
             'marca',
             'empresa',
             'precioActual'
@@ -28,6 +30,11 @@ class ProductoController extends Controller
             ->paginate(10);
 
         $categorias = Categoria::where('activo', true)
+            ->orderBy('nombre')
+            ->get();
+
+        $subcategorias = Subcategoria::with('categoria')
+            ->where('activo', true)
             ->orderBy('nombre')
             ->get();
 
@@ -42,6 +49,7 @@ class ProductoController extends Controller
         return Inertia::render('Productos/Index', [
             'productos' => $productos,
             'categorias' => $categorias,
+            'subcategorias' => $subcategorias,
             'marcas' => $marcas,
             'empresas' => $empresas,
             'siguienteCodigo' => $this->generarCodigoInterno(),
@@ -53,6 +61,10 @@ class ProductoController extends Controller
         return Inertia::render('Productos/Form', [
             'codigoInicial' => $this->generarCodigoInterno(),
             'categorias' => Categoria::where('activo', true)
+                ->orderBy('nombre')
+                ->get(),
+            'subcategorias' => Subcategoria::with('categoria')
+                ->where('activo', true)
                 ->orderBy('nombre')
                 ->get(),
             'marcas' => Marca::where('activo', true)
@@ -111,6 +123,11 @@ class ProductoController extends Controller
             'marca_id' => 'required|exists:marcas,id',
 
             'categoria_id' => 'required|exists:categorias,id',
+
+            'subcategoria_id' => [
+                'nullable',
+                Rule::exists('subcategorias', 'id')->where('categoria_id', $request->categoria_id),
+            ],
         ]);
 
         //Obtener la empresa de la marca
@@ -144,6 +161,7 @@ class ProductoController extends Controller
     {
         $producto->load([
             'categoria',
+            'subcategoria',
             'marca',
             'empresa',
             'precioActual'
@@ -164,6 +182,7 @@ class ProductoController extends Controller
     {
         $producto->load([
             'categoria',
+            'subcategoria',
             'marca',
             'empresa',
             'precioActual'
@@ -173,6 +192,11 @@ class ProductoController extends Controller
             'producto' => $producto,
 
             'categorias' => Categoria::where('activo', true)
+                ->orderBy('nombre')
+                ->get(),
+
+            'subcategorias' => Subcategoria::with('categoria')
+                ->where('activo', true)
                 ->orderBy('nombre')
                 ->get(),
 
@@ -227,6 +251,11 @@ class ProductoController extends Controller
             'marca_id' => 'required|exists:marcas,id',
 
             'categoria_id' => 'required|exists:categorias,id',
+
+            'subcategoria_id' => [
+                'nullable',
+                Rule::exists('subcategorias', 'id')->where('categoria_id', $request->categoria_id),
+            ],
 
             'tiene_descuento' => 'boolean',
 
@@ -301,6 +330,7 @@ class ProductoController extends Controller
                 'activo' => $validated['activo'] ?? true,
                 'marca_id' => $validated['marca_id'],
                 'categoria_id' => $validated['categoria_id'],
+                'subcategoria_id' => $validated['subcategoria_id'] ?? null,
                 'empresa_id' => $empresaId,
             ]);
 

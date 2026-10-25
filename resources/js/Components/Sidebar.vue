@@ -138,6 +138,12 @@ const items = [
                 permiso: "categorias.index",
             },
             {
+                title: "Subcategorías",
+                icon: "mdi-shape-outline",
+                route: "subcategorias.index",
+                permiso: "subcategorias.index",
+            },
+            {
                 title: "Marcas",
                 icon: "mdi-tag",
                 route: "marcas.index",

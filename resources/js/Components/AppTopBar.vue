@@ -71,7 +71,7 @@ const toggleUserMenu = (event) => {
 const logout = async () => {
     userMenu.value?.hide();
     try {
-        const response = await fetch(route("sesiones-caja.verificar-abierta"), {
+        const response = await fetch("/sesiones-caja/verificar-abierta", {
             headers: {
                 Accept: "application/json",
                 "X-Requested-With": "XMLHttpRequest",

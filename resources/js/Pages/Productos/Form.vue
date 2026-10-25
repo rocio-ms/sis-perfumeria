@@ -13,6 +13,11 @@ const props = defineProps({
         default: () => [],
     },
 
+    subcategorias: {
+        type: Array,
+        default: () => [],
+    },
+
     marcas: {
         type: Array,
         default: () => [],
@@ -40,24 +45,30 @@ const form = useForm({
     imagen_url: null,
     activo: true,
     categoria_id: null,
+    subcategoria_id: null,
     marca_id: null,
     precio_venta: null,
 });
 const imagenPreview = ref("/images/producto_default.svg");
 
 const unidadesMedida = [
-    { label: "Unidad", value: "und" },
-    { label: "Caja", value: "caja" },
-    { label: "Paquete", value: "pqt" },
-    { label: "Blíster", value: "blister" },
-    { label: "Frasco", value: "frasco" },
-    { label: "Botella", value: "botella" },
-    { label: "Mililitros", value: "ml" },
-    { label: "Litros", value: "l" },
-    { label: "Gramos", value: "gr" },
-    { label: "Kilogramos", value: "kg" },
-    { label: "Kit", value: "kit" },
+    { label: "Unidad", value: "unidad" },
+    { label: "Pieza", value: "pieza" },
+    { label: "Juego", value: "juego" },
+    { label: "Set", value: "set" },
     { label: "Par", value: "par" },
+    { label: "Colección", value: "coleccion" },
+    { label: "Paquete", value: "paquete" },
+    { label: "Mililitros", value: "ml" },
+    { label: "Tubo", value: "tubo" },
+    { label: "Equipo", value: "equipo" },
+    { label: "Docena", value: "docena" },
+    { label: "Frasco", value: "frasco" },
+    { label: "Bolsa", value: "bolsita" },
+    { label: "Litro", value: "l" },
+    { label: "Gramos", value: "gr" },
+    { label: "Kit", value: "kit" },
+    { label: "Caja", value: "cajita" },
 ];
 const esEdicion = computed(() => {
     return props.producto !== null;
@@ -74,6 +85,16 @@ const subtitulo = computed(() => {
 });
 
 const descripcionLength = computed(() => form.nombre?.length ?? 0);
+
+const subcategoriasPorCategoria = computed(() => {
+    if (!form.categoria_id) {
+        return [];
+    }
+
+    return props.subcategorias.filter(
+        (subcategoria) => Number(subcategoria.categoria_id) === Number(form.categoria_id),
+    );
+});
 
 //Limpiar form
 const limpiarFormulario = () => {
@@ -100,6 +121,7 @@ const limpiarFormulario = () => {
     form.activo = true;
 
     form.categoria_id = null;
+    form.subcategoria_id = null;
     form.marca_id = null;
 
     imagenPreview.value = "/images/producto_default.svg";
@@ -141,6 +163,7 @@ const cargarProducto = (producto) => {
     form.activo = Boolean(producto.activo);
 
     form.categoria_id = producto.categoria_id ?? null;
+    form.subcategoria_id = producto.subcategoria_id ?? null;
     form.marca_id = producto.marca_id ?? null;
 };
 
@@ -204,6 +227,25 @@ const guardar = () => {
         });
     }
 };
+
+watch(
+    () => form.categoria_id,
+    (categoriaId) => {
+        if (!categoriaId) {
+            form.subcategoria_id = null;
+            return;
+        }
+
+        const tieneSubcategoria = props.subcategorias.some(
+            (subcategoria) =>
+                Number(subcategoria.categoria_id) === Number(categoriaId),
+        );
+
+        if (!tieneSubcategoria) {
+            form.subcategoria_id = null;
+        }
+    },
+);
 
 watch(
     () => form.unidad_medida,
@@ -343,6 +385,30 @@ const cerrar = () => {
 
                 <small v-if="form.errors.categoria_id" class="text-red-500">
                     {{ form.errors.categoria_id }}
+                </small>
+            </div>
+
+            <!-- Subcategoría -->
+            <div class="flex flex-col gap-1">
+                <FloatLabel variant="on">
+                    <Select
+                        id="subcategoria_id"
+                        v-model="form.subcategoria_id"
+                        :options="subcategoriasPorCategoria"
+                        optionLabel="nombre"
+                        optionValue="id"
+                        class="w-full"
+                        :disabled="!form.categoria_id"
+                        :invalid="!!form.errors.subcategoria_id"
+                    />
+
+                    <label for="subcategoria_id">
+                        Subcategoría
+                    </label>
+                </FloatLabel>
+
+                <small v-if="form.errors.subcategoria_id" class="text-red-500">
+                    {{ form.errors.subcategoria_id }}
                 </small>
             </div>
 
