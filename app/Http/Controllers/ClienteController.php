@@ -33,10 +33,9 @@ class ClienteController extends Controller
                 });
             })
             ->orderByDesc('id')
-            ->paginate(10)
-            ->withQueryString();
+            ->get();
         // Crear el nombre completo para cada cliente
-        $clientes->getCollection()->transform(function ($cliente) {
+        $clientes->transform(function ($cliente) {
 
             if ($cliente->tipo_documento === 'RUC') {
                 $cliente->nombre_completo = $cliente->razon_social_nombre;

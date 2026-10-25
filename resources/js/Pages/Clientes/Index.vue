@@ -20,10 +20,8 @@ defineOptions({
 
 const props = defineProps({
     clientes: {
-        type: Object,
-        default: () => ({
-            data: [],
-        }),
+        type: Array,
+        default: () => [],
     },
 });
 
@@ -43,7 +41,7 @@ const mostrarShow = ref(false);
 // ============================================================
 // COLUMNAS
 // ============================================================
-console.log("DATOS DE LOS CLIENTES: ",props.clientes.data);
+console.log("DATOS DE LOS CLIENTES: ", props.clientes);
 const columns = [
     {
         field: "tipo_documento",
@@ -227,7 +225,7 @@ const eliminarCliente = async (cliente) => {
             <template #content>
                 <DataTableBase
                     title="Clientes"
-                    :data="props.clientes.data"
+                    :data="props.clientes"
                     :columns="columns"
                     :loading="false"
                     title-button="Nuevo cliente"

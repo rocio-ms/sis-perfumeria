@@ -14,13 +14,8 @@ defineOptions({
 
 const props = defineProps({
     cajas: {
-        type: Object,
-        default: () => ({
-            data: [],
-            current_page: 1,
-            last_page: 1,
-            total: 0,
-        }),
+        type: Array,
+        default: () => [],
     },
 
     filters: {
@@ -75,7 +70,7 @@ const columns = [
 ];
 
 const cargarCajas = computed(() => {
-    return (props.cajas?.data ?? []).map((caja) => {
+    return props.cajas.map((caja) => {
         const activo = Number(caja.activo) === 1;
 
         return {

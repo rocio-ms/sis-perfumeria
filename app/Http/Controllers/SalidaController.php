@@ -83,7 +83,7 @@ class SalidaController extends Controller
             'venta.comprobantes.detalles.producto',
         ])
             ->orderByDesc('id')
-            ->paginate(10);
+            ->get();
 
         // Productos
         $productos = collect();

@@ -17,10 +17,8 @@ defineOptions({
 
 const props = defineProps({
     salidas: {
-        type: Object,
-        default: () => ({
-            data: [],
-        }),
+        type: Array,
+        default: () => [],
     },
 
     productos: {
@@ -41,7 +39,7 @@ const mostrarForm = ref(false);
 const mostrarComprobanteVenta = ref(false);
 const salidaSeleccionada = ref(null);
 const ventaSeleccionada = ref(null);
-const salidasFiltradas = computed(() => props.salidas?.data ?? []);
+const salidasFiltradas = computed(() => props.salidas);
 const comprobantesVenta = computed(() => {
     const comprobantes = ventaSeleccionada.value?.comprobantes ?? [];
     const ventas = comprobantes.length

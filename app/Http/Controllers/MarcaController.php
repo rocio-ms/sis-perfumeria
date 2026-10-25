@@ -14,7 +14,7 @@ class MarcaController extends Controller
     {
         $marcas = Marca::with('empresa')
             ->orderBy('id', 'desc')
-            ->paginate(10);
+            ->get();
 
         $empresas = Empresa::where('activo', true)
             ->orderBy('nombre_comercial')

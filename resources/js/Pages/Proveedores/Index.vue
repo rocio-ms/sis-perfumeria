@@ -23,10 +23,8 @@ const mostrarShow = ref(false);
 
 const props = defineProps({
     proveedores: {
-        type: Object,
-        default: () => ({
-            data: [],
-        }),
+        type: Array,
+        default: () => [],
     },
 });
 
@@ -120,7 +118,7 @@ const cerrarForm = () => {
                 <DataTableBase
                     v-model:filters="filters"
                     title="Proveedores"
-                    :data="props.proveedores.data"
+                    :data="props.proveedores"
                     :columns="columns"
                     :loading="loading"
                     createRoute="proveedores.create"

@@ -18,7 +18,10 @@ const mostrarForm = ref(false);
 const marcaSeleccionada = ref(null);
 
 const props = defineProps({
-    marcas: Object,
+    marcas: {
+        type: Array,
+        default: () => [],
+    },
 
     empresas: {
         type: Array,
@@ -98,7 +101,7 @@ const cerrarForm = () => {
             <template #content>
                 <DataTableBase
                     title="Marcas"
-                    :data="props.marcas.data"
+                    :data="props.marcas"
                     :columns="columns"
                     :loading="loading"
                     :search-fields="['nombre']"

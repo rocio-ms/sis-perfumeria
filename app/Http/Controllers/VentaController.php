@@ -68,8 +68,7 @@ class VentaController extends Controller
                 });
             })
             ->orderByDesc('id')
-            ->paginate(10)
-            ->withQueryString();
+            ->get();
 
         return Inertia::render('Ventas/Index', [
             'ventas' => $ventas,

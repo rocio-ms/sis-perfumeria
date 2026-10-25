@@ -11,10 +11,8 @@ defineOptions({
 
 const props = defineProps({
     kardexs: {
-        type: Object,
-        default: () => ({
-            data: [],
-        }),
+        type: Array,
+        default: () => [],
     },
 
     productos: {
@@ -80,7 +78,7 @@ const productosOptions = computed(() => {
 */
 
 const kardexFiltrado = computed(() => {
-    const lista = Array.isArray(props.kardexs?.data) ? props.kardexs.data : [];
+    const lista = props.kardexs;
 
     return lista.filter((movimiento) => {
         /*

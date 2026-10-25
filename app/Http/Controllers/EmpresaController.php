@@ -28,7 +28,7 @@ class EmpresaController extends Controller
                 'seriesComprobantes.tipoComprobante',
             ])
             ->orderBy('id', 'desc')
-            ->paginate(10);
+            ->get();
 
         $tiendas = Tienda::orderBy(
                 'nombre_comercial'

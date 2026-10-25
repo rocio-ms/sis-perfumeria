@@ -15,12 +15,8 @@ defineOptions({
 
 const props = defineProps({
     sesiones: {
-        type: Object,
-        default: () => ({
-            data: [],
-            current_page: 1,
-            last_page: 1,
-        }),
+        type: Array,
+        default: () => [],
     },
 
     cajasDisponibles: {
@@ -36,9 +32,9 @@ const props = defineProps({
     },
 });
 
-console.log("SESIONES RECIBIDAS:", props.sesiones.data);
-console.log("PRIMERA SESIÓN:", props.sesiones.data?.[0]);
-console.log("VENTAS PRIMERA SESIÓN:", props.sesiones.data?.[0]?.ventas);
+console.log("SESIONES RECIBIDAS:", props.sesiones);
+console.log("PRIMERA SESIÓN:", props.sesiones?.[0]);
+console.log("VENTAS PRIMERA SESIÓN:", props.sesiones?.[0]?.ventas);
 
 console.log("CAJAS DISPONIBLES:", props.cajasDisponibles);
 
@@ -96,7 +92,7 @@ const columns = [
 ];
 
 const sesionesTabla = computed(() => {
-    return (props.sesiones?.data ?? []).map((sesion) => ({
+    return props.sesiones.map((sesion) => ({
         ...sesion,
 
         caja: sesion.caja?.nombre ?? "Sin caja",
@@ -136,7 +132,7 @@ const abrirCierre = (sesion) => {
 const verSesion = (sesion) => {
     console.log("ID SELECCIONADO:", sesion.id);
 
-    const sesionOriginal = props.sesiones.data.find(
+    const sesionOriginal = props.sesiones.find(
         (item) => item.id === sesion.id,
     );
 

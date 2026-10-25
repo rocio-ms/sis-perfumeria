@@ -34,10 +34,9 @@ class SesionCajaController extends Controller
                 });
             })
             ->orderByDesc('fecha_apertura')
-            ->paginate(10)
-            ->withQueryString();
+            ->get();
 
-        $sesiones->getCollection()->transform(function ($sesion) {
+        $sesiones->transform(function ($sesion) {
 
             // Las ventas ya vienen filtradas por activo = true
             $ventasActivas = $sesion->ventas;

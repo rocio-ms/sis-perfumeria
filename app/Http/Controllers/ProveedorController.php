@@ -12,7 +12,7 @@ class ProveedorController extends Controller
     public function index()
     {
 
-        $proveedores = Proveedor::latest()->paginate(10);
+        $proveedores = Proveedor::latest()->get();
 
         return Inertia::render(
             'Proveedores/Index',

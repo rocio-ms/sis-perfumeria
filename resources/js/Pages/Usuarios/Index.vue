@@ -17,10 +17,8 @@ defineOptions({
 
 const props = defineProps({
     usuarios: {
-        type: Object,
-        default: () => ({
-            data: [],
-        }),
+        type: Array,
+        default: () => [],
     },
 
     roles: {
@@ -158,7 +156,7 @@ const formularioGuardado = async (tipo) => {
             <template #content>
                 <DataTableBase
                     title="Usuarios"
-                    :data="props.usuarios.data"
+                    :data="props.usuarios"
                     :columns="columns"
                     :loading="false"
                     title-button="Nuevo usuario"

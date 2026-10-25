@@ -22,8 +22,7 @@ class CajaController extends Controller
         $cajas = $query
             ->with('sesionAbierta')
             ->orderBy('nombre')
-            ->paginate(10)
-            ->withQueryString();
+            ->get();
 
         return Inertia::render('Cajas/Index', [
             'cajas' => $cajas,

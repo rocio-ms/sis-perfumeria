@@ -21,14 +21,8 @@ defineOptions({
 
 const props = defineProps({
     ventas: {
-        type: Object,
-        default: () => ({
-            data: [],
-            current_page: 1,
-            last_page: 1,
-            per_page: 10,
-            total: 0,
-        }),
+        type: Array,
+        default: () => [],
     },
 
     filters: {
@@ -376,7 +370,7 @@ const totalVenta = computed(() => {
             <template #content>
                 <DataTableBase
                     title="Ventas"
-                    :data="props.ventas?.data ?? []"
+                    :data="props.ventas"
                     :columns="columns"
                     :loading="false"
                     title-button="Nueva venta"

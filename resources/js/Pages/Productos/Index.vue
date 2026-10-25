@@ -16,10 +16,8 @@ defineOptions({
 
 const props = defineProps({
     productos: {
-        type: Object,
-        default: () => ({
-            data: [],
-        }),
+        type: Array,
+        default: () => [],
     },
     categorias: {
         type: Array,
@@ -194,7 +192,7 @@ const eliminarProducto = async (producto) => {
             <template #content>
                 <DataTableBase
                     title="Productos"
-                    :data="props.productos.data"
+                    :data="props.productos"
                     :columns="columns"
                     :loading="false"
                     title-button="Nuevo producto"

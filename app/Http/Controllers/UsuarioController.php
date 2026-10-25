@@ -18,8 +18,7 @@ class UsuarioController extends Controller
     {
         $usuarios = User::with('roles')
             ->orderBy('name')
-            ->paginate(10)
-            ->withQueryString();
+            ->get();
 
         $roles = Role::orderBy('name')->get();
 

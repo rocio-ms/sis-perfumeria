@@ -20,10 +20,8 @@ const empresaSeleccionada = ref(null);
 
 const props = defineProps({
     empresas: {
-        type: Object,
-        default: () => ({
-            data: [],
-        }),
+        type: Array,
+        default: () => [],
     },
 
     tiendas: {
@@ -140,7 +138,7 @@ const cerrarShow = () => {
             <template #content>
                 <DataTableBase
                     title="Empresas"
-                    :data="props.empresas.data"
+                    :data="props.empresas"
                     :columns="columns"
                     :loading="loading"
                     :search-fields="['ruc', 'razon_social', 'nombre_comercial']"

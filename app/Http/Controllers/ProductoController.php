@@ -25,7 +25,7 @@ class ProductoController extends Controller
             'precioActual'
         ])
             ->orderBy('id', 'desc')
-            ->paginate(10);
+            ->get();
 
         $categorias = Categoria::where('activo', true)
             ->orderBy('nombre')

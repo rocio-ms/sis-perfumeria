@@ -103,9 +103,7 @@ class KardexController extends Controller
         |--------------------------------------------------------------------------
         */
 
-        $kardexs = $query
-            ->paginate(15)
-            ->withQueryString();
+        $kardexs = $query->get();
 
         /*
         |--------------------------------------------------------------------------
