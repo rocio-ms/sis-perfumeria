@@ -19,7 +19,10 @@ const mostrarForm = ref(false);
 const categoriaSeleccionada = ref(null);
 
 const props = defineProps({
-    categorias: Object,
+    categorias: {
+        type: Array,
+        default: () => [],
+    },
 });
 
 const columns = [
@@ -99,7 +102,7 @@ const cerrarForm = () => {
             <template #content>
                 <DataTableBase
                     title="Categorías"
-                    :data="props.categorias.data"
+                    :data="props.categorias"
                     :columns="columns"
                     :search-fields="['nombre']"
                     :loading="loading"

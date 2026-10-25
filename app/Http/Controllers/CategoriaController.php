@@ -11,7 +11,7 @@ class CategoriaController extends Controller
 {
     public function index()
     {
-        $categorias = Categoria::paginate(10);
+        $categorias = Categoria::orderByDesc('id')->get();
 
         return Inertia::render(
             'Categorias/Index', 
