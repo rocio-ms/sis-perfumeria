@@ -49,6 +49,10 @@ const columns = [
         header: "Código",
     },
     {
+        field: "categoria.nombre",
+        header: "Categoría",
+    },
+    {
         field: "nombre",
         header: "Producto",
     },

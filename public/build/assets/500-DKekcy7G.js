@@ -1,1 +1,0 @@
-import{N as e,l as t}from"./runtime-core.esm-bundler-C8qHIgUv.js";import{t as n}from"./ErrorPage-BDPw2j64.js";var r={__name:`500`,setup(r){return(r,i)=>(e(),t(n,{code:`500`,title:`Error interno del servidor`,message:`Ocurrió un problema inesperado en el sistema. Intenta nuevamente en unos momentos.`,icon:`pi pi-server`}))}};export{r as default};

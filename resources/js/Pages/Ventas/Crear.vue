@@ -248,6 +248,20 @@ const limpiarBusqueda = () => {
     });
 };
 
+const recargarCatalogo = async () => {
+    clearTimeout(temporizadorBusqueda);
+    controladorBusqueda?.abort();
+    busquedaPendiente++;
+    busqueda.value = "";
+
+    await nextTick();
+
+    clearTimeout(temporizadorBusqueda);
+    await solicitarProductos("");
+
+    inputBusqueda.value?.$el?.focus();
+};
+
 /*
 |--------------------------------------------------------------------------
 | AGREGAR AL CARRITO
@@ -586,10 +600,7 @@ const procesarVenta = (datosPago) => {
                 mostrarComprobantesEmitidos.value =
                     comprobantesEmitidos.value.length > 0;
 
-                //Actualizar catálogo después de registrar la venta
-                await solicitarProductos(busqueda.value.trim());
-
-                limpiarBusqueda();
+                await recargarCatalogo();
             },
 
             onError: (errors) => {
@@ -880,6 +891,23 @@ onMounted(() => {
 
                             <!-- SIN RESULTADOS -->
                             <div
+                                v-else-if="errorBusqueda"
+                                class="flex flex-col items-center justify-center py-16 text-center text-gray-400"
+                            >
+                                <p class="font-medium text-gray-600 m-0">
+                                    {{ errorBusqueda }}
+                                </p>
+                                <Button
+                                    label="Reintentar"
+                                    icon="pi pi-refresh"
+                                    severity="secondary"
+                                    outlined
+                                    class="mt-3"
+                                    @click="recargarCatalogo"
+                                />
+                            </div>
+
+                            <div
                                 v-else-if="busqueda"
                                 class="flex flex-col items-center justify-center py-16 text-center text-gray-400"
                             >
@@ -892,10 +920,7 @@ onMounted(() => {
                                 </div>
 
                                 <p class="font-medium text-gray-600 m-0">
-                                    {{
-                                        errorBusqueda ||
-                                        `Sin coincidencias para "${busqueda}"`
-                                    }}
+                                    {{ `Sin coincidencias para "${busqueda}"` }}
                                 </p>
 
                                 <small class="mt-1">
