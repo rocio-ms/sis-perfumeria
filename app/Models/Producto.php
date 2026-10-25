@@ -48,6 +48,7 @@ class Producto extends Model
         'volumen_ml',
         'imagen_url',
         'categoria_id',
+        'subcategoria_id',
         'marca_id',
         'empresa_id',
     ];
@@ -62,6 +63,11 @@ class Producto extends Model
     public function categoria()
     {
         return $this->belongsTo(Categoria::class);
+    }
+
+    public function subcategoria()
+    {
+        return $this->belongsTo(Subcategoria::class);
     }
 
     public function marca()

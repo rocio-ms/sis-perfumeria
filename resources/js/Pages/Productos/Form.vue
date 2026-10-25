@@ -13,6 +13,11 @@ const props = defineProps({
         default: () => [],
     },
 
+    subcategorias: {
+        type: Array,
+        default: () => [],
+    },
+
     ubicaciones: {
         type: Array,
         default: () => [],
@@ -48,6 +53,7 @@ const form = useForm({
     imagen_url: null,
     activo: true,
     categoria_id: null,
+    subcategoria_id: null,
     marca_id: null,
     precio_venta: null,
 });
@@ -88,6 +94,17 @@ const subtitulo = computed(() => {
 
 const descripcionLength = computed(() => form.nombre?.length ?? 0);
 
+const subcategoriasPorCategoria = computed(() => {
+    if (!form.categoria_id) {
+        return [];
+    }
+
+    return props.subcategorias.filter(
+        (subcategoria) =>
+            Number(subcategoria.categoria_id) === Number(form.categoria_id),
+    );
+});
+
 const buscarUbicaciones = ({ query }) => {
     const busqueda = query.trim().toLocaleLowerCase();
     ubicacionesSugeridas.value = props.ubicaciones.filter((ubicacion) =>
@@ -121,6 +138,7 @@ const limpiarFormulario = () => {
     form.activo = true;
 
     form.categoria_id = null;
+    form.subcategoria_id = null;
     form.marca_id = null;
 
     imagenPreview.value = "/images/producto_default.svg";
@@ -163,6 +181,7 @@ const cargarProducto = (producto) => {
     form.activo = Boolean(producto.activo);
 
     form.categoria_id = producto.categoria_id ?? null;
+    form.subcategoria_id = producto.subcategoria_id ?? null;
     form.marca_id = producto.marca_id ?? null;
 };
 
@@ -226,6 +245,28 @@ const guardar = () => {
         });
     }
 };
+
+watch(
+    () => form.categoria_id,
+    (categoriaId) => {
+        if (!categoriaId) {
+            form.subcategoria_id = null;
+            return;
+        }
+
+        const subcategoriaSeleccionada = props.subcategorias.find(
+            (subcategoria) =>
+                Number(subcategoria.id) === Number(form.subcategoria_id),
+        );
+
+        if (
+            subcategoriaSeleccionada &&
+            Number(subcategoriaSeleccionada.categoria_id) !== Number(categoriaId)
+        ) {
+            form.subcategoria_id = null;
+        }
+    },
+);
 
 watch(
     () => form.unidad_medida,
@@ -377,6 +418,28 @@ const cerrar = () => {
 
                 <small v-if="form.errors.categoria_id" class="text-red-500">
                     {{ form.errors.categoria_id }}
+                </small>
+            </div>
+
+            <!-- Subcategoría -->
+            <div class="flex flex-col gap-1">
+                <FloatLabel variant="on">
+                    <Select
+                        id="subcategoria_id"
+                        v-model="form.subcategoria_id"
+                        :options="subcategoriasPorCategoria"
+                        optionLabel="nombre"
+                        optionValue="id"
+                        class="w-full"
+                        :disabled="!form.categoria_id"
+                        :invalid="!!form.errors.subcategoria_id"
+                    />
+
+                    <label for="subcategoria_id">Subcategoría</label>
+                </FloatLabel>
+
+                <small v-if="form.errors.subcategoria_id" class="text-red-500">
+                    {{ form.errors.subcategoria_id }}
                 </small>
             </div>
 
