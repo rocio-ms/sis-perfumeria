@@ -6,7 +6,6 @@ use App\Http\Controllers\AlertaController;
 use App\Http\Controllers\CajaController;
 use App\Http\Controllers\CategoriaController;
 use App\Http\Controllers\ClienteController;
-use App\Http\Controllers\SubcategoriaController;
 use App\Http\Controllers\KardexController;
 use App\Http\Controllers\LoteController;
 use App\Http\Controllers\MarcaController;
@@ -187,8 +186,6 @@ Route::middleware([
     */
 
     Route::resource('/categorias', CategoriaController::class);
-
-    Route::resource('/subcategorias', SubcategoriaController::class);
 
     /*
     |--------------------------------------------------------------------------

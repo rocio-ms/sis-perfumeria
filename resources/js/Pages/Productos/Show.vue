@@ -37,6 +37,24 @@ const unidadMedida = computed(() => {
     return unidades[producto.value?.unidad_medida] ?? producto.value?.unidad_medida ?? "—";
 });
 
+const contenidoProducto = computed(() => {
+    const unidad = producto.value?.unidad_medida;
+    const unidadesContenido = {
+        ml: "ml",
+        l: "L",
+        gr: "gr",
+        frasco: "ml",
+        botella: "ml",
+    };
+    const sufijo = unidadesContenido[unidad];
+
+    if (!sufijo || producto.value?.volumen_ml == null) {
+        return "—";
+    }
+
+    return `${producto.value.volumen_ml} ${sufijo}`;
+});
+
 const cerrar = () => {
     visible.value = false;
 };
@@ -89,7 +107,6 @@ const formatearMoneda = (valor) =>
                 <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
                     <div class="border border-gray-100 rounded-lg p-3 bg-gray-50/50"><span class="text-xs text-gray-500 block mb-1">Código de barras</span><span class="font-medium text-sm text-gray-800">{{ producto.codigo_barras || "Sin código" }}</span></div>
                     <div class="border border-gray-100 rounded-lg p-3 bg-gray-50/50"><span class="text-xs text-gray-500 block mb-1">Categoría</span><span class="font-medium text-sm text-gray-800">{{ producto.categoria?.nombre || "—" }}</span></div>
-                    <div class="border border-gray-100 rounded-lg p-3 bg-gray-50/50"><span class="text-xs text-gray-500 block mb-1">Subcategoría</span><span class="font-medium text-sm text-gray-800">{{ producto.subcategoria?.nombre || "Sin subcategoría" }}</span></div>
                     <div class="border border-gray-100 rounded-lg p-3 bg-gray-50/50"><span class="text-xs text-gray-500 block mb-1">Marca</span><span class="font-medium text-sm text-gray-800">{{ producto.marca?.nombre || "Sin marca" }}</span></div>
                     <div class="border border-gray-100 rounded-lg p-3 bg-gray-50/50"><span class="text-xs text-gray-500 block mb-1">Unidad de medida</span><span class="font-medium text-sm text-gray-800">{{ unidadMedida }}</span></div>
                 </div>
@@ -104,7 +121,7 @@ const formatearMoneda = (valor) =>
                 <div class="grid grid-cols-2 sm:grid-cols-4 gap-3">
                     <div class="border border-gray-200 rounded-lg p-3"><span class="text-xs text-gray-500 block mb-1">Stock actual</span><span class="text-xl font-bold text-gray-800">{{ producto.stock_actual ?? 0 }}</span></div>
                     <div class="border border-gray-200 rounded-lg p-3"><span class="text-xs text-gray-500 block mb-1">Stock mínimo</span><span class="text-xl font-bold text-gray-800">{{ producto.stock_minimo ?? 0 }}</span></div>
-                    <div class="border border-gray-200 rounded-lg p-3"><span class="text-xs text-gray-500 block mb-1">Volumen</span><span class="text-xl font-bold text-gray-800">{{ producto.volumen_ml ?? 0 }} ml</span></div>
+                    <div class="border border-gray-200 rounded-lg p-3"><span class="text-xs text-gray-500 block mb-1">Contenido</span><span class="text-xl font-bold text-gray-800">{{ contenidoProducto }}</span></div>
                     <div class="border border-gray-200 rounded-lg p-3"><span class="text-xs text-gray-500 block mb-1">Precio venta</span><span class="text-lg font-bold text-gray-800">{{ formatearMoneda(precioVenta) }}</span></div>
                 </div>
             </div>
@@ -124,4 +141,3 @@ const formatearMoneda = (valor) =>
         </div>
     </Dialog>
 </template>
-

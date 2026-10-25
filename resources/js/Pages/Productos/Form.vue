@@ -13,11 +13,6 @@ const props = defineProps({
         default: () => [],
     },
 
-    subcategorias: {
-        type: Array,
-        default: () => [],
-    },
-
     marcas: {
         type: Array,
         default: () => [],
@@ -45,7 +40,6 @@ const form = useForm({
     imagen_url: null,
     activo: true,
     categoria_id: null,
-    subcategoria_id: null,
     marca_id: null,
     precio_venta: null,
 });
@@ -86,16 +80,6 @@ const subtitulo = computed(() => {
 
 const descripcionLength = computed(() => form.nombre?.length ?? 0);
 
-const subcategoriasPorCategoria = computed(() => {
-    if (!form.categoria_id) {
-        return [];
-    }
-
-    return props.subcategorias.filter(
-        (subcategoria) => Number(subcategoria.categoria_id) === Number(form.categoria_id),
-    );
-});
-
 //Limpiar form
 const limpiarFormulario = () => {
     form.reset();
@@ -121,7 +105,6 @@ const limpiarFormulario = () => {
     form.activo = true;
 
     form.categoria_id = null;
-    form.subcategoria_id = null;
     form.marca_id = null;
 
     imagenPreview.value = "/images/producto_default.svg";
@@ -163,7 +146,6 @@ const cargarProducto = (producto) => {
     form.activo = Boolean(producto.activo);
 
     form.categoria_id = producto.categoria_id ?? null;
-    form.subcategoria_id = producto.subcategoria_id ?? null;
     form.marca_id = producto.marca_id ?? null;
 };
 
@@ -229,30 +211,11 @@ const guardar = () => {
 };
 
 watch(
-    () => form.categoria_id,
-    (categoriaId) => {
-        if (!categoriaId) {
-            form.subcategoria_id = null;
-            return;
-        }
-
-        const tieneSubcategoria = props.subcategorias.some(
-            (subcategoria) =>
-                Number(subcategoria.categoria_id) === Number(categoriaId),
-        );
-
-        if (!tieneSubcategoria) {
-            form.subcategoria_id = null;
-        }
-    },
-);
-
-watch(
     () => form.unidad_medida,
     (unidad) => {
-        const unidadesConVolumen = ["ml", "l", "frasco", "botella"];
+        const unidadesConContenido = ["ml", "l", "gr", "frasco", "botella"];
 
-        if (!unidadesConVolumen.includes(unidad)) {
+        if (!unidadesConContenido.includes(unidad)) {
             form.volumen_ml = 0;
         }
     },
@@ -271,7 +234,19 @@ const seleccionarImagen = (event) => {
 };
 
 const requiereVolumen = computed(() => {
-    return ["frasco", "botella", "ml", "l"].includes(form.unidad_medida);
+    return ["frasco", "botella", "ml", "l", "gr"].includes(form.unidad_medida);
+});
+
+const unidadContenido = computed(() => {
+    const unidades = {
+        ml: "ml",
+        l: "L",
+        gr: "gr",
+        frasco: "ml",
+        botella: "ml",
+    };
+
+    return unidades[form.unidad_medida] ?? "";
 });
 
 const cerrar = () => {
@@ -385,30 +360,6 @@ const cerrar = () => {
 
                 <small v-if="form.errors.categoria_id" class="text-red-500">
                     {{ form.errors.categoria_id }}
-                </small>
-            </div>
-
-            <!-- Subcategoría -->
-            <div class="flex flex-col gap-1">
-                <FloatLabel variant="on">
-                    <Select
-                        id="subcategoria_id"
-                        v-model="form.subcategoria_id"
-                        :options="subcategoriasPorCategoria"
-                        optionLabel="nombre"
-                        optionValue="id"
-                        class="w-full"
-                        :disabled="!form.categoria_id"
-                        :invalid="!!form.errors.subcategoria_id"
-                    />
-
-                    <label for="subcategoria_id">
-                        Subcategoría
-                    </label>
-                </FloatLabel>
-
-                <small v-if="form.errors.subcategoria_id" class="text-red-500">
-                    {{ form.errors.subcategoria_id }}
                 </small>
             </div>
 
@@ -571,19 +522,19 @@ const cerrar = () => {
                 </small>
             </div> -->
 
-            <!-- Volumen -->
+            <!-- Contenido según la unidad de medida -->
             <div v-if="requiereVolumen" class="flex flex-col gap-1">
                 <FloatLabel variant="on">
                     <InputNumber
                         id="volumen_ml"
                         v-model="form.volumen_ml"
                         class="w-full"
-                        suffix=" ml"
+                        :suffix="` ${unidadContenido}`"
                         :min="0"
                         :invalid="!!form.errors.volumen_ml"
                     />
 
-                    <label for="volumen_ml"> Volumen </label>
+                    <label for="volumen_ml"> Contenido </label>
                 </FloatLabel>
 
                 <small v-if="form.errors.volumen_ml" class="text-red-500">

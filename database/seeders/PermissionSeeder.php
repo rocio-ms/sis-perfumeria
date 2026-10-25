@@ -49,10 +49,6 @@ class PermissionSeeder extends Seeder
             'categorias.crear',
             'categorias.editar',
 
-            'subcategorias.index',
-            'subcategorias.crear',
-            'subcategorias.editar',
-
             'marcas.index',
             'marcas.crear',
             'marcas.editar',
