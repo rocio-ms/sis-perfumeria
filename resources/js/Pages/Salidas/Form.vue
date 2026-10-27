@@ -1,7 +1,9 @@
 <script setup>
 import { computed, ref, watch } from "vue";
 import { router, useForm } from "@inertiajs/vue3";
+import axios from "axios";
 import Swal from "sweetalert2";
+import ImportacionExcel from "@/Components/ImportacionExcel.vue";
 
 const props = defineProps({
     salida: {
@@ -62,6 +64,7 @@ const tiposSalida = [
 
 const productosFiltrados = ref([]);
 const buscandoProducto = ref(false);
+const importandoExcel = ref(false);
 
 let temporizadorBusqueda = null;
 
@@ -487,6 +490,206 @@ const agregarDetalle = () => {
     cantidad.value = 1;
 
     busquedaProducto.value = "";
+};
+
+const valorNumericoExcel = (valor) => {
+    if (typeof valor === "number") {
+        return Number.isFinite(valor) ? valor : null;
+    }
+
+    const texto = String(valor ?? "").trim();
+    if (!texto) {
+        return null;
+    }
+
+    const numero = Number(/^\d+,\d+$/.test(texto) ? texto.replace(",", ".") : texto);
+    return Number.isFinite(numero) ? numero : null;
+};
+
+const importarDetallesExcel = async (filas) => {
+    importandoExcel.value = true;
+
+    try {
+        const errores = [];
+        const filasValidas = [];
+        const codigos = [];
+
+        filas.forEach((fila) => {
+            const codigo = String(fila.codigo_producto ?? "").trim();
+            const numeroLote = String(fila.numero_lote ?? "").trim();
+            const cantidad = valorNumericoExcel(fila.cantidad);
+
+            if (!codigo || !numeroLote || !Number.isInteger(cantidad) || cantidad < 1) {
+                errores.push(`Fila ${fila.numero_fila}: código, número de lote y cantidad entera mayor a cero son obligatorios.`);
+                return;
+            }
+
+            filasValidas.push({ ...fila, codigo, numeroLote, cantidad });
+            codigos.push(codigo);
+        });
+
+        if (errores.length) {
+            await Swal.fire({
+                title: "Revisa las filas del Excel",
+                text: [
+                    ...errores.slice(0, 12),
+                    ...(errores.length > 12
+                        ? [`Y ${errores.length - 12} errores más.`]
+                        : []),
+                ].join("\n"),
+                icon: "warning",
+                confirmButtonText: "Aceptar",
+            });
+            return;
+        }
+
+        const { data } = await axios.post(
+            route("productos.resolver-importacion"),
+            {
+                codigos: [...new Set(codigos)],
+                incluir_lotes: true,
+            },
+        );
+        const productos = data.productos ?? [];
+        const productoPorCodigo = new Map();
+        const productoPorCodigoNumerico = new Map();
+
+        productos.forEach((producto) => {
+            if (producto.codigo) {
+                const codigo = String(producto.codigo).trim();
+                productoPorCodigo.set(codigo, producto);
+                if (/^\d+$/.test(codigo)) {
+                    productoPorCodigoNumerico.set(
+                        codigo.replace(/^0+(?=\d)/, ""),
+                        producto,
+                    );
+                }
+            }
+            if (producto.codigo_barras) {
+                productoPorCodigo.set(String(producto.codigo_barras).trim(), producto);
+            }
+        });
+
+        const detallesImportados = [];
+        filasValidas.forEach((fila) => {
+            const producto =
+                productoPorCodigo.get(fila.codigo) ??
+                productoPorCodigoNumerico.get(
+                    fila.codigo.replace(/^0+(?=\d)/, ""),
+                );
+            if (!producto) {
+                errores.push(`Fila ${fila.numero_fila}: no se encontró el producto "${fila.codigo}".`);
+                return;
+            }
+
+            const lote = (producto.lotes ?? []).find(
+                (item) =>
+                    String(item.numero_lote ?? "").trim().toLocaleLowerCase() ===
+                    fila.numeroLote.toLocaleLowerCase(),
+            );
+            if (!lote) {
+                errores.push(`Fila ${fila.numero_fila}: el producto "${fila.codigo}" no tiene el lote "${fila.numeroLote}" con stock disponible.`);
+                return;
+            }
+
+            const existente = detallesImportados.find(
+                (detalle) =>
+                    detalle.producto_id === producto.id &&
+                    detalle.lote_id === lote.id,
+            );
+            const detalleEnFormulario = form.detalles.find(
+                (detalle) =>
+                    detalle.producto_id === producto.id &&
+                    detalle.lote_id === lote.id,
+            );
+            const cantidadAcumulada =
+                fila.cantidad +
+                Number(existente?.cantidad ?? 0) +
+                Number(detalleEnFormulario?.cantidad ?? 0);
+
+            if (cantidadAcumulada > Number(lote.cantidad_actual ?? 0)) {
+                errores.push(`Fila ${fila.numero_fila}: la cantidad acumulada supera el stock disponible del lote "${fila.numeroLote}" (${lote.cantidad_actual}).`);
+                return;
+            }
+
+            if (existente) {
+                existente.cantidad += fila.cantidad;
+                existente.subtotal =
+                    existente.cantidad * existente.costo_unitario;
+                return;
+            }
+
+            const costoUnitario = Number(
+                lote.detalle_entrada?.precio_compra ?? 0,
+            );
+            const precioUnitario = Number(
+                lote.detalle_entrada?.precio_venta ?? 0,
+            );
+
+            detallesImportados.push({
+                producto_id: producto.id,
+                lote_id: lote.id,
+                cantidad: fila.cantidad,
+                costo_unitario: costoUnitario,
+                precio_unitario: precioUnitario,
+                subtotal: fila.cantidad * costoUnitario,
+                producto,
+                lote,
+            });
+        });
+
+        if (errores.length) {
+            await Swal.fire({
+                title: "No se importaron las filas",
+                text: [
+                    ...errores.slice(0, 12),
+                    ...(errores.length > 12
+                        ? [`Y ${errores.length - 12} errores más.`]
+                        : []),
+                ].join("\n"),
+                icon: "warning",
+                confirmButtonText: "Aceptar",
+            });
+            return;
+        }
+
+        detallesImportados.forEach((detalle) => {
+            const existente = form.detalles.find(
+                (item) =>
+                    item.producto_id === detalle.producto_id &&
+                    item.lote_id === detalle.lote_id,
+            );
+
+            if (existente) {
+                existente.cantidad += detalle.cantidad;
+                existente.subtotal =
+                    existente.cantidad * Number(existente.costo_unitario);
+            } else {
+                form.detalles.push(detalle);
+            }
+        });
+
+        calcularTotal();
+
+        await Swal.fire({
+            title: "Excel importado",
+            text: `Se procesaron ${filasValidas.length} filas y se actualizaron los detalles del formulario. Revisa los datos antes de guardar.`,
+            icon: "success",
+            confirmButtonText: "Aceptar",
+        });
+    } catch (error) {
+        await Swal.fire({
+            title: "No se pudo importar el Excel",
+            text:
+                error.response?.data?.message ||
+                error.message ||
+                "Ocurrió un error al buscar los productos y lotes.",
+            icon: "error",
+            confirmButtonText: "Aceptar",
+        });
+    } finally {
+        importandoExcel.value = false;
+    }
 };
 
 /*
@@ -956,6 +1159,13 @@ const nombreTipoSalida = (tipo) => {
                         }}
                     </span>
                 </div>
+
+                <ImportacionExcel
+                    tipo="salida"
+                    class="mb-4"
+                    :disabled="importandoExcel"
+                    @imported="importarDetallesExcel"
+                />
 
                 <!-- ================================================= -->
                 <!-- AUTOCOMPLETE PRODUCTO -->

@@ -153,6 +153,11 @@ Route::middleware([
     |--------------------------------------------------------------------------
     */
 
+    Route::post(
+        '/productos/resolver-importacion',
+        [ProductoController::class, 'resolverImportacion']
+    )->name('productos.resolver-importacion');
+
     // Listar productos
     Route::get(
         '/productos',

@@ -1,9 +1,11 @@
 <script setup>
 import { computed, ref, watch } from "vue";
 import { router, useForm } from "@inertiajs/vue3";
+import axios from "axios";
 
 import Swal from "sweetalert2";
 
+import ImportacionExcel from "@/Components/ImportacionExcel.vue";
 import ProveedorForm from "../Proveedores/Form.vue";
 import ProductoForm from "../Productos/Form.vue";
 
@@ -74,6 +76,7 @@ const productoBusqueda = ref(null);
 const productosFiltrados = ref([]);
 
 const buscandoProducto = ref(false);
+const importandoExcel = ref(false);
 
 /*
 |--------------------------------------------------------------------------
@@ -427,6 +430,228 @@ const agregarProducto = (producto = null) => {
     });
 
     productoBusqueda.value = null;
+};
+
+const valorNumericoExcel = (valor) => {
+    if (typeof valor === "number") {
+        return Number.isFinite(valor) ? valor : null;
+    }
+
+    const texto = String(valor ?? "").trim();
+    if (!texto) {
+        return null;
+    }
+
+    const normalizado = /^\d+,\d+$/.test(texto)
+        ? texto.replace(",", ".")
+        : texto;
+    const numero = Number(normalizado);
+
+    return Number.isFinite(numero) ? numero : null;
+};
+
+const fechaExcel = (valor) => {
+    if (valor instanceof Date && !Number.isNaN(valor.getTime())) {
+        return new Date(
+            valor.getFullYear(),
+            valor.getMonth(),
+            valor.getDate(),
+        );
+    }
+
+    if (typeof valor === "number" && valor > 0) {
+        const fecha = new Date(Date.UTC(1899, 11, 30) + valor * 86400000);
+        return new Date(fecha.getUTCFullYear(), fecha.getUTCMonth(), fecha.getUTCDate());
+    }
+
+    const texto = String(valor ?? "").trim();
+    if (!texto) {
+        return null;
+    }
+
+    const partes = texto.match(/^(\d{1,2})[/-](\d{1,2})[/-](\d{4})$/);
+    if (partes) {
+        const fecha = new Date(Number(partes[3]), Number(partes[2]) - 1, Number(partes[1]));
+        return Number.isNaN(fecha.getTime()) ? null : fecha;
+    }
+
+    const fecha = new Date(texto);
+    return Number.isNaN(fecha.getTime()) ? null : fecha;
+};
+
+const importarDetallesExcel = async (filas) => {
+    importandoExcel.value = true;
+
+    try {
+        const errores = [];
+        const codigos = [];
+        const filasValidas = [];
+
+        filas.forEach((fila) => {
+            const codigo = String(fila.codigo_producto ?? "").trim();
+            const cantidad = valorNumericoExcel(fila.cantidad);
+            const precioCompra = valorNumericoExcel(fila.precio_compra);
+            const precioVenta = valorNumericoExcel(fila.precio_venta);
+            const descuento = valorNumericoExcel(fila.descuento) ?? 0;
+            const tieneDescuento = ["si", "sí", "true", "1", "yes"].includes(
+                String(fila.tiene_descuento ?? "").trim().toLocaleLowerCase(),
+            );
+            const fechaVencimiento = fechaExcel(fila.fecha_vencimiento);
+
+            if (!codigo || !Number.isInteger(cantidad) || cantidad < 1) {
+                errores.push(`Fila ${fila.numero_fila}: código y cantidad entera mayor a cero son obligatorios.`);
+                return;
+            }
+
+            if (
+                precioCompra === null ||
+                precioCompra < 0 ||
+                precioVenta === null ||
+                precioVenta < 0
+            ) {
+                errores.push(`Fila ${fila.numero_fila}: precio de compra y precio de venta deben ser números iguales o mayores a cero.`);
+                return;
+            }
+
+            if (
+                descuento < 0 ||
+                (tieneDescuento && descuento > precioVenta)
+            ) {
+                errores.push(`Fila ${fila.numero_fila}: el descuento debe estar entre cero y el precio de venta.`);
+                return;
+            }
+
+            if (fila.fecha_vencimiento && !fechaVencimiento) {
+                errores.push(`Fila ${fila.numero_fila}: la fecha de vencimiento no es válida.`);
+                return;
+            }
+
+            if (
+                fechaVencimiento &&
+                fechaVencimiento <= new Date(new Date().setHours(0, 0, 0, 0))
+            ) {
+                errores.push(`Fila ${fila.numero_fila}: la fecha de vencimiento debe ser posterior a hoy.`);
+                return;
+            }
+
+            codigos.push(codigo);
+            filasValidas.push({
+                ...fila,
+                codigo,
+                cantidad,
+                precio_compra: precioCompra,
+                precio_venta: precioVenta,
+                tiene_descuento: tieneDescuento,
+                descuento: tieneDescuento ? descuento : 0,
+                fecha_vencimiento: fechaVencimiento,
+            });
+        });
+
+        if (errores.length) {
+            await Swal.fire({
+                title: "Revisa las filas del Excel",
+                text: [
+                    ...errores.slice(0, 12),
+                    ...(errores.length > 12
+                        ? [`Y ${errores.length - 12} errores más.`]
+                        : []),
+                ].join("\n"),
+                icon: "warning",
+                confirmButtonText: "Aceptar",
+            });
+            return;
+        }
+
+        const { data } = await axios.post(
+            route("productos.resolver-importacion"),
+            { codigos: [...new Set(codigos)] },
+        );
+        const productos = data.productos ?? [];
+        const productoPorCodigo = new Map();
+        const productoPorCodigoNumerico = new Map();
+
+        productos.forEach((producto) => {
+            if (producto.codigo) {
+                const codigo = String(producto.codigo).trim();
+                productoPorCodigo.set(codigo, producto);
+                if (/^\d+$/.test(codigo)) {
+                    productoPorCodigoNumerico.set(
+                        codigo.replace(/^0+(?=\d)/, ""),
+                        producto,
+                    );
+                }
+            }
+            if (producto.codigo_barras) {
+                productoPorCodigo.set(String(producto.codigo_barras).trim(), producto);
+            }
+        });
+
+        const noEncontrados = filasValidas
+            .filter(
+                (fila) =>
+                    !productoPorCodigo.has(fila.codigo) &&
+                    !productoPorCodigoNumerico.has(
+                        fila.codigo.replace(/^0+(?=\d)/, ""),
+                    ),
+            )
+            .map((fila) => `Fila ${fila.numero_fila}: no se encontró el producto "${fila.codigo}".`);
+
+        if (noEncontrados.length) {
+            await Swal.fire({
+                title: "Hay productos que no existen",
+                text: [
+                    ...noEncontrados.slice(0, 12),
+                    ...(noEncontrados.length > 12
+                        ? [`Y ${noEncontrados.length - 12} productos más.`]
+                        : []),
+                ].join("\n"),
+                icon: "warning",
+                confirmButtonText: "Aceptar",
+            });
+            return;
+        }
+
+        filasValidas.forEach((fila) => {
+            const producto =
+                productoPorCodigo.get(fila.codigo) ??
+                productoPorCodigoNumerico.get(
+                    fila.codigo.replace(/^0+(?=\d)/, ""),
+                );
+            const subtotal = Math.round(fila.cantidad * fila.precio_compra * 100) / 100;
+
+            form.detalles.push({
+                producto_id: producto.id,
+                producto,
+                cantidad: fila.cantidad,
+                precio_compra: fila.precio_compra,
+                precio_venta: fila.precio_venta,
+                tiene_descuento: fila.tiene_descuento,
+                descuento: fila.descuento,
+                subtotal,
+                tiene_vencimiento: Boolean(fila.fecha_vencimiento),
+                fecha_vencimiento: fila.fecha_vencimiento,
+            });
+        });
+
+        await Swal.fire({
+            title: "Excel importado",
+            text: `Se agregaron ${filasValidas.length} filas al formulario. Revisa los datos antes de guardar.`,
+            icon: "success",
+            confirmButtonText: "Aceptar",
+        });
+    } catch (error) {
+        await Swal.fire({
+            title: "No se pudo importar el Excel",
+            text:
+                error.response?.data?.message ||
+                error.message ||
+                "Ocurrió un error al buscar los productos.",
+            icon: "error",
+            confirmButtonText: "Aceptar",
+        });
+    } finally {
+        importandoExcel.value = false;
+    }
 };
 
 /*
@@ -949,6 +1174,14 @@ const cerrar = () => {
                         }}
                     </span>
                 </div>
+
+                <ImportacionExcel
+                    v-if="!esEdicion"
+                    tipo="entrada"
+                    class="mb-4"
+                    :disabled="importandoExcel"
+                    @imported="importarDetallesExcel"
+                />
 
                 <!-- BUSCADOR -->
 

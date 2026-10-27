@@ -271,7 +271,7 @@ watch(
 watch(
     () => form.unidad_medida,
     (unidad) => {
-        const unidadesConContenido = ["ml", "l", "gr", "frasco", "botella"];
+        const unidadesConContenido = ["ml", "l", "gr", "frasco"];
 
         if (!unidadesConContenido.includes(unidad)) {
             form.volumen_ml = 0;
@@ -292,7 +292,7 @@ const seleccionarImagen = (event) => {
 };
 
 const requiereVolumen = computed(() => {
-    return ["frasco", "botella", "ml", "l", "gr"].includes(form.unidad_medida);
+    return ["frasco", "ml", "l", "gr"].includes(form.unidad_medida);
 });
 
 const unidadContenido = computed(() => {
@@ -301,7 +301,6 @@ const unidadContenido = computed(() => {
         l: "L",
         gr: "gr",
         frasco: "ml",
-        botella: "ml",
     };
 
     return unidades[form.unidad_medida] ?? "";

@@ -17,6 +17,80 @@ use Illuminate\Support\Facades\Storage;
 
 class ProductoController extends Controller
 {
+    private const UNIDADES_MEDIDA = [
+        'unidad',
+        'pieza',
+        'juego',
+        'set',
+        'par',
+        'coleccion',
+        'paquete',
+        'ml',
+        'l',
+        'tubo',
+        'equipo',
+        'docena',
+        'frasco',
+        'bolsita',
+        'gr',
+        'kit',
+        'cajita',
+    ];
+
+    public function resolverImportacion(Request $request)
+    {
+        $validated = $request->validate([
+            'codigos' => ['required', 'array', 'min:1', 'max:500'],
+            'codigos.*' => ['required', 'string', 'max:100'],
+            'incluir_lotes' => ['sometimes', 'boolean'],
+        ]);
+
+        $codigos = collect($validated['codigos'])
+            ->map(fn ($codigo) => trim($codigo))
+            ->filter()
+            ->unique()
+            ->values();
+        $codigosNumericos = $codigos
+            ->filter(fn ($codigo) => ctype_digit($codigo))
+            ->map(fn ($codigo) => ltrim($codigo, '0') ?: '0')
+            ->unique()
+            ->values();
+
+        $consulta = Producto::query()
+            ->where('activo', true)
+            ->where(function ($query) use ($codigos, $codigosNumericos) {
+                $query->whereIn('codigo', $codigos)
+                    ->orWhereIn('codigo_barras', $codigos);
+                if ($codigosNumericos->isNotEmpty()) {
+                    $query->orWhereIn('codigo', $codigosNumericos);
+                }
+            });
+
+        if ($request->boolean('incluir_lotes')) {
+            $consulta->with([
+                'lotes' => function ($query) {
+                    $query->where('cantidad_actual', '>', 0)
+                        ->with('detalleEntrada')
+                        ->orderBy('id');
+                },
+            ]);
+        }
+
+        $productos = $consulta
+            ->get([
+                'id',
+                'codigo',
+                'codigo_barras',
+                'nombre',
+                'unidad_medida',
+                'stock_actual',
+            ]);
+
+        return response()->json([
+            'productos' => $productos,
+        ]);
+    }
+
     public function index()
     {
         $productos = Producto::with([
@@ -110,8 +184,7 @@ class ProductoController extends Controller
 
             'ubicacion' => ['nullable', Rule::in(Producto::UBICACIONES)],
 
-            'unidad_medida' =>
-            'required|in:und,caja,pqt,blister,frasco,botella,ml,l,gr,kg,kit,par',
+            'unidad_medida' => ['required', Rule::in(self::UNIDADES_MEDIDA)],
 
             'stock_minimo' => 'required|integer|min:0',
 
@@ -239,8 +312,7 @@ class ProductoController extends Controller
 
             'ubicacion' => ['nullable', Rule::in(Producto::UBICACIONES)],
 
-            'unidad_medida' =>
-            'required|in:und,caja,pqt,blister,frasco,botella,ml,l,gr,kg,kit,par',
+            'unidad_medida' => ['required', Rule::in(self::UNIDADES_MEDIDA)],
 
             'stock_minimo' => 'required|integer|min:0',
 
