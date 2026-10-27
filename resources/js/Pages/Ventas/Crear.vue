@@ -664,16 +664,6 @@ onMounted(() => {
                         </p>
                     </div>
 
-                    <!-- INDICADOR DE PRODUCTOS -->
-                    <div
-                        class="flex items-center gap-2 px-3 py-2 rounded-lg bg-[#FDF2F5] text-[#7F1D3F] border border-[#F5DCE4]"
-                    >
-                        <i class="pi pi-box text-[#7F1D3F]"></i>
-
-                        <span class="text-sm font-medium">
-                            {{ productosDisponibles.length }} resultados
-                        </span>
-                    </div>
                 </div>
             </template>
 
@@ -723,11 +713,6 @@ onMounted(() => {
                                     </div>
                                 </div>
 
-                                <Tag
-                                    :value="`${productosDisponibles.length} resultados`"
-                                    severity="info"
-                                    class="!bg-[#FDF2F5] !text-[#7F1D3F] !border !border-[#F5DCE4]"
-                                />
                             </div>
 
                             <!-- BUSCADOR -->
@@ -827,7 +812,7 @@ onMounted(() => {
 
                                     <div class="min-w-0">
                                         <h3
-                                            class="font-semibold text-sm text-gray-800 truncate"
+                                            class="block max-w-full whitespace-normal break-words [overflow-wrap:anywhere] font-semibold text-sm leading-snug text-gray-800"
                                             :title="producto.nombre"
                                         >
                                             {{ producto.nombre }}
@@ -1033,7 +1018,7 @@ onMounted(() => {
 
                                                 <div class="min-w-0">
                                                     <h3
-                                                        class="font-semibold text-sm text-gray-800 truncate"
+                                                        class="block max-w-full whitespace-normal break-words [overflow-wrap:anywhere] font-semibold text-sm leading-snug text-gray-800"
                                                         :title="
                                                             item.producto
                                                                 ?.nombre
