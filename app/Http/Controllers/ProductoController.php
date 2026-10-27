@@ -294,17 +294,19 @@ class ProductoController extends Controller
 
     public function update(Request $request, Producto $producto)
     {
+        $reglasCodigoBarras = [
+            'nullable',
+            'string',
+            'max:50',
+        ];
 
+        if ($request->input('codigo_barras') !== $producto->codigo_barras) {
+            $reglasCodigoBarras[] = Rule::unique('productos', 'codigo_barras')
+                ->ignore($producto->getKey(), $producto->getKeyName());
+        }
 
         $validated = $request->validate([
-
-            'codigo_barras' => [
-                'nullable',
-                'string',
-                'max:50',
-                Rule::unique('productos', 'codigo_barras')
-                    ->ignore($producto->id),
-            ],
+            'codigo_barras' => $reglasCodigoBarras,
 
             'nombre' => 'required|string|max:150',
 
