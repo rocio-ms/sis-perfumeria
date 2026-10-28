@@ -654,7 +654,7 @@ const estadoTag = (valor, columna) => {
             :value="datosFiltrados"
             :loading="loading"
             paginator
-            :rows="10"
+            :rows="50"
             :rowsPerPageOptions="[10, 20, 50]"
             stripedRows
             sortField="id"

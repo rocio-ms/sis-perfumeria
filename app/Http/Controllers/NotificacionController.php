@@ -146,7 +146,7 @@ class NotificacionController extends Controller
         // Paginación
 
         $notificaciones = $query
-            ->paginate(10)
+            ->paginate(50)
             ->withQueryString();
 
         /*
