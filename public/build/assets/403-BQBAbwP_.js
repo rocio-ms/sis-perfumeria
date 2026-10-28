@@ -1,1 +1,0 @@
-import{N as e,l as t}from"./runtime-core.esm-bundler-C8qHIgUv.js";import{t as n}from"./ErrorPage-CL4qgCxu.js";var r={__name:`403`,setup(r){return(r,i)=>(e(),t(n,{code:`403`,title:`Acceso denegado`,message:`No tienes permisos suficientes para acceder a esta sección.`,icon:`pi pi-lock`}))}};export{r as default};
