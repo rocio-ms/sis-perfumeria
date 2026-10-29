@@ -16,16 +16,11 @@ const props = defineProps({
 const emit = defineEmits(["update:visible"]);
 
 const nombreEmpresa = computed(() => {
-    return (
-        props.empresa?.nombre_comercial ||
-        props.empresa?.razon_social ||
-        "Sin nombre"
-    );
+    return props.empresa?.razon_social || "Sin nombre";
 });
 
 const iniciales = computed(() => {
-    const nombre =
-        props.empresa?.nombre_comercial || props.empresa?.razon_social || "";
+    const nombre = props.empresa?.razon_social || "";
 
     if (!nombre) {
         return "E";
@@ -192,17 +187,6 @@ const fechaActualizacion = computed(() => {
                         </span>
                     </div>
 
-                    <!-- NOMBRE COMERCIAL -->
-                    <div class="border border-gray-200 rounded-xl p-3">
-                        <span class="block text-xs text-gray-500 mb-1">
-                            Nombre comercial
-                        </span>
-
-                        <span class="font-medium text-gray-800">
-                            {{ empresa.nombre_comercial || "—" }}
-                        </span>
-                    </div>
-
                     <!-- RUC -->
                     <div class="border border-gray-200 rounded-xl p-3">
                         <span class="block text-xs text-gray-500 mb-1">
@@ -233,63 +217,24 @@ const fechaActualizacion = computed(() => {
                 </div>
             </div>
 
-            <!-- ===================================================== -->
-            <!-- DATOS DE CONTACTO -->
-            <!-- ===================================================== -->
-
             <div>
                 <div class="flex items-center gap-2 mb-3">
-                    <i class="pi pi-address-book text-indigo-600"></i>
-
-                    <h3 class="font-semibold text-gray-800">
-                        Información de contacto
-                    </h3>
+                    <i class="pi pi-tags text-indigo-600"></i>
+                    <h3 class="font-semibold text-gray-800">Marcas</h3>
                 </div>
-
-                <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                    <!-- DIRECCIÓN -->
-                    <div
-                        class="border border-gray-200 rounded-xl p-3 sm:col-span-2"
+                <div class="flex flex-wrap gap-2">
+                    <Tag
+                        v-for="marca in empresa.marcas || []"
+                        :key="marca.id"
+                        :value="marca.nombre"
+                        severity="info"
+                    />
+                    <span
+                        v-if="!empresa.marcas?.length"
+                        class="text-sm text-gray-500"
                     >
-                        <span class="block text-xs text-gray-500 mb-1">
-                            Dirección
-                        </span>
-
-                        <div class="flex items-center gap-2">
-
-                            <span class="font-medium text-gray-800">
-                                {{ empresa.direccion || "—" }}
-                            </span>
-                        </div>
-                    </div>
-
-                    <!-- TELÉFONO -->
-                    <div class="border border-gray-200 rounded-xl p-3">
-                        <span class="block text-xs text-gray-500 mb-1">
-                            Teléfono
-                        </span>
-
-                        <div class="flex items-center gap-2">
-
-                            <span class="font-medium text-gray-800">
-                                {{ empresa.telefono || "Sin información" }}
-                            </span>
-                        </div>
-                    </div>
-
-                    <!-- CORREO -->
-                    <div class="border border-gray-200 rounded-xl p-3">
-                        <span class="block text-xs text-gray-500 mb-1">
-                            Correo electrónico
-                        </span>
-
-                        <div class="flex items-center gap-2">
-
-                            <span class="font-medium text-gray-800 break-all">
-                                {{ empresa.email || "Sin información" }}
-                            </span>
-                        </div>
-                    </div>
+                        Sin marcas asignadas
+                    </span>
                 </div>
             </div>
 

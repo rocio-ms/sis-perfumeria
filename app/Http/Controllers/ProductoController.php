@@ -113,11 +113,12 @@ class ProductoController extends Controller
             ->get();
 
         $marcas = Marca::where('activo', true)
+            ->whereNotNull('empresa_id')
             ->orderBy('nombre')
             ->get();
 
         $empresas = Empresa::where('activo', true)
-            ->orderBy('nombre_comercial')
+            ->orderBy('razon_social')
             ->get();
 
         return Inertia::render('Productos/Index', [
@@ -144,10 +145,11 @@ class ProductoController extends Controller
                 ->get(),
             'ubicaciones' => Producto::UBICACIONES,
             'marcas' => Marca::where('activo', true)
+                ->whereNotNull('empresa_id')
                 ->orderBy('nombre')
                 ->get(),
             'empresas' => Empresa::where('activo', true)
-                ->orderBy('nombre_comercial')
+                ->orderBy('razon_social')
                 ->get(),
         ]);
     }
@@ -197,7 +199,10 @@ class ProductoController extends Controller
 
             'activo' => 'boolean',
 
-            'marca_id' => 'required|exists:marcas,id',
+            'marca_id' => [
+                'required',
+                Rule::exists('marcas', 'id')->whereNotNull('empresa_id'),
+            ],
 
             'categoria_id' => 'required|exists:categorias,id',
 
@@ -208,7 +213,7 @@ class ProductoController extends Controller
         ]);
 
         //Obtener la empresa de la marca
-        $marca = Marca::find($validated['marca_id']);
+        $marca = Marca::findOrFail($validated['marca_id']);
 
         $validated['empresa_id'] = $marca->empresa_id;
 
@@ -277,11 +282,15 @@ class ProductoController extends Controller
                 ->get(),
             'ubicaciones' => Producto::UBICACIONES,
             'marcas' => Marca::where('activo', true)
+                ->where(function ($query) use ($producto) {
+                    $query->whereNotNull('empresa_id')
+                        ->orWhere('id', $producto->marca_id);
+                })
                 ->orderBy('nombre')
                 ->get(),
 
             'empresas' => Empresa::where('activo', true)
-                ->orderBy('nombre_comercial')
+                ->orderBy('razon_social')
                 ->get(),
         ]);
     }
@@ -327,7 +336,13 @@ class ProductoController extends Controller
 
             'activo' => 'boolean',
 
-            'marca_id' => 'required|exists:marcas,id',
+            'marca_id' => [
+                'required',
+                Rule::exists('marcas', 'id')->where(function ($query) use ($producto) {
+                    $query->whereNotNull('empresa_id')
+                        ->orWhere('id', $producto->marca_id);
+                }),
+            ],
 
             'categoria_id' => 'required|exists:categorias,id',
 
@@ -366,7 +381,7 @@ class ProductoController extends Controller
 
             $marca = Marca::findOrFail($validated['marca_id']);
 
-            $empresaId = $marca->empresa_id;
+            $empresaId = $marca->empresa_id ?? $producto->empresa_id;
 
             /*
             |--------------------------------------------------------------------------

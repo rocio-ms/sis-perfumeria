@@ -31,37 +31,27 @@ const logoUrl = computed(() => {
 const nombreTienda = computed(
     () =>
         tienda.value.nombre_comercial ||
-        tienda.value.nombre ||
-        tienda.value.razon_social ||
         "MI TIENDA",
 );
 
 const razonSocialEmisor = computed(
     () =>
         (!esVentaMixta.value && empresa.value?.razon_social) ||
-        tienda.value.razon_social ||
         nombreTienda.value,
 );
 
 const rucEmisor = computed(
     () =>
         (!esVentaMixta.value && empresa.value?.ruc) ||
-        tienda.value.ruc ||
         "",
 );
 
 const direccionEmisor = computed(
-    () =>
-        (!esVentaMixta.value && empresa.value?.direccion) ||
-        tienda.value.direccion ||
-        "",
+    () => tienda.value.direccion || "",
 );
 
 const telefonoEmisor = computed(
-    () =>
-        (!esVentaMixta.value && empresa.value?.telefono) ||
-        tienda.value.telefono ||
-        "",
+    () => tienda.value.telefono || "",
 );
 
 const ubicacionTienda = computed(

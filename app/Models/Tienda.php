@@ -10,8 +10,6 @@ class Tienda extends Model
 
     protected $fillable = [
         'nombre_comercial',
-        'ruc',
-        'razon_social',
         'direccion',
         'departamento',
         'provincia',

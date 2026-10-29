@@ -32,8 +32,6 @@ const items = ref([
 ]);
 
 const form = useForm({
-    ruc: "",
-    razon_social: "",
     nombre_comercial: "",
     direccion: "",
     departamento: "",
@@ -56,8 +54,6 @@ watch(
 
         console.log("TIENDA RECIBIDA:", tienda);
         if (tienda) {
-            form.ruc = tienda.ruc ?? "";
-            form.razon_social = tienda.razon_social ?? "";
             form.nombre_comercial = tienda.nombre_comercial ?? "";
             form.direccion = tienda.direccion ?? "";
             form.departamento = tienda.departamento ?? "";
@@ -164,10 +160,10 @@ const guardar = () => {
 
             <template #content>
                 <div class="flex flex-col gap-6">
-                    <!-- DATOS FISCALES -->
+                    <!-- DATOS DE LA TIENDA -->
                     <div>
                         <h2 class="text-lg font-semibold text-gray-800">
-                            Datos fiscales
+                            Datos de la tienda
                         </h2>
 
                         <p class="text-sm text-gray-500 mt-1">
@@ -178,65 +174,6 @@ const guardar = () => {
                     <Divider />
 
                     <div class="grid grid-cols-1 md:grid-cols-2 gap-5">
-                        <!-- RUC -->
-                        <div class="flex flex-col gap-1">
-                            <FloatLabel variant="on">
-                                <InputText
-                                    id="ruc"
-                                    v-model="form.ruc"
-                                    class="w-full"
-                                    maxlength="11"
-                                    inputmode="numeric"
-                                    :invalid="!!form.errors.ruc"
-                                    @input="
-                                        form.ruc = form.ruc
-                                            .replace(/\D/g, '')
-                                            .slice(0, 11)
-                                    "
-                                />
-
-                                <label for="ruc">
-                                    RUC <span class="text-red-500">*</span>
-                                </label>
-                            </FloatLabel>
-                            <small
-                                v-if="
-                                    form.ruc &&
-                                    form.ruc.length !== 11 &&
-                                    !form.errors.ruc
-                                "
-                                class="text-red-500 text-xs"
-                            >
-                                El RUC debe tener 11 dígitos
-                            </small>
-                            <small v-if="form.errors.ruc" class="text-red-500">
-                                {{ form.errors.ruc }}
-                            </small>
-                        </div>
-
-                        <!-- Razón social -->
-                        <div class="flex flex-col gap-1">
-                            <FloatLabel variant="on">
-                                <InputText
-                                    id="razon_social"
-                                    v-model="form.razon_social"
-                                    class="w-full"
-                                    :invalid="!!form.errors.razon_social"
-                                />
-
-                                <label for="razon_social">
-                                    Razón social
-                                    <span class="text-red-500">*</span>
-                                </label>
-                            </FloatLabel>
-                            <small
-                                v-if="form.errors.razon_social"
-                                class="text-red-500"
-                            >
-                                {{ form.errors.razon_social }}
-                            </small>
-                        </div>
-
                         <!-- Nombre comercial -->
                         <div class="flex flex-col gap-1">
                             <FloatLabel variant="on">

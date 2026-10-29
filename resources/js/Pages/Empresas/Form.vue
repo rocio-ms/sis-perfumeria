@@ -30,14 +30,6 @@ const form = useForm({
 
     razon_social: "",
 
-    nombre_comercial: "",
-
-    direccion: "",
-
-    telefono: "",
-
-    email: "",
-
     activo: true,
 
     series: {
@@ -85,14 +77,6 @@ const limpiarFormulario = () => {
 
     form.razon_social = "";
 
-    form.nombre_comercial = "";
-
-    form.direccion = "";
-
-    form.telefono = "";
-
-    form.email = "";
-
     form.activo = true;
 
     form.series = {
@@ -135,14 +119,6 @@ const cargarEmpresa = (empresa) => {
     form.ruc = empresa.ruc ?? "";
 
     form.razon_social = empresa.razon_social ?? "";
-
-    form.nombre_comercial = empresa.nombre_comercial ?? "";
-
-    form.direccion = empresa.direccion ?? "";
-
-    form.telefono = empresa.telefono ?? "";
-
-    form.email = empresa.email ?? "";
 
     form.activo = Boolean(empresa.activo);
 
@@ -443,97 +419,6 @@ const cerrar = () => {
                 </small>
             </div>
 
-            <div class="flex flex-col gap-1">
-                <FloatLabel variant="on">
-                    <InputText
-                        id="nombre_comercial"
-                        v-model="form.nombre_comercial"
-                        class="w-full"
-                        :invalid="!!form.errors.nombre_comercial"
-                    />
-
-                    <label for="nombre_comercial">
-                        Nombre comercial
-
-                        <span class="text-red-500"> * </span>
-                    </label>
-                </FloatLabel>
-
-                <small v-if="form.errors.nombre_comercial" class="text-red-500">
-                    {{ form.errors.nombre_comercial }}
-                </small>
-            </div>
-
-            <div class="flex flex-col gap-1">
-                <FloatLabel variant="on">
-                    <InputText
-                        id="direccion"
-                        v-model="form.direccion"
-                        class="w-full"
-                        :invalid="!!form.errors.direccion"
-                    />
-
-                    <label for="direccion">
-                        Dirección
-
-                        <span class="text-red-500"> * </span>
-                    </label>
-                </FloatLabel>
-
-                <small v-if="form.errors.direccion" class="text-red-500">
-                    {{ form.errors.direccion }}
-                </small>
-            </div>
-
-            <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
-                <!-- TELÉFONO -->
-
-                <div class="flex flex-col gap-1">
-                    <FloatLabel variant="on">
-                        <InputText
-                            id="telefono"
-                            v-model="form.telefono"
-                            class="w-full"
-                            :class="{
-                                'p-invalid': form.errors.telefono,
-                            }"
-                            maxlength="20"
-                            inputmode="numeric"
-                            @input="
-                                form.telefono = form.telefono.replace(/\D/g, '')
-                            "
-                        />
-
-                        <label for="telefono"> Teléfono </label>
-                    </FloatLabel>
-
-                    <small v-if="form.errors.telefono" class="text-red-500">
-                        {{ form.errors.telefono }}
-                    </small>
-                </div>
-
-                <!-- CORREO -->
-
-                <div class="flex flex-col gap-1">
-                    <FloatLabel variant="on">
-                        <InputText
-                            id="email"
-                            v-model="form.email"
-                            type="email"
-                            class="w-full"
-                            :class="{
-                                'p-invalid': form.errors.email,
-                            }"
-                        />
-
-                        <label for="email"> Correo electrónico </label>
-                    </FloatLabel>
-
-                    <small v-if="form.errors.email" class="text-red-500">
-                        {{ form.errors.email }}
-                    </small>
-                </div>
-            </div>
             <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <div class="flex flex-col gap-1">
                     <FloatLabel variant="on">

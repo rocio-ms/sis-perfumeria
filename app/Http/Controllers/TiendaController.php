@@ -20,18 +20,6 @@ class TiendaController extends Controller
     public function store(Request $request)
     {
         $validated = $request->validate([
-            'ruc' => [
-                'required',
-                'digits:11',
-                'unique:tiendas,ruc',
-            ],
-
-            'razon_social' => [
-                'required',
-                'string',
-                'max:255',
-            ],
-
             'nombre_comercial' => [
                 'required',
                 'string',
@@ -115,18 +103,6 @@ class TiendaController extends Controller
     public function update(Request $request, Tienda $tienda)
     {
         $validated = $request->validate([
-            'ruc' => [
-                'required',
-                'digits:11',
-                'unique:tiendas,ruc,' . $tienda->id,
-            ],
-
-            'razon_social' => [
-                'required',
-                'string',
-                'max:255',
-            ],
-
             'nombre_comercial' => [
                 'required',
                 'string',
@@ -212,8 +188,7 @@ class TiendaController extends Controller
 
         unset($validated['logo']);
 
-        $tienda->logo_url = $validated['logo_url'];
-        $tienda->save();
+        $tienda->update($validated);
 
         return redirect()
             ->route('tiendas.index')

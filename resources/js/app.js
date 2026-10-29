@@ -24,6 +24,7 @@ import Avatar from "primevue/avatar";
 import SelectButton from "primevue/selectbutton";
 import Dialog from "primevue/dialog";
 import Select from "primevue/select";
+import MultiSelect from "primevue/multiselect";
 import InputNumber from "primevue/inputnumber";
 import Textarea from "primevue/textarea";
 import Message from "primevue/message";
@@ -78,6 +79,7 @@ createInertiaApp({
             .component("SelectButton", SelectButton)
             .component("Dialog", Dialog)
             .component("Select", Select)
+            .component("MultiSelect", MultiSelect)
             .component("InputNumber", InputNumber)
             .component("Textarea", Textarea)
             .component("Message", Message)

@@ -180,12 +180,12 @@ const cerrar = () => {
                         optionValue="id"
                         class="w-full"
                         :invalid="!!form.errors.empresa_id"
+                        showClear
+                        placeholder="Sin empresa asignada"
                         emptyMessage="No existen empresas disponibles"
                     />
 
-                    <label for="empresa_id"
-                        >Empresa <span class="text-red-500">*</span></label
-                    >
+                    <label for="empresa_id">Empresa</label>
                 </FloatLabel>
 
                 <small v-if="form.errors.empresa_id" class="text-red-500">

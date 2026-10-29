@@ -120,47 +120,27 @@ const razonSocialEmisor = computed(() => {
     }
 
     return (
-        tienda.value.razon_social ||
         tienda.value.nombre_comercial ||
-        tienda.value.nombre ||
         "MI TIENDA"
     );
 });
 
 const nombreComercialEmisor = computed(() => {
-    if (!esVentaMixta.value && empresaEmisora.value?.nombre_comercial) {
-        return empresaEmisora.value.nombre_comercial;
-    }
-
     return (
         tienda.value.nombre_comercial ||
-        tienda.value.nombre ||
-        tienda.value.razon_social ||
         "MI TIENDA"
     );
 });
 
 const direccionEmisor = computed(() => {
-    if (!esVentaMixta.value && empresaEmisora.value?.direccion) {
-        return empresaEmisora.value.direccion;
-    }
-
     return tienda.value.direccion || "";
 });
 
 const telefonoEmisor = computed(() => {
-    if (!esVentaMixta.value && empresaEmisora.value?.telefono) {
-        return empresaEmisora.value.telefono;
-    }
-
     return tienda.value.telefono || "";
 });
 
 const emailEmisor = computed(() => {
-    if (!esVentaMixta.value && empresaEmisora.value?.email) {
-        return empresaEmisora.value.email;
-    }
-
     return tienda.value.email || "";
 });
 

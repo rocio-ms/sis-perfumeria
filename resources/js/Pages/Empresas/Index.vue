@@ -40,18 +40,9 @@ const columns = [
         header: "Razón social",
     },
     {
-        field: "nombre_comercial",
-        header: "Nombre comercial",
-    },
-    {
         field: "tienda.nombre_comercial",
         header: "Tienda",
         default: "Sin tienda",
-    },
-    {
-        field: "telefono",
-        header: "Teléfono",
-        default: "Sin teléfono",
     },
     {
         field: "activo",
@@ -141,7 +132,7 @@ const cerrarShow = () => {
                     :data="props.empresas"
                     :columns="columns"
                     :loading="loading"
-                    :search-fields="['ruc', 'razon_social', 'nombre_comercial']"
+                    :search-fields="['ruc', 'razon_social']"
                     createRoute="empresas.create"
                     titleButton="Nueva empresa"
                     :show-view="true"

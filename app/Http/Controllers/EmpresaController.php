@@ -25,6 +25,7 @@ class EmpresaController extends Controller
     {
         $empresas = Empresa::with([
                 'tienda',
+                'marcas',
                 'seriesComprobantes.tipoComprobante',
             ])
             ->orderBy('id', 'desc')
@@ -34,7 +35,6 @@ class EmpresaController extends Controller
                 'nombre_comercial'
             )
             ->get();
-
         return Inertia::render(
             'Empresas/Index',
             [
@@ -56,7 +56,6 @@ class EmpresaController extends Controller
                 'nombre_comercial'
             )
             ->get();
-
         return Inertia::render(
             'Empresas/Form',
             [
@@ -90,30 +89,6 @@ class EmpresaController extends Controller
                 'razon_social' => [
                     'required',
                     'string',
-                    'max:255',
-                ],
-
-                'nombre_comercial' => [
-                    'required',
-                    'string',
-                    'max:255',
-                ],
-
-                'direccion' => [
-                    'required',
-                    'string',
-                    'max:255',
-                ],
-
-                'telefono' => [
-                    'nullable',
-                    'string',
-                    'max:20',
-                ],
-
-                'email' => [
-                    'nullable',
-                    'email',
                     'max:255',
                 ],
 
@@ -167,15 +142,6 @@ class EmpresaController extends Controller
                 'razon_social.required' =>
                     'La razón social es obligatoria.',
 
-                'nombre_comercial.required' =>
-                    'El nombre comercial es obligatorio.',
-
-                'direccion.required' =>
-                    'La dirección es obligatoria.',
-
-                'email.email' =>
-                    'Ingresa un correo electrónico válido.',
-
                 'activo.required' =>
                     'Debes indicar el estado de la empresa.',
 
@@ -228,18 +194,6 @@ class EmpresaController extends Controller
 
                 'razon_social' =>
                     $validated['razon_social'],
-
-                'nombre_comercial' =>
-                    $validated['nombre_comercial'],
-
-                'direccion' =>
-                    $validated['direccion'],
-
-                'telefono' =>
-                    $validated['telefono'] ?? null,
-
-                'email' =>
-                    $validated['email'] ?? null,
 
                 'activo' =>
                     $validated['activo'],
@@ -346,6 +300,7 @@ class EmpresaController extends Controller
     {
         $empresa->load([
             'tienda',
+            'marcas',
             'seriesComprobantes.tipoComprobante',
         ]);
 
@@ -367,6 +322,7 @@ class EmpresaController extends Controller
     {
         $empresa->load([
             'tienda',
+            'marcas',
             'seriesComprobantes.tipoComprobante',
         ]);
 
@@ -374,7 +330,6 @@ class EmpresaController extends Controller
                 'nombre_comercial'
             )
             ->get();
-
         return Inertia::render(
             'Empresas/Form',
             [
@@ -414,30 +369,6 @@ class EmpresaController extends Controller
                 'razon_social' => [
                     'required',
                     'string',
-                    'max:255',
-                ],
-
-                'nombre_comercial' => [
-                    'required',
-                    'string',
-                    'max:255',
-                ],
-
-                'direccion' => [
-                    'required',
-                    'string',
-                    'max:255',
-                ],
-
-                'telefono' => [
-                    'nullable',
-                    'string',
-                    'max:20',
-                ],
-
-                'email' => [
-                    'nullable',
-                    'email',
                     'max:255',
                 ],
 
@@ -491,15 +422,6 @@ class EmpresaController extends Controller
                 'razon_social.required' =>
                     'La razón social es obligatoria.',
 
-                'nombre_comercial.required' =>
-                    'El nombre comercial es obligatorio.',
-
-                'direccion.required' =>
-                    'La dirección es obligatoria.',
-
-                'email.email' =>
-                    'Ingresa un correo electrónico válido.',
-
                 'activo.required' =>
                     'Debes indicar el estado de la empresa.',
 
@@ -552,18 +474,6 @@ class EmpresaController extends Controller
 
                 'razon_social' =>
                     $validated['razon_social'],
-
-                'nombre_comercial' =>
-                    $validated['nombre_comercial'],
-
-                'direccion' =>
-                    $validated['direccion'],
-
-                'telefono' =>
-                    $validated['telefono'] ?? null,
-
-                'email' =>
-                    $validated['email'] ?? null,
 
                 'activo' =>
                     $validated['activo'],

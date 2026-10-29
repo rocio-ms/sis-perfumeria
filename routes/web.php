@@ -202,6 +202,8 @@ Route::middleware([
     |--------------------------------------------------------------------------
     */
 
+    Route::post('/marcas/asignar-empresa', [MarcaController::class, 'asignarEmpresa'])
+        ->name('marcas.asignar-empresa');
     Route::resource('/marcas', MarcaController::class);
 
 

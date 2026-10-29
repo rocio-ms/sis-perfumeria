@@ -10,10 +10,6 @@ class Empresa extends Model
         'tienda_id',
         'ruc',
         'razon_social',
-        'nombre_comercial',
-        'direccion',
-        'telefono',
-        'email',
         'activo',
     ];
 
@@ -24,6 +20,11 @@ class Empresa extends Model
     public function tienda()
     {
         return $this->belongsTo(Tienda::class);
+    }
+
+    public function marcas()
+    {
+        return $this->hasMany(Marca::class);
     }
 
     public function productos()
