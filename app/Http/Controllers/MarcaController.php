@@ -4,7 +4,6 @@ namespace App\Http\Controllers;
 
 use App\Models\Marca;
 use App\Models\Empresa;
-use Illuminate\Support\Facades\DB;
 use Illuminate\Http\Request;
 use Illuminate\Validation\Rule;
 use Inertia\Inertia;
@@ -26,29 +25,8 @@ class MarcaController extends Controller
             [
                 'marcas' => $marcas,
                 'empresas' => $empresas,
-                'todasLasMarcas' => Marca::orderBy('nombre')->get(['id', 'nombre', 'empresa_id']),
             ]
         );
-    }
-
-    public function asignarEmpresa(Request $request)
-    {
-        $validated = $request->validate([
-            'empresa_id' => ['required', 'exists:empresas,id'],
-            'marcas' => ['present', 'array'],
-            'marcas.*' => ['integer', 'distinct', 'exists:marcas,id'],
-        ]);
-
-        DB::transaction(function () use ($validated) {
-            Marca::where('empresa_id', $validated['empresa_id'])
-                ->whereNotIn('id', $validated['marcas'])
-                ->update(['empresa_id' => null]);
-
-            Marca::whereIn('id', $validated['marcas'])
-                ->update(['empresa_id' => $validated['empresa_id']]);
-        });
-
-        return back()->with('success', 'Las marcas de la empresa fueron actualizadas correctamente.');
     }
 
     public function create()
@@ -76,7 +54,7 @@ class MarcaController extends Controller
             ],
 
             'empresa_id' => [
-                'nullable',
+                'required',
                 'exists:empresas,id',
             ],
 
@@ -125,7 +103,7 @@ class MarcaController extends Controller
             ],
 
             'empresa_id' => [
-                'nullable',
+                'required',
                 'exists:empresas,id',
             ],
 
