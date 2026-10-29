@@ -171,24 +171,21 @@ const cerrar = () => {
             </div>
             <!-- EMPRESA -->
             <div class="flex flex-col gap-1">
-                <FloatLabel variant="on">
-                    <Select
-                        id="empresa_id"
-                        v-model="form.empresa_id"
-                        :options="empresas"
-                        optionLabel="razon_social"
-                        optionValue="id"
-                        class="w-full"
-                        :invalid="!!form.errors.empresa_id"
-                        filter
-                        placeholder="Busca y selecciona una empresa"
-                        emptyMessage="No existen empresas disponibles"
-                    />
-
-                    <label for="empresa_id">
-                        Empresa <span class="text-red-500">*</span>
-                    </label>
-                </FloatLabel>
+                <label for="empresa_id" class="font-medium">
+                    Empresa <span class="text-red-500">*</span>
+                </label>
+                <Select
+                    id="empresa_id"
+                    v-model="form.empresa_id"
+                    :options="empresas"
+                    optionLabel="razon_social"
+                    optionValue="id"
+                    class="w-full"
+                    :invalid="!!form.errors.empresa_id"
+                    filter
+                    placeholder="Busca y selecciona una empresa"
+                    emptyMessage="No existen empresas disponibles"
+                />
 
                 <small v-if="form.errors.empresa_id" class="text-red-500">
                     {{ form.errors.empresa_id }}
