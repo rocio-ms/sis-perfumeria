@@ -38,6 +38,10 @@ const props = defineProps({
         type: Array,
         default: () => [],
     },
+    empresas: {
+        type: Array,
+        default: () => [],
+    },
     siguienteCodigo: {
         type: String,
         default: "000001",
@@ -240,6 +244,7 @@ const eliminarProducto = async (producto) => {
             :subcategorias="props.subcategorias"
             :ubicaciones="props.ubicaciones"
             :marcas="props.marcas"
+            :empresas="props.empresas"
             :codigo-inicial="siguienteCodigo"
             @saved="formularioGuardado"
             @cancel="cerrarForm"

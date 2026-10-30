@@ -27,6 +27,10 @@ const props = defineProps({
         type: Array,
         default: () => [],
     },
+    empresas: {
+        type: Array,
+        default: () => [],
+    },
     codigoInicial: {
         type: String,
         default: "000001",
@@ -55,9 +59,24 @@ const form = useForm({
     categoria_id: null,
     subcategoria_id: null,
     marca_id: null,
+    marca_nombre: "",
+    empresa_id: null,
     precio_venta: null,
 });
 const imagenPreview = ref("/images/producto_default.svg");
+const marcaOtros = "__otros__";
+const opcionesMarca = [
+    { label: "Esika", value: "Esika" },
+    { label: "Cyzone", value: "Cyzone" },
+    { label: "L'bel", value: "L'bel" },
+    { label: "Yanbal", value: "Yanbal" },
+    { label: "Natura", value: "Natura" },
+    { label: "AVON", value: "AVON" },
+    { label: "Oriflame", value: "Oriflame" },
+    { label: "Otros", value: marcaOtros },
+];
+const marcaOpcion = ref(null);
+const marcaOtroNombre = ref("");
 
 const unidadesMedida = [
     { label: "Unidad", value: "unidad" },
@@ -105,6 +124,78 @@ const subcategoriasPorCategoria = computed(() => {
     );
 });
 
+const normalizarNombreMarca = (nombre) =>
+    String(nombre ?? "")
+        .normalize("NFD")
+        .replace(/[\u0300-\u036f]/g, "")
+        .replace(/[’'´`]/g, "")
+        .trim()
+        .toLocaleLowerCase();
+
+const buscarMarca = (nombre) => {
+    const normalizado = normalizarNombreMarca(nombre);
+    return props.marcas.find(
+        (marca) => normalizarNombreMarca(marca.nombre) === normalizado,
+    );
+};
+
+const necesitaEmpresa = computed(() => {
+    const nombre =
+        marcaOpcion.value === marcaOtros
+            ? marcaOtroNombre.value
+            : marcaOpcion.value;
+    const marcaExistente = buscarMarca(nombre);
+
+    return (
+        Boolean(nombre?.trim()) &&
+        (!marcaExistente || !marcaExistente.empresa_id)
+    );
+});
+
+const aplicarMarca = (nombre) => {
+    const nombreLimpio = nombre?.trim() ?? "";
+    const marcaExistente = nombreLimpio ? buscarMarca(nombreLimpio) : null;
+
+    form.marca_id = marcaExistente?.id ?? null;
+    form.marca_nombre = marcaExistente ? "" : nombreLimpio;
+
+    if (marcaExistente) {
+        form.empresa_id = null;
+    }
+};
+
+watch(
+    marcaOpcion,
+    (opcion) => {
+        form.clearErrors("marca_id", "marca_nombre", "empresa_id");
+
+        if (opcion === marcaOtros) {
+            marcaOtroNombre.value = "";
+            form.marca_id = null;
+            form.marca_nombre = "";
+            form.empresa_id = null;
+            return;
+        }
+
+        marcaOtroNombre.value = "";
+        aplicarMarca(opcion);
+        if (necesitaEmpresa.value) {
+            form.empresa_id = null;
+        }
+    },
+    { flush: "sync" },
+);
+
+watch(
+    marcaOtroNombre,
+    (nombre) => {
+        if (marcaOpcion.value === marcaOtros) {
+            aplicarMarca(nombre);
+        }
+    },
+    { flush: "sync" },
+);
+
 const buscarUbicaciones = ({ query }) => {
     const busqueda = query.trim().toLocaleLowerCase();
     ubicacionesSugeridas.value = props.ubicaciones.filter((ubicacion) =>
@@ -140,6 +231,10 @@ const limpiarFormulario = () => {
     form.categoria_id = null;
     form.subcategoria_id = null;
     form.marca_id = null;
+    form.marca_nombre = "";
+    form.empresa_id = null;
+    marcaOpcion.value = null;
+    marcaOtroNombre.value = "";
 
     imagenPreview.value = "/images/producto_default.svg";
 };
@@ -183,6 +278,19 @@ const cargarProducto = (producto) => {
     form.categoria_id = producto.categoria_id ?? null;
     form.subcategoria_id = producto.subcategoria_id ?? null;
     form.marca_id = producto.marca_id ?? null;
+    form.marca_nombre = "";
+    form.empresa_id = null;
+
+    const marcaNombre = producto.marca?.nombre ?? "";
+    const marcaEstandar = opcionesMarca.find(
+        (opcion) =>
+            opcion.value !== marcaOtros &&
+            normalizarNombreMarca(opcion.value) ===
+                normalizarNombreMarca(marcaNombre),
+    );
+
+    marcaOpcion.value = marcaEstandar?.value ?? marcaOtros;
+    marcaOtroNombre.value = marcaEstandar ? "" : marcaNombre;
 };
 
 // Cuando cambia el producto seleccionado
@@ -466,24 +574,61 @@ const cerrar = () => {
 
             <!-- Marca -->
             <div class="flex flex-col gap-1">
+                <label for="marca_opcion">
+                    Marca <span class="text-red-500">*</span>
+                </label>
+                <Select
+                    id="marca_opcion"
+                    v-model="marcaOpcion"
+                    :options="opcionesMarca"
+                    optionLabel="label"
+                    optionValue="value"
+                    placeholder="Selecciona una marca"
+                    class="w-full"
+                    :invalid="!!form.errors.marca_id || !!form.errors.marca_nombre"
+                />
+                <small
+                    v-if="form.errors.marca_id || form.errors.marca_nombre"
+                    class="text-red-500"
+                >
+                    {{ form.errors.marca_id || form.errors.marca_nombre }}
+                </small>
+            </div>
+
+            <div
+                v-if="marcaOpcion === marcaOtros"
+                class="flex flex-col gap-1"
+            >
                 <FloatLabel variant="on">
-                    <Select
-                        id="marca_id"
-                        v-model="form.marca_id"
-                        :options="marcas"
-                        optionLabel="nombre"
-                        optionValue="id"
+                    <InputText
+                        id="marca_otro_nombre"
+                        v-model="marcaOtroNombre"
                         class="w-full"
-                        :invalid="!!form.errors.marca_id"
+                        :invalid="!!form.errors.marca_nombre"
                     />
-
-                    <label for="marca_id">
-                        Marca <span class="text-red-500">*</span>
-                    </label>
+                    <label for="marca_otro_nombre">Otros</label>
                 </FloatLabel>
+                <small v-if="form.errors.marca_nombre" class="text-red-500">
+                    {{ form.errors.marca_nombre }}
+                </small>
+            </div>
 
-                <small v-if="form.errors.marca_id" class="text-red-500">
-                    {{ form.errors.marca_id }}
+            <div v-if="necesitaEmpresa" class="flex flex-col gap-1">
+                <label for="empresa_marca">
+                    Empresa <span class="text-red-500">*</span>
+                </label>
+                <Select
+                    id="empresa_marca"
+                    v-model="form.empresa_id"
+                    :options="empresas"
+                    optionLabel="razon_social"
+                    optionValue="id"
+                    placeholder="Selecciona la empresa de la marca"
+                    class="w-full"
+                    :invalid="!!form.errors.empresa_id"
+                />
+                <small v-if="form.errors.empresa_id" class="text-red-500">
+                    {{ form.errors.empresa_id }}
                 </small>
             </div>
 

@@ -14,6 +14,8 @@ use Inertia\Inertia;
 use Illuminate\Validation\Rule;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Storage;
+use Illuminate\Support\Str;
+use Illuminate\Validation\ValidationException;
 
 class ProductoController extends Controller
 {
@@ -200,9 +202,12 @@ class ProductoController extends Controller
             'activo' => 'boolean',
 
             'marca_id' => [
-                'required',
-                Rule::exists('marcas', 'id')->whereNotNull('empresa_id'),
+                'nullable',
+                'required_without:marca_nombre',
+                Rule::exists('marcas', 'id'),
             ],
+            'marca_nombre' => 'nullable|required_without:marca_id|string|max:60',
+            'empresa_id' => 'nullable|exists:empresas,id',
 
             'categoria_id' => 'required|exists:categorias,id',
 
@@ -211,11 +216,6 @@ class ProductoController extends Controller
                 Rule::exists('subcategorias', 'id')->where('categoria_id', $request->categoria_id),
             ],
         ]);
-
-        //Obtener la empresa de la marca
-        $marca = Marca::findOrFail($validated['marca_id']);
-
-        $validated['empresa_id'] = $marca->empresa_id;
 
         //Generar código
 
@@ -229,7 +229,14 @@ class ProductoController extends Controller
                 ->store('productos', 'public');
         }
 
-        Producto::create($validated);
+        DB::transaction(function () use (&$validated) {
+            $marca = $this->resolverMarca($validated);
+            $validated['marca_id'] = $marca->id;
+            $validated['empresa_id'] = $marca->empresa_id;
+            unset($validated['marca_nombre']);
+
+            Producto::create($validated);
+        });
 
         return back()->with(
             'success',
@@ -337,12 +344,15 @@ class ProductoController extends Controller
             'activo' => 'boolean',
 
             'marca_id' => [
-                'required',
+                'nullable',
+                'required_without:marca_nombre',
                 Rule::exists('marcas', 'id')->where(function ($query) use ($producto) {
                     $query->whereNotNull('empresa_id')
                         ->orWhere('id', $producto->marca_id);
                 }),
             ],
+            'marca_nombre' => 'nullable|required_without:marca_id|string|max:60',
+            'empresa_id' => 'nullable|exists:empresas,id',
 
             'categoria_id' => 'required|exists:categorias,id',
 
@@ -379,7 +389,9 @@ class ProductoController extends Controller
             $producto
         ) {
 
-            $marca = Marca::findOrFail($validated['marca_id']);
+            $marca = $this->resolverMarca($validated);
+            $validated['marca_id'] = $marca->id;
+            unset($validated['marca_nombre']);
 
             $empresaId = $marca->empresa_id ?? $producto->empresa_id;
 
@@ -502,5 +514,69 @@ class ProductoController extends Controller
             'success',
             'Producto actualizado correctamente.'
         );
+    }
+
+    private function resolverMarca(array $validated): Marca
+    {
+        if (!empty($validated['marca_id'])) {
+            $marca = Marca::findOrFail($validated['marca_id']);
+        } else {
+            $nombre = trim($validated['marca_nombre'] ?? '');
+            $nombreNormalizado = mb_strtolower($nombre, 'UTF-8');
+
+            $marca = Marca::query()
+                ->whereRaw('LOWER(TRIM(nombre)) = ?', [$nombreNormalizado])
+                ->first();
+
+            if (!$marca) {
+                $marca = Marca::query()->get()->first(
+                    fn (Marca $marca) => $this->normalizarNombreMarca($marca->nombre)
+                        === $this->normalizarNombreMarca($nombre)
+                );
+            }
+
+            if (!$marca) {
+                if (empty($validated['empresa_id'])) {
+                    throw ValidationException::withMessages([
+                        'empresa_id' => 'Selecciona la empresa de la marca nueva.',
+                    ]);
+                }
+
+                $marca = Marca::create([
+                    'nombre' => $nombre,
+                    'empresa_id' => $validated['empresa_id'],
+                    'activo' => true,
+                ]);
+            }
+        }
+
+        if (!$marca->activo) {
+            throw ValidationException::withMessages([
+                'marca_nombre' => 'Esta marca ya existe, pero está inactiva. Actívala desde el módulo de Marcas.',
+            ]);
+        }
+
+        if (!$marca->empresa_id) {
+            if (empty($validated['empresa_id'])) {
+                throw ValidationException::withMessages([
+                    'empresa_id' => 'Selecciona la empresa asociada a esta marca.',
+                ]);
+            }
+
+            $marca->update([
+                'empresa_id' => $validated['empresa_id'],
+            ]);
+        }
+
+        return $marca;
+    }
+
+    private function normalizarNombreMarca(string $nombre): string
+    {
+        return preg_replace(
+            '/[^a-z0-9]/',
+            '',
+            Str::ascii(mb_strtolower(trim($nombre), 'UTF-8'))
+        ) ?? '';
     }
 }

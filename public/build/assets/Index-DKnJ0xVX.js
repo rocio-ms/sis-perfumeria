@@ -1,0 +1,1 @@
+import{N as e,X as t,c as n,l as r}from"./runtime-core.esm-bundler-C8qHIgUv.js";import{t as i}from"./AppLayout-B0ws6be1.js";import{t as a}from"./VContainer-BAvPH2bi.js";var o=Object.assign({layout:i},{__name:`Index`,setup(i){return(i,o)=>(e(),r(a,{fluid:``},{default:t(()=>[...o[0]||=[n(`h1`,null,`Tipos de pago`,-1)]]),_:1}))}});export{o as default};
