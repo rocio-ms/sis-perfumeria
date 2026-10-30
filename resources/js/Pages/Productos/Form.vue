@@ -574,19 +574,20 @@ const cerrar = () => {
 
             <!-- Marca -->
             <div class="flex flex-col gap-1">
-                <label for="marca_opcion">
-                    Marca <span class="text-red-500">*</span>
-                </label>
-                <Select
-                    id="marca_opcion"
-                    v-model="marcaOpcion"
-                    :options="opcionesMarca"
-                    optionLabel="label"
-                    optionValue="value"
-                    placeholder="Selecciona una marca"
-                    class="w-full"
-                    :invalid="!!form.errors.marca_id || !!form.errors.marca_nombre"
-                />
+                <FloatLabel variant="on">
+                    <Select
+                        id="marca_opcion"
+                        v-model="marcaOpcion"
+                        :options="opcionesMarca"
+                        optionLabel="label"
+                        optionValue="value"
+                        class="w-full"
+                        :invalid="!!form.errors.marca_id || !!form.errors.marca_nombre"
+                    />
+                    <label for="marca_opcion">
+                        Marca <span class="text-red-500">*</span>
+                    </label>
+                </FloatLabel>
                 <small
                     v-if="form.errors.marca_id || form.errors.marca_nombre"
                     class="text-red-500"

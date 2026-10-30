@@ -114,17 +114,6 @@ const rucEmisor = computed(() => {
     return tienda.value.ruc || "";
 });
 
-const razonSocialEmisor = computed(() => {
-    if (!esVentaMixta.value && empresaEmisora.value?.razon_social) {
-        return empresaEmisora.value.razon_social;
-    }
-
-    return (
-        tienda.value.nombre_comercial ||
-        "MI TIENDA"
-    );
-});
-
 const nombreComercialEmisor = computed(() => {
     return (
         tienda.value.nombre_comercial ||
@@ -247,9 +236,7 @@ const fechaFormateada = computed(() => {
 */
 
 const nombreTienda = computed(() => {
-    return (
-        nombreComercialEmisor.value || razonSocialEmisor.value || "MI TIENDA"
-    );
+    return nombreComercialEmisor.value || "MI TIENDA";
 });
 
 /*
@@ -598,17 +585,6 @@ const nuevaVenta = () => {
 
                                 <div class="store-name">
                                     {{ nombreTienda }}
-                                </div>
-
-                                <div
-                                    v-if="
-                                        !esVentaMixta &&
-                                        razonSocialEmisor &&
-                                        razonSocialEmisor !== nombreTienda
-                                    "
-                                    class="store-info"
-                                >
-                                    {{ razonSocialEmisor }}
                                 </div>
 
                                 <div class="store-info">

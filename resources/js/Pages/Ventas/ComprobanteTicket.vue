@@ -34,12 +34,6 @@ const nombreTienda = computed(
         "MI TIENDA",
 );
 
-const razonSocialEmisor = computed(
-    () =>
-        (!esVentaMixta.value && empresa.value?.razon_social) ||
-        nombreTienda.value,
-);
-
 const rucEmisor = computed(
     () =>
         (!esVentaMixta.value && empresa.value?.ruc) ||
@@ -215,12 +209,6 @@ const vuelto = computed(() => Number(venta.value.vuelto ?? 0));
         <header class="header text-center">
             <img v-if="logoUrl" :src="logoUrl" class="logo" alt="Logo de la tienda" />
             <div class="store-name">{{ nombreTienda }}</div>
-            <div
-                v-if="!esVentaMixta && razonSocialEmisor !== nombreTienda"
-                class="store-info"
-            >
-                {{ razonSocialEmisor }}
-            </div>
             <div class="store-info">
                 <template v-if="rucEmisor">RUC: {{ rucEmisor }}<br /></template>
                 <template v-if="direccionEmisor">{{ direccionEmisor }}<br /></template>

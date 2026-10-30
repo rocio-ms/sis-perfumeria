@@ -131,6 +131,24 @@ const mostrarFiltros = ref(false);
 const busqueda = ref("");
 
 const filtros = ref({});
+const columnasFiltrables = computed(() =>
+    props.columns.filter((columna) => columna.filter),
+);
+
+const opcionesFiltro = (columna) =>
+    typeof columna.filterOptions === "function"
+        ? columna.filterOptions(filtros.value)
+        : columna.filterOptions;
+
+const alCambiarFiltro = (columna) => {
+    props.columns
+        .filter((dependiente) => dependiente.filterDependsOn === columna.field)
+        .forEach((dependiente) => {
+            if (filtros.value[dependiente.field]) {
+                filtros.value[dependiente.field].value = null;
+            }
+        });
+};
 
 /*
 |--------------------------------------------------------------------------
@@ -582,7 +600,14 @@ const estadoTag = (valor, columna) => {
                 />
             </div>
 
-            <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div
+                class="grid gap-4"
+                :class="
+                    columnasFiltrables.length === 1
+                        ? 'grid-cols-1'
+                        : 'grid-cols-1 md:grid-cols-2'
+                "
+            >
                 <template v-for="columna in columns" :key="columna.field">
                     <!-- ================================================= -->
                     <!-- FILTRO TEXTO -->
@@ -621,13 +646,14 @@ const estadoTag = (valor, columna) => {
 
                         <Select
                             v-model="filtros[columna.field].value"
-                            :options="columna.filterOptions"
+                            :options="opcionesFiltro(columna)"
                             optionLabel="label"
                             optionValue="value"
                             placeholder="Todos"
                             showClear
                             size="large"
                             class="w-full"
+                            @change="alCambiarFiltro(columna)"
                         />
                     </div>
 
