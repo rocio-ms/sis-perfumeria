@@ -32,6 +32,12 @@ const columns = [
     {
         field: "categoria.nombre",
         header: "Categoría",
+        filter: true,
+        type: "select",
+        filterOptions: props.categorias.map((categoria) => ({
+            label: categoria.nombre,
+            value: categoria.nombre,
+        })),
     },
     {
         field: "descripcion",
@@ -85,7 +91,7 @@ const cerrarFormulario = () => {
                     title-button="Nueva subcategoría"
                     :show-view="false"
                     :show-delete="false"
-                    :show-filters="false"
+                    :show-filters="true"
                     :mostrar-crear="true"
                     create-permission="subcategorias.crear"
                     edit-permission="subcategorias.editar"

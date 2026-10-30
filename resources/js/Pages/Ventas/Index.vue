@@ -98,6 +98,7 @@ const columns = [
         field: "fecha_emision",
         header: "Fecha de emisión",
         type: "date",
+        filter: true,
     },
 
     {
@@ -377,6 +378,7 @@ const totalVenta = computed(() => {
                     :show-view="true"
                     :show-edit="false"
                     :show-delete="false"
+                    :show-filters="true"
                     @nuevo="nuevaVenta"
                     @ver="verVenta"
                     @eliminar="eliminarVenta"

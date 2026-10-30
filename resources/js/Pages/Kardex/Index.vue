@@ -271,6 +271,7 @@ const limpiarFiltros = () => {
                     :show-edit="false"
                     :show-delete="false"
                     :show-create="false"
+                    :show-filters="true"
                 />
             </template>
         </Card>

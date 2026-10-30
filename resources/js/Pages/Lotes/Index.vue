@@ -40,11 +40,13 @@ const columns = [
         field: "fecha_ingreso",
         header: "Fecha de ingreso",
         type: "date",
+        filter: true,
     },
     {
         field: "fecha_vencimiento",
         header: "Fecha de vencimiento",
         type: "date",
+        filter: true,
         dateFormat: "month-year",
         default: "Sin vencimiento",
     },
@@ -87,7 +89,6 @@ const items = ref([{ label: "Lotes" }]);
             </template>
             <template #content>
                 <DataTableBase
-                    v-model:filters="filters"
                     title="Lotes"
                     :data="props.lotes"
                     :columns="columns"
@@ -96,6 +97,7 @@ const items = ref([{ label: "Lotes" }]);
                     :show-edit="false"
                     :show-delete="false"
                     :show-create="false"
+                    :show-filters="true"
                 />
             </template>
         </Card>

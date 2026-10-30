@@ -59,6 +59,22 @@ const columns = [
     {
         field: "categoria.nombre",
         header: "Categoría",
+        filter: true,
+        type: "select",
+        filterOptions: props.categorias.map((categoria) => ({
+            label: categoria.nombre,
+            value: categoria.nombre,
+        })),
+    },
+    {
+        field: "subcategoria.nombre",
+        header: "Subcategoría",
+        filter: true,
+        type: "select",
+        filterOptions: props.subcategorias.map((subcategoria) => ({
+            label: subcategoria.nombre,
+            value: subcategoria.nombre,
+        })),
     },
     {
         field: "nombre",
@@ -200,6 +216,7 @@ const eliminarProducto = async (producto) => {
                     :data="props.productos"
                     :columns="columns"
                     :loading="false"
+                    :show-filters="true"
                     title-button="Nuevo producto"
                     :show-view="true"
                     :show-delete="false"

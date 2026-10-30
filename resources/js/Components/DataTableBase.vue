@@ -276,7 +276,16 @@ const datosFiltrados = computed(() => {
                     continue;
                 }
 
-                const fechaFila = new Date(valorFila);
+                const fechaSolo = typeof valorFila === "string"
+                    ? /^(\d{4})-(\d{2})-(\d{2})$/.exec(valorFila)
+                    : null;
+                const fechaFila = fechaSolo
+                    ? new Date(
+                          Number(fechaSolo[1]),
+                          Number(fechaSolo[2]) - 1,
+                          Number(fechaSolo[3]),
+                      )
+                    : new Date(valorFila);
 
                 const desde = new Date(valorFiltro[0]);
 
@@ -573,7 +582,7 @@ const estadoTag = (valor, columna) => {
                 />
             </div>
 
-            <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <template v-for="columna in columns" :key="columna.field">
                     <!-- ================================================= -->
                     <!-- FILTRO TEXTO -->
@@ -617,6 +626,7 @@ const estadoTag = (valor, columna) => {
                             optionValue="value"
                             placeholder="Todos"
                             showClear
+                            size="large"
                             class="w-full"
                         />
                     </div>

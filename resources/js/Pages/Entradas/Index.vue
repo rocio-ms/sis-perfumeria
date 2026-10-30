@@ -80,6 +80,7 @@ const columns = [
         field: "fecha_ingreso",
         header: "Fecha de ingreso",
         type: "date",
+        filter: true,
     },
     {
         field: "total_compra",
@@ -177,6 +178,7 @@ const cerrarForm = () => {
                     :show-view="true"
                     :show-edit="true"
                     :show-delete="false"
+                    :show-filters="true"
                     :mostrarCrear="true"
                     @nuevo="abrirForm"
                     @editar="editarEntrada"
