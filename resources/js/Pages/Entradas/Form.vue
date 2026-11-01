@@ -272,7 +272,7 @@ watch(
 
                 const precioVenta =
                     Number(detalle.precio_venta) ||
-                    Math.round(precioCompra * 0.3 * 10 + Number.EPSILON) / 10;
+                    Math.round(precioCompra * 1.3 * 10 + Number.EPSILON) / 10;
 
                 const fechaVencimiento =
                     detalle.lotes?.[0]?.fecha_vencimiento ??
@@ -672,7 +672,7 @@ const calcularPrecioVenta = (detalle) => {
     }
 
     detalle.precio_venta =
-        Math.round(precioCompra * 0.3 * 10 + Number.EPSILON) / 10;
+        Math.round(precioCompra * 1.3 * 10 + Number.EPSILON) / 10;
 
     calcularSubtotal(detalle);
 };
