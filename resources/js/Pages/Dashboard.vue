@@ -130,9 +130,15 @@ const verVenta = (venta) => router.visit(route("ventas.show", venta.id));
 //Helpers
 
 const obtenerSeveridadStock = (stock) => {
-    if (stock <= 2) return "danger";
+    if (stock === 0) return "danger";
     if (stock <= 5) return "warn";
     return "success";
+};
+
+const etiquetaStock = (stock) => {
+    if (stock === 0) return "Agotado";
+    if (stock === 1) return "Mínimo";
+    return `${stock} und.`;
 };
 
 const porcentajeStock = (stock) => {
@@ -439,7 +445,7 @@ const iniciales = (texto) => {
                                         producto.nombre
                                     }}</span>
                                     <Tag
-                                        :value="`${producto.stock} und.`"
+                                        :value="etiquetaStock(producto.stock)"
                                         :severity="
                                             obtenerSeveridadStock(
                                                 producto.stock,
