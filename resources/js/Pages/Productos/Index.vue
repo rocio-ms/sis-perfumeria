@@ -71,28 +71,6 @@ const columns = [
         })),
     },
     {
-        field: "subcategoria.nombre",
-        header: "Subcategoría",
-        filter: true,
-        type: "select",
-        filterOptions: (filtros) => {
-            const categoriaSeleccionada =
-                filtros["categoria.nombre"]?.value;
-
-            return props.subcategorias
-                .filter(
-                    (subcategoria) =>
-                        !categoriaSeleccionada ||
-                        subcategoria.categoria?.nombre === categoriaSeleccionada,
-                )
-                .map((subcategoria) => ({
-                    label: subcategoria.nombre,
-                    value: subcategoria.nombre,
-                }));
-        },
-        filterDependsOn: "categoria.nombre",
-    },
-    {
         field: "nombre",
         header: "Producto",
     },

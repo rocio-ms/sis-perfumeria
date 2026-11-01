@@ -51,7 +51,7 @@ const form = useForm({
     unidad_medida: null,
     tiene_descuento: false,
     descuento: null,
-    stock_minimo: null,
+    stock_minimo: 0,
     stock_actual: 0,
     volumen_ml: 0,
     imagen_url: null,
@@ -219,7 +219,7 @@ const limpiarFormulario = () => {
     form.tiene_descuento = false;
     form.descuento = null;
 
-    form.stock_minimo = null;
+    form.stock_minimo = 0;
     form.stock_actual = 0;
 
     form.volumen_ml = 0;
@@ -737,7 +737,7 @@ const cerrar = () => {
                         id="stock_minimo"
                         v-model="form.stock_minimo"
                         class="w-full"
-                        :min="1"
+                        :min="0"
                         :invalid="!!form.errors.stock_minimo"
                     />
 
