@@ -1298,10 +1298,10 @@ const cerrar = () => {
                         </div>
 
                         <div
-                            class="mt-4 grid grid-cols-[90px_minmax(320px,1.7fr)_minmax(190px,1fr)_150px_minmax(210px,1.3fr)_44px] items-stretch gap-3 rounded-xl bg-gray-50 p-3"
+                            class="mt-4 grid grid-cols-[110px_minmax(340px,1.7fr)_minmax(200px,1fr)_150px_minmax(220px,1.3fr)_44px] items-stretch gap-3 rounded-xl bg-gray-50 p-3"
                         >
                             <div
-                                class="flex flex-col justify-center gap-2 rounded-lg border border-gray-200 bg-white p-3"
+                                class="flex min-w-0 flex-col justify-center gap-2 rounded-lg border border-gray-200 bg-white p-3"
                             >
                                 <label
                                     :for="`cantidad_${index}`"
@@ -1313,6 +1313,7 @@ const cerrar = () => {
                                     v-model="detalle.cantidad"
                                     :inputId="`cantidad_${index}`"
                                     class="w-full"
+                                    inputClass="w-full"
                                     :min="1"
                                     :showButtons="true"
                                     @update:modelValue="
@@ -1322,7 +1323,7 @@ const cerrar = () => {
                             </div>
 
                             <div
-                                class="flex flex-col justify-center gap-2 rounded-lg border border-gray-200 bg-white p-3"
+                                class="flex min-w-0 flex-col justify-center gap-2 rounded-lg border border-gray-200 bg-white p-3"
                             >
                                 <span
                                     class="text-xs font-semibold uppercase tracking-wide text-gray-500"
@@ -1341,6 +1342,7 @@ const cerrar = () => {
                                             v-model="detalle.precio_compra"
                                             :inputId="`precio_compra_${index}`"
                                             class="w-full"
+                                            inputClass="w-full"
                                             mode="currency"
                                             currency="PEN"
                                             locale="es-PE"
@@ -1370,14 +1372,14 @@ const cerrar = () => {
                                             :minFractionDigits="2"
                                             :maxFractionDigits="2"
                                             disabled
-                                            inputClass="bg-gray-50"
+                                            inputClass="w-full bg-gray-50"
                                         />
                                     </div>
                                 </div>
                             </div>
 
                             <div
-                                class="flex flex-col justify-center gap-2 rounded-lg border border-gray-200 bg-white p-3"
+                                class="flex min-w-0 flex-col justify-center gap-2 rounded-lg border border-gray-200 bg-white p-3"
                             >
                                 <span
                                     class="text-xs font-semibold uppercase tracking-wide text-gray-500"
@@ -1406,6 +1408,7 @@ const cerrar = () => {
                                         v-else
                                         v-model="detalle.descuento"
                                         class="w-full"
+                                        inputClass="w-full"
                                         mode="currency"
                                         currency="PEN"
                                         locale="es-PE"
