@@ -93,23 +93,119 @@ class ProductoController extends Controller
         ]);
     }
 
-    public function index()
+    public function index(Request $request)
     {
-        $productos = Producto::with([
-            'categoria',
-            'subcategoria',
-            'marca',
-            'empresa',
-            'precioActual'
-        ])
-            ->orderBy('id', 'desc')
-            ->get();
+        $validated = $request->validate([
+            'search' => ['nullable', 'string', 'max:100'],
+            'categoria' => ['nullable', 'string', 'max:150'],
+            'page' => ['nullable', 'integer', 'min:1'],
+            'per_page' => ['nullable', 'integer', Rule::in([10, 20, 50])],
+            'sort' => [
+                'nullable',
+                Rule::in([
+                    'id',
+                    'codigo',
+                    'nombre',
+                    'imagen_url',
+                    'categoria.nombre',
+                    'precio_actual.precio_venta',
+                    'stock_actual',
+                    'activo',
+                ]),
+            ],
+            'direction' => ['nullable', Rule::in(['asc', 'desc'])],
+        ]);
+
+        $search = trim($validated['search'] ?? '');
+        $categoria = $validated['categoria'] ?? '';
+        $sort = $validated['sort'] ?? 'id';
+        $direction = $validated['direction'] ?? 'desc';
+
+        $productos = Producto::query()
+            ->select([
+                'id',
+                'codigo',
+                'codigo_barras',
+                'nombre',
+                'descripcion',
+                'ubicacion',
+                'unidad_medida',
+                'stock_actual',
+                'stock_minimo',
+                'volumen_ml',
+                'imagen_url',
+                'activo',
+                'categoria_id',
+                'subcategoria_id',
+                'marca_id',
+                'empresa_id',
+            ])
+            ->with([
+                'categoria:id,nombre',
+                'subcategoria:id,nombre,categoria_id',
+                'marca:id,nombre,empresa_id',
+                'precioActual:id,producto_id,precio_venta,tiene_descuento,descuento,activo',
+            ]);
+
+        if ($search !== '') {
+            $termino = "%{$search}%";
+
+            $productos->where(function ($query) use ($termino, $search) {
+                $query->where('codigo', 'like', $termino)
+                    ->orWhere('nombre', 'like', $termino)
+                    ->orWhere('imagen_url', 'like', $termino)
+                    ->orWhere('stock_actual', 'like', $termino)
+                    ->orWhereHas('categoria', fn ($categoriaQuery) => $categoriaQuery
+                        ->where('nombre', 'like', $termino))
+                    ->orWhereHas('precioActual', fn ($precioQuery) => $precioQuery
+                        ->where('precio_venta', 'like', $termino));
+
+                if (str_contains('true', mb_strtolower($search))) {
+                    $query->orWhere('activo', true);
+                }
+
+                if (str_contains('false', mb_strtolower($search))) {
+                    $query->orWhere('activo', false);
+                }
+            });
+        }
+
+        if ($categoria !== '') {
+            $productos->whereHas('categoria', fn ($query) => $query
+                ->where('nombre', $categoria));
+        }
+
+        if ($sort === 'categoria.nombre') {
+            $productos->orderBy(
+                Categoria::select('nombre')
+                    ->whereColumn('categorias.id', 'productos.categoria_id'),
+                $direction,
+            );
+        } elseif ($sort === 'precio_actual.precio_venta') {
+            $productos->orderBy(
+                PrecioProducto::select('precio_venta')
+                    ->whereColumn('precios_productos.producto_id', 'productos.id')
+                    ->where('activo', true)
+                    ->latest('id')
+                    ->limit(1),
+                $direction,
+            );
+        } else {
+            $sortColumn = in_array($sort, ['codigo', 'nombre', 'imagen_url', 'stock_actual', 'activo'], true)
+                ? $sort
+                : 'id';
+            $productos->orderBy($sortColumn, $direction);
+        }
+
+        $productos = $productos
+            ->paginate($validated['per_page'] ?? 50)
+            ->withQueryString();
 
         $categorias = Categoria::where('activo', true)
             ->orderBy('nombre')
-            ->get();
+            ->get(['id', 'nombre']);
 
-        $subcategorias = Subcategoria::with('categoria')
+        $subcategorias = Subcategoria::select(['id', 'nombre', 'categoria_id'])
             ->where('activo', true)
             ->orderBy('nombre')
             ->get();
@@ -117,11 +213,11 @@ class ProductoController extends Controller
         $marcas = Marca::where('activo', true)
             ->whereNotNull('empresa_id')
             ->orderBy('nombre')
-            ->get();
+            ->get(['id', 'nombre', 'empresa_id']);
 
         $empresas = Empresa::where('activo', true)
             ->orderBy('razon_social')
-            ->get();
+            ->get(['id', 'razon_social']);
 
         return Inertia::render('Productos/Index', [
             'productos' => $productos,
@@ -131,6 +227,12 @@ class ProductoController extends Controller
             'marcas' => $marcas,
             'empresas' => $empresas,
             'siguienteCodigo' => $this->generarCodigoInterno(),
+            'filtros' => [
+                'search' => $search,
+                'categoria.nombre' => $categoria,
+                'sort' => $sort,
+                'direction' => $direction,
+            ],
         ]);
     }
 

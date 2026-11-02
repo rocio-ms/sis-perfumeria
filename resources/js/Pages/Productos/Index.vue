@@ -16,8 +16,8 @@ defineOptions({
 
 const props = defineProps({
     productos: {
-        type: Array,
-        default: () => [],
+        type: Object,
+        default: () => ({ data: [], total: 0, current_page: 1, per_page: 50 }),
     },
     categorias: {
         type: Array,
@@ -46,6 +46,10 @@ const props = defineProps({
         type: String,
         default: "000001",
     },
+    filtros: {
+        type: Object,
+        default: () => ({}),
+    },
 });
 
 //Create and edit
@@ -54,6 +58,7 @@ const productoSeleccionado = ref(null);
 
 //Show
 const mostrarShow = ref(false);
+const cargandoProductos = ref(false);
 
 const columns = [
     {
@@ -123,6 +128,32 @@ const cerrarShow = () => {
 const cerrarForm = () => {
     mostrarForm.value = false;
     productoSeleccionado.value = null;
+};
+
+const buscarProductos = (consulta) => {
+    router.get(
+        route("productos.index"),
+        {
+            page: consulta.page,
+            per_page: consulta.rows,
+            search: consulta.search,
+            categoria: consulta.filters["categoria.nombre"] ?? "",
+            sort: consulta.sortField,
+            direction: consulta.sortOrder === 1 ? "asc" : "desc",
+        },
+        {
+            only: ["productos", "filtros"],
+            preserveState: true,
+            preserveScroll: true,
+            replace: true,
+            onStart: () => {
+                cargandoProductos.value = true;
+            },
+            onFinish: () => {
+                cargandoProductos.value = false;
+            },
+        },
+    );
 };
 
 const formularioGuardado = async (tipo) => {
@@ -207,9 +238,14 @@ const eliminarProducto = async (producto) => {
             <template #content>
                 <DataTableBase
                     title="Productos"
-                    :data="props.productos"
+                    :data="props.productos.data"
                     :columns="columns"
-                    :loading="false"
+                    :loading="cargandoProductos"
+                    server-pagination
+                    :total-records="props.productos.total"
+                    :current-page="props.productos.current_page"
+                    :rows="props.productos.per_page"
+                    :server-filters="props.filtros"
                     :show-filters="true"
                     title-button="Nuevo producto"
                     :show-view="true"
@@ -219,6 +255,7 @@ const eliminarProducto = async (producto) => {
                     @nuevo="abrirForm"
                     @editar="editarProducto"
                     @ver="verProducto"
+                    @server-query="buscarProductos"
                     createPermission="productos.crear"
                     viewPermission="productos.ver"
                     editPermission="productos.editar"

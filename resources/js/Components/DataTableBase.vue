@@ -1,5 +1,5 @@
 <script setup>
-import { ref, computed } from "vue";
+import { ref, computed, watch, onBeforeUnmount } from "vue";
 
 import DataTable from "primevue/datatable";
 import Column from "primevue/column";
@@ -20,26 +20,37 @@ import { usePage } from "@inertiajs/vue3";
 const page = usePage();
 
 const tienePermiso = (permiso) => {
-    console.log("=================================");
-    console.log("🔐 PERMISO SOLICITADO:", permiso);
-    console.log("👤 PERMISOS DEL USUARIO:", page.props.auth?.permissions);
-
     if (!permiso) {
-        console.log("✅ No se solicitó permiso → PERMITIDO");
         return true;
     }
 
-    const permitido = (page.props.auth?.permissions ?? []).includes(permiso);
-
-    console.log(permitido ? "✅ PERMISO CONCEDIDO" : "❌ PERMISO DENEGADO");
-
-    return permitido;
+    return (page.props.auth?.permissions ?? []).includes(permiso);
 };
 
 const props = defineProps({
     data: {
         type: Array,
         default: () => [],
+    },
+    serverPagination: {
+        type: Boolean,
+        default: false,
+    },
+    totalRecords: {
+        type: Number,
+        default: 0,
+    },
+    currentPage: {
+        type: Number,
+        default: 1,
+    },
+    rows: {
+        type: Number,
+        default: 50,
+    },
+    serverFilters: {
+        type: Object,
+        default: () => ({}),
     },
 
     columns: {
@@ -117,7 +128,14 @@ const props = defineProps({
 |--------------------------------------------------------------------------
 */
 
-const emit = defineEmits(["nuevo", "ver", "editar", "eliminar", "cerrar"]);
+const emit = defineEmits([
+    "nuevo",
+    "ver",
+    "editar",
+    "eliminar",
+    "cerrar",
+    "server-query",
+]);
 
 
 /*
@@ -128,9 +146,21 @@ const emit = defineEmits(["nuevo", "ver", "editar", "eliminar", "cerrar"]);
 
 const mostrarFiltros = ref(false);
 
-const busqueda = ref("");
+const busqueda = ref(props.serverFilters.search ?? "");
+const first = ref(0);
 
 const filtros = ref({});
+const ordenamiento = ref({
+    sortField: props.serverFilters.sort ?? "id",
+    sortOrder: props.serverFilters.direction === "asc" ? 1 : -1,
+});
+let temporizadorBusqueda;
+
+const puedeCrear = computed(() => tienePermiso(props.createPermission));
+const puedeVer = computed(() => tienePermiso(props.viewPermission));
+const puedeEditar = computed(() => tienePermiso(props.editPermission));
+const puedeEliminar = computed(() => tienePermiso(props.deletePermission));
+const puedeCerrar = computed(() => tienePermiso(props.closePermission));
 const columnasFiltrables = computed(() =>
     props.columns.filter((columna) => columna.filter),
 );
@@ -184,7 +214,7 @@ const inicializarFiltros = () => {
     props.columns.forEach((columna) => {
         if (columna.filter) {
             nuevosFiltros[columna.field] = {
-                value: null,
+                value: props.serverFilters[columna.field] ?? null,
             };
         }
     });
@@ -194,6 +224,50 @@ const inicializarFiltros = () => {
 
 inicializarFiltros();
 
+const emitirConsultaServidor = (page = 1, rows = props.rows) => {
+    emit("server-query", {
+        page,
+        rows,
+        search: busqueda.value.trim(),
+        filters: Object.fromEntries(
+            Object.entries(filtros.value).map(([field, filter]) => [
+                field,
+                filter.value,
+            ]),
+        ),
+        sortField: ordenamiento.value.sortField,
+        sortOrder: ordenamiento.value.sortOrder,
+    });
+};
+
+watch(
+    [busqueda, filtros],
+    () => {
+        if (!props.serverPagination) {
+            return;
+        }
+
+        clearTimeout(temporizadorBusqueda);
+        temporizadorBusqueda = setTimeout(() => emitirConsultaServidor(), 300);
+    },
+    { deep: true },
+);
+
+onBeforeUnmount(() => clearTimeout(temporizadorBusqueda));
+
+const cambiarPagina = (event) => {
+    first.value = event.first;
+    emitirConsultaServidor(event.page + 1, event.rows);
+};
+
+const cambiarOrden = (event) => {
+    ordenamiento.value = {
+        sortField: event.sortField,
+        sortOrder: event.sortOrder,
+    };
+    emitirConsultaServidor(1, props.rows);
+};
+
 /*
 |--------------------------------------------------------------------------
 | DATOS FILTRADOS
@@ -202,6 +276,10 @@ inicializarFiltros();
 
 const datosFiltrados = computed(() => {
     const lista = Array.isArray(props.data) ? props.data : [];
+
+    if (props.serverPagination) {
+        return lista;
+    }
 
     return lista.filter((fila) => {
         /*
@@ -549,7 +627,7 @@ const estadoTag = (valor, columna) => {
                     v-if="
                         mostrarCrear &&
                         titleButton &&
-                        tienePermiso(createPermission)
+                        puedeCrear
                     "
                     :label="titleButton"
                     icon="pi pi-plus"
@@ -690,14 +768,19 @@ const estadoTag = (valor, columna) => {
             :value="datosFiltrados"
             :loading="loading"
             paginator
-            :rows="50"
+            :rows="rows"
+            :first="serverPagination ? (currentPage - 1) * rows : first"
+            :totalRecords="totalRecords"
+            :lazy="serverPagination"
             :rowsPerPageOptions="[10, 20, 50]"
             stripedRows
-            sortField="id"
-            :sortOrder="-1"
+            :sortField="ordenamiento.sortField"
+            :sortOrder="ordenamiento.sortOrder"
             responsiveLayout="scroll"
             dataKey="id"
             class="text-sm"
+            @page="cambiarPagina"
+            @sort="cambiarOrden"
         >
             <!-- ================================================= -->
             <!-- SIN RESULTADOS -->
@@ -839,7 +922,7 @@ const estadoTag = (valor, columna) => {
                 <template #body="{ data }">
                     <div class="flex justify-center gap-1">
                         <Button
-                            v-if="showView && tienePermiso(viewPermission)"
+                            v-if="showView && puedeVer"
                             icon="pi pi-eye"
                             severity="info"
                             v-tooltip.top="'Ver'"
@@ -847,7 +930,7 @@ const estadoTag = (valor, columna) => {
                         />
 
                         <Button
-                            v-if="showEdit && tienePermiso(editPermission)"
+                            v-if="showEdit && puedeEditar"
                             icon="pi pi-pencil"
                             severity="warning"
                             v-tooltip.top="'Editar'"
@@ -855,7 +938,7 @@ const estadoTag = (valor, columna) => {
                         />
 
                         <Button
-                            v-if="showDelete && tienePermiso(deletePermission)"
+                            v-if="showDelete && puedeEliminar"
                             icon="pi pi-trash"
                             severity="danger"
                             v-tooltip.top="'Eliminar'"
@@ -865,7 +948,7 @@ const estadoTag = (valor, columna) => {
                         <Button
                             v-if="
                                 showClose &&
-                                tienePermiso(closePermission) &&
+                                puedeCerrar &&
                                 (data.sesion_estado === 'Abierta' ||
                                     data.estado === 'Abierta')
                             "

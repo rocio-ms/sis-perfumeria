@@ -261,7 +261,7 @@ const cargarProducto = (producto) => {
 
     form.descuento = Number(producto.precio_actual?.descuento ?? 0);
 
-    form.stock_minimo = producto.stock_minimo ?? null;
+    form.stock_minimo = producto.stock_minimo ?? 0;
     form.stock_actual = producto.stock_actual ?? 0;
 
     form.volumen_ml = producto.volumen_ml ?? 0;
