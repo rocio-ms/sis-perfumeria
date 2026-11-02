@@ -1,5 +1,5 @@
 <script setup>
-import { computed } from "vue";
+import { computed, ref, watch } from "vue";
 
 const props = defineProps({
     visible: {
@@ -14,6 +14,22 @@ const props = defineProps({
 });
 
 const emit = defineEmits(["update:visible"]);
+
+const limiteMarcas = 8;
+const mostrarTodasMarcas = ref(false);
+
+const marcasVisibles = computed(() => {
+    const marcas = props.empresa?.marcas ?? [];
+
+    return mostrarTodasMarcas.value ? marcas : marcas.slice(0, limiteMarcas);
+});
+
+watch(
+    () => props.empresa?.id,
+    () => {
+        mostrarTodasMarcas.value = false;
+    },
+);
 
 const nombreEmpresa = computed(() => {
     return props.empresa?.razon_social || "Sin nombre";
@@ -224,10 +240,17 @@ const fechaActualizacion = computed(() => {
                 </div>
                 <div class="flex flex-wrap gap-2">
                     <Tag
-                        v-for="marca in empresa.marcas || []"
+                        v-for="marca in marcasVisibles"
                         :key="marca.id"
                         :value="marca.nombre"
                         severity="info"
+                    />
+                    <Button
+                        v-if="(empresa.marcas?.length ?? 0) > limiteMarcas"
+                        :label="mostrarTodasMarcas ? 'Ver menos' : 'Ver más'"
+                        text
+                        size="small"
+                        @click="mostrarTodasMarcas = !mostrarTodasMarcas"
                     />
                     <span
                         v-if="!empresa.marcas?.length"

@@ -4,6 +4,7 @@ namespace App\Http\Middleware;
 
 // use Carbon\Carbon;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Cache;
 use Inertia\Middleware;
 // use App\Models\Producto;
 // use App\Models\Lote;
@@ -56,7 +57,15 @@ class HandleInertiaRequests extends Middleware
             ],
 
             'notificaciones' => function () {
-                app(NotificacionService::class)->sincronizar();
+                Cache::remember(
+                    'inertia.notificaciones.last_sync',
+                    now()->addSeconds(15),
+                    function () {
+                        app(NotificacionService::class)->sincronizar();
+
+                        return true;
+                    }
+                );
 
                 $items = Notificacion::where('solucionada', false)
                     ->orderByDesc('created_at')
