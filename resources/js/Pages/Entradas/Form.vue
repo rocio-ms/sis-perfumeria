@@ -1262,245 +1262,212 @@ const cerrar = () => {
                 v-if="form.detalles.length > 0"
                 class="border border-gray-200 rounded-lg overflow-x-auto"
             >
-                <table class="w-full min-w-[1250px]">
-                    <thead class="bg-gray-50">
-                        <tr>
-                            <th
-                                class="text-left px-4 py-3 text-sm font-semibold"
-                            >
-                                Producto
-                            </th>
+                <div class="min-w-[1150px]">
+            <div
+                    v-for="(detalle, index) in form.detalles"
+                    :key="detalle.producto_id"
+                    class="border-b border-gray-100 p-4 last:border-b-0"
+                >
+                <div
+                    class="grid grid-cols-[minmax(0,1fr)_250px] items-center gap-6"
+                >
+                    <div class="min-w-0">
+                        <div class="font-medium">
+                            {{ detalle.producto?.nombre }}
+                        </div>
+                        <small class="text-gray-500">
+                            Código: {{ detalle.producto?.codigo }}
+                        </small>
+                    </div>
 
-                            <th
-                                class="text-center px-4 py-3 text-sm font-semibold"
-                                style="width: 130px"
-                            >
-                                Cantidad
-                            </th>
-
-                            <th
-                                class="text-right px-4 py-3 text-sm font-semibold"
-                                style="width: 180px"
-                            >
-                                Precio de compra
-                            </th>
-
-                            <th
-                                class="text-right px-4 py-3 text-sm font-semibold"
-                                style="width: 180px"
-                            >
-                                Precio de venta
-                            </th>
-
-                            <th
-                                class="text-center px-4 py-3 text-sm font-semibold"
-                                style="width: 130px"
-                            >
-                                Descuento
-                            </th>
-
-                            <th
-                                class="text-right px-4 py-3 text-sm font-semibold"
-                                style="width: 160px"
-                            >
-                                Subtotal
-                            </th>
-
-                            <th
-                                class="text-center px-4 py-3 text-sm font-semibold"
-                                style="width: 200px"
-                            >
-                                Código de barras del lote
-                            </th>
-
-                            <th
-                                class="text-center px-4 py-3 text-sm font-semibold"
-                                style="width: 180px"
-                            >
-                                Vencimiento
-                            </th>
-
-                            <th
-                                class="text-center px-4 py-3"
-                                style="width: 70px"
-                            ></th>
-                        </tr>
-                    </thead>
-
-                    <tbody>
-                        <tr
-                            v-for="(detalle, index) in form.detalles"
-                            :key="detalle.producto_id"
-                            class="border-t border-gray-100"
+                    <div class="flex flex-col gap-1">
+                        <label
+                            :for="`codigo_barras_lote_${index}`"
+                            class="text-sm font-medium text-gray-600"
                         >
-                            <!-- PRODUCTO -->
+                            Código de barras del lote
+                        </label>
+                        <InputText
+                            :id="`codigo_barras_lote_${index}`"
+                            v-model="detalle.codigo_barras_lote"
+                            class="w-full"
+                            maxlength="50"
+                            placeholder="Opcional"
+                        />
+                    </div>
+                </div>
 
-                            <td class="px-4 py-3">
-                                <div class="font-medium">
-                                    {{ detalle.producto?.nombre }}
-                                </div>
+                <div
+                    class="mt-4 grid grid-cols-[120px_180px_180px_180px_150px_220px_56px] items-end gap-4"
+                >
+                    <div class="flex flex-col gap-1">
+                        <label
+                            :for="`cantidad_${index}`"
+                            class="text-sm font-medium text-gray-600"
+                        >
+                            Cantidad
+                        </label>
+                        <InputNumber
+                            v-model="detalle.cantidad"
+                            :inputId="`cantidad_${index}`"
+                            class="w-full"
+                            :min="1"
+                            :showButtons="true"
+                            @update:modelValue="
+                                calcularSubtotal(detalle)
+                            "
+                        />
+                    </div>
 
-                                <small class="text-gray-500">
-                                    Código:
-                                    {{ detalle.producto?.codigo }}
-                                </small>
-                            </td>
+                    <div class="flex flex-col gap-1">
+                        <label
+                            :for="`precio_compra_${index}`"
+                            class="text-sm font-medium text-gray-600"
+                        >
+                            Precio de compra
+                        </label>
+                        <InputNumber
+                            v-model="detalle.precio_compra"
+                            :inputId="`precio_compra_${index}`"
+                            class="w-full"
+                            mode="currency"
+                            currency="PEN"
+                            locale="es-PE"
+                            :min="0"
+                            :minFractionDigits="2"
+                            :maxFractionDigits="2"
+                            @update:modelValue="
+                                calcularPrecioVenta(detalle)
+                            "
+                        />
+                    </div>
 
-                            <!-- CANTIDAD -->
+                    <div class="flex flex-col gap-1">
+                        <label
+                            :for="`precio_venta_${index}`"
+                            class="text-sm font-medium text-gray-600"
+                        >
+                            Precio de venta
+                        </label>
+                        <InputNumber
+                            v-model="detalle.precio_venta"
+                            :inputId="`precio_venta_${index}`"
+                            class="w-full"
+                            mode="currency"
+                            currency="PEN"
+                            locale="es-PE"
+                            :min="0"
+                            :minFractionDigits="2"
+                            :maxFractionDigits="2"
+                            disabled
+                            inputClass="bg-gray-50"
+                        />
+                    </div>
 
-                            <td class="px-4 py-3">
-                                <InputNumber
-                                    v-model="detalle.cantidad"
-                                    class="w-full"
-                                    :min="1"
-                                    :showButtons="true"
-                                    @update:modelValue="
-                                        calcularSubtotal(detalle)
-                                    "
-                                />
-                            </td>
+                    <div class="flex flex-col gap-1">
+                        <span
+                            class="text-sm font-medium text-gray-600"
+                        >
+                            Descuento
+                        </span>
+                        <div class="flex items-center gap-2">
+                            <Checkbox
+                                v-model="detalle.tiene_descuento"
+                                :inputId="`descuento_${index}`"
+                                :binary="true"
+                                @update:modelValue="
+                                    cambiarDescuento(detalle)
+                                "
+                            />
+                            <label
+                                v-if="!detalle.tiene_descuento"
+                                :for="`descuento_${index}`"
+                                class="text-sm text-surface-600 cursor-pointer select-none whitespace-nowrap"
+                            >
+                                Aplicar
+                            </label>
+                            <InputNumber
+                                v-else
+                                v-model="detalle.descuento"
+                                class="w-full"
+                                mode="currency"
+                                currency="PEN"
+                                locale="es-PE"
+                                :min="0"
+                                :max="detalle.precio_venta ?? 0"
+                                :minFractionDigits="2"
+                                :maxFractionDigits="2"
+                            />
+                        </div>
+                    </div>
 
-                            <!-- PRECIO COMPRA -->
+                    <div class="flex flex-col gap-1">
+                        <span
+                            class="text-sm font-medium text-gray-600"
+                        >
+                            Subtotal
+                        </span>
+                        <span class="py-2 text-right font-medium">
+                            {{
+                                Number(
+                                    detalle.subtotal,
+                                ).toLocaleString("es-PE", {
+                                    style: "currency",
+                                    currency: "PEN",
+                                })
+                            }}
+                        </span>
+                    </div>
 
-                            <td class="px-4 py-3">
-                                <InputNumber
-                                    v-model="detalle.precio_compra"
-                                    class="w-full"
-                                    mode="currency"
-                                    currency="PEN"
-                                    locale="es-PE"
-                                    :min="0"
-                                    :minFractionDigits="2"
-                                    :maxFractionDigits="2"
-                                    @update:modelValue="
-                                        calcularPrecioVenta(detalle)
-                                    "
-                                />
-                            </td>
+                    <div class="flex flex-col gap-1">
+                        <span
+                            class="text-sm font-medium text-gray-600"
+                        >
+                            Vencimiento
+                        </span>
+                        <div class="flex items-center gap-2">
+                            <Checkbox
+                                v-model="detalle.tiene_vencimiento"
+                                :inputId="`vencimiento_${index}`"
+                                :binary="true"
+                                @update:modelValue="
+                                    cambiarVencimiento(detalle)
+                                "
+                            />
+                            <label
+                                v-if="!detalle.tiene_vencimiento"
+                                :for="`vencimiento_${index}`"
+                                class="text-sm text-surface-600 cursor-pointer select-none whitespace-nowrap"
+                            >
+                                Tiene vencimiento
+                            </label>
+                            <DatePicker
+                                v-else
+                                v-model="detalle.fecha_vencimiento"
+                                view="month"
+                                dateFormat="mm/yy"
+                                showIcon
+                                class="w-full"
+                                :minDate="fechaMinima"
+                                placeholder="Mes/año"
+                            />
+                        </div>
+                    </div>
 
-                            <!-- PRECIO VENTA -->
-
-                            <td class="px-4 py-3">
-                                <InputNumber
-                                    v-model="detalle.precio_venta"
-                                    class="w-full"
-                                    mode="currency"
-                                    currency="PEN"
-                                    locale="es-PE"
-                                    :min="0"
-                                    :minFractionDigits="2"
-                                    :maxFractionDigits="2"
-                                    disabled
-                                    inputClass="bg-gray-50"
-                                />
-                            </td>
-
-                            <!-- DESCUENTO -->
-
-                            <td class="px-4 py-3">
-                                <div class="flex items-center gap-2 w-[180px]">
-                                    <Checkbox
-                                        v-model="detalle.tiene_descuento"
-                                        :inputId="`descuento_${index}`"
-                                        :binary="true"
-                                        @update:modelValue="
-                                            cambiarDescuento(detalle)
-                                        "
-                                    />
-                                    <label
-                                        v-if="!detalle.tiene_descuento"
-                                        :for="`descuento_${index}`"
-                                        class="text-sm text-surface-600 cursor-pointer select-none whitespace-nowrap"
-                                    >
-                                        Aplicar descuento
-                                    </label>
-                                    <InputNumber
-                                        v-else
-                                        v-model="detalle.descuento"
-                                        class="w-full"
-                                        mode="currency"
-                                        currency="PEN"
-                                        locale="es-PE"
-                                        :min="0"
-                                        :max="detalle.precio_venta ?? 0"
-                                        :minFractionDigits="2"
-                                        :maxFractionDigits="2"
-                                    />
-                                </div>
-                            </td>
-
-                            <!-- SUBTOTAL -->
-
-                            <td class="px-4 py-3 text-right font-medium">
-                                {{
-                                    Number(detalle.subtotal).toLocaleString(
-                                        "es-PE",
-                                        {
-                                            style: "currency",
-                                            currency: "PEN",
-                                        },
-                                    )
-                                }}
-                            </td>
-
-                            <!-- CÓDIGO DE BARRAS DEL LOTE -->
-
-                            <td class="px-4 py-3">
-                                <InputText
-                                    v-model="detalle.codigo_barras_lote"
-                                    class="w-full"
-                                    maxlength="50"
-                                    placeholder="Opcional"
-                                />
-                            </td>
-
-                            <!-- VENCIMIENTO -->
-
-                            <td class="px-4 py-3">
-                                <div class="flex items-center gap-2 w-[180px]">
-                                    <Checkbox
-                                        v-model="detalle.tiene_vencimiento"
-                                        :inputId="`vencimiento_${index}`"
-                                        :binary="true"
-                                        @update:modelValue="
-                                            cambiarVencimiento(detalle)
-                                        "
-                                    />
-                                    <label
-                                        v-if="!detalle.tiene_vencimiento"
-                                        :for="`vencimiento_${index}`"
-                                        class="text-sm text-surface-600 cursor-pointer select-none whitespace-nowrap"
-                                    >
-                                        Tiene vencimiento
-                                    </label>
-                                    <DatePicker
-                                        v-else
-                                        v-model="detalle.fecha_vencimiento"
-                                        view="month"
-                                        dateFormat="mm/yy"
-                                        showIcon
-                                        class="w-full"
-                                        :minDate="fechaMinima"
-                                        placeholder="Mes/año de vencimiento"
-                                    />
-                                </div>
-                            </td>
-
-                            <!-- ELIMINAR -->
-
-                            <td class="px-4 py-3 text-center">
-                                <Button
-                                    icon="pi pi-trash"
-                                    severity="danger"
-                                    text
-                                    rounded
-                                    type="button"
-                                    @click="eliminarDetalle(index)"
-                                />
-                            </td>
-                        </tr>
-                    </tbody>
-                </table>
+                    <div class="flex justify-center pb-1">
+                        <Button
+                            icon="pi pi-trash"
+                            severity="danger"
+                            text
+                            rounded
+                            type="button"
+                            aria-label="Eliminar producto"
+                            @click="eliminarDetalle(index)"
+                        />
+                    </div>
+                </div>
+            </div>
+                </div>
             </div>
 
             <!-- ========================================================= -->
