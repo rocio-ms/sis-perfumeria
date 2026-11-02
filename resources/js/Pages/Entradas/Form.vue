@@ -1263,210 +1263,233 @@ const cerrar = () => {
                 class="border border-gray-200 rounded-lg overflow-x-auto"
             >
                 <div class="min-w-[1150px]">
-            <div
-                    v-for="(detalle, index) in form.detalles"
-                    :key="detalle.producto_id"
-                    class="border-b border-gray-100 p-4 last:border-b-0"
-                >
-                <div
-                    class="grid grid-cols-[minmax(0,1fr)_250px] items-center gap-6"
-                >
-                    <div class="min-w-0">
-                        <div class="font-medium">
-                            {{ detalle.producto?.nombre }}
+                    <div
+                        v-for="(detalle, index) in form.detalles"
+                        :key="detalle.producto_id"
+                        class="border-b border-gray-100 p-4 last:border-b-0"
+                    >
+                        <div
+                            class="grid grid-cols-[minmax(0,1fr)_300px] items-center gap-6"
+                        >
+                            <div class="min-w-0">
+                                <div class="font-medium text-gray-800">
+                                    {{ detalle.producto?.nombre }}
+                                </div>
+                                <small class="text-gray-500">
+                                    Código: {{ detalle.producto?.codigo }}
+                                </small>
+                            </div>
+
+                            <div class="flex flex-col gap-1">
+                                <label
+                                    :for="`codigo_barras_lote_${index}`"
+                                    class="text-sm font-medium text-gray-600"
+                                >
+                                    Código de barras del lote
+                                </label>
+                                <InputText
+                                    :id="`codigo_barras_lote_${index}`"
+                                    v-model="detalle.codigo_barras_lote"
+                                    class="w-full"
+                                    maxlength="50"
+                                    placeholder="Opcional"
+                                />
+                            </div>
                         </div>
-                        <small class="text-gray-500">
-                            Código: {{ detalle.producto?.codigo }}
-                        </small>
-                    </div>
 
-                    <div class="flex flex-col gap-1">
-                        <label
-                            :for="`codigo_barras_lote_${index}`"
-                            class="text-sm font-medium text-gray-600"
+                        <div
+                            class="mt-4 grid grid-cols-[90px_minmax(320px,1.7fr)_minmax(190px,1fr)_150px_minmax(210px,1.3fr)_44px] items-stretch gap-3 rounded-xl bg-gray-50 p-3"
                         >
-                            Código de barras del lote
-                        </label>
-                        <InputText
-                            :id="`codigo_barras_lote_${index}`"
-                            v-model="detalle.codigo_barras_lote"
-                            class="w-full"
-                            maxlength="50"
-                            placeholder="Opcional"
-                        />
-                    </div>
-                </div>
-
-                <div
-                    class="mt-4 grid grid-cols-[120px_180px_180px_180px_150px_220px_56px] items-end gap-4"
-                >
-                    <div class="flex flex-col gap-1">
-                        <label
-                            :for="`cantidad_${index}`"
-                            class="text-sm font-medium text-gray-600"
-                        >
-                            Cantidad
-                        </label>
-                        <InputNumber
-                            v-model="detalle.cantidad"
-                            :inputId="`cantidad_${index}`"
-                            class="w-full"
-                            :min="1"
-                            :showButtons="true"
-                            @update:modelValue="
-                                calcularSubtotal(detalle)
-                            "
-                        />
-                    </div>
-
-                    <div class="flex flex-col gap-1">
-                        <label
-                            :for="`precio_compra_${index}`"
-                            class="text-sm font-medium text-gray-600"
-                        >
-                            Precio de compra
-                        </label>
-                        <InputNumber
-                            v-model="detalle.precio_compra"
-                            :inputId="`precio_compra_${index}`"
-                            class="w-full"
-                            mode="currency"
-                            currency="PEN"
-                            locale="es-PE"
-                            :min="0"
-                            :minFractionDigits="2"
-                            :maxFractionDigits="2"
-                            @update:modelValue="
-                                calcularPrecioVenta(detalle)
-                            "
-                        />
-                    </div>
-
-                    <div class="flex flex-col gap-1">
-                        <label
-                            :for="`precio_venta_${index}`"
-                            class="text-sm font-medium text-gray-600"
-                        >
-                            Precio de venta
-                        </label>
-                        <InputNumber
-                            v-model="detalle.precio_venta"
-                            :inputId="`precio_venta_${index}`"
-                            class="w-full"
-                            mode="currency"
-                            currency="PEN"
-                            locale="es-PE"
-                            :min="0"
-                            :minFractionDigits="2"
-                            :maxFractionDigits="2"
-                            disabled
-                            inputClass="bg-gray-50"
-                        />
-                    </div>
-
-                    <div class="flex flex-col gap-1">
-                        <span
-                            class="text-sm font-medium text-gray-600"
-                        >
-                            Descuento
-                        </span>
-                        <div class="flex items-center gap-2">
-                            <Checkbox
-                                v-model="detalle.tiene_descuento"
-                                :inputId="`descuento_${index}`"
-                                :binary="true"
-                                @update:modelValue="
-                                    cambiarDescuento(detalle)
-                                "
-                            />
-                            <label
-                                v-if="!detalle.tiene_descuento"
-                                :for="`descuento_${index}`"
-                                class="text-sm text-surface-600 cursor-pointer select-none whitespace-nowrap"
+                            <div
+                                class="flex flex-col justify-center gap-2 rounded-lg border border-gray-200 bg-white p-3"
                             >
-                                Aplicar
-                            </label>
-                            <InputNumber
-                                v-else
-                                v-model="detalle.descuento"
-                                class="w-full"
-                                mode="currency"
-                                currency="PEN"
-                                locale="es-PE"
-                                :min="0"
-                                :max="detalle.precio_venta ?? 0"
-                                :minFractionDigits="2"
-                                :maxFractionDigits="2"
-                            />
-                        </div>
-                    </div>
+                                <label
+                                    :for="`cantidad_${index}`"
+                                    class="text-xs font-semibold uppercase tracking-wide text-gray-500"
+                                >
+                                    Cantidad
+                                </label>
+                                <InputNumber
+                                    v-model="detalle.cantidad"
+                                    :inputId="`cantidad_${index}`"
+                                    class="w-full"
+                                    :min="1"
+                                    :showButtons="true"
+                                    @update:modelValue="
+                                        calcularSubtotal(detalle)
+                                    "
+                                />
+                            </div>
 
-                    <div class="flex flex-col gap-1">
-                        <span
-                            class="text-sm font-medium text-gray-600"
-                        >
-                            Subtotal
-                        </span>
-                        <span class="py-2 text-right font-medium">
-                            {{
-                                Number(
-                                    detalle.subtotal,
-                                ).toLocaleString("es-PE", {
-                                    style: "currency",
-                                    currency: "PEN",
-                                })
-                            }}
-                        </span>
-                    </div>
-
-                    <div class="flex flex-col gap-1">
-                        <span
-                            class="text-sm font-medium text-gray-600"
-                        >
-                            Vencimiento
-                        </span>
-                        <div class="flex items-center gap-2">
-                            <Checkbox
-                                v-model="detalle.tiene_vencimiento"
-                                :inputId="`vencimiento_${index}`"
-                                :binary="true"
-                                @update:modelValue="
-                                    cambiarVencimiento(detalle)
-                                "
-                            />
-                            <label
-                                v-if="!detalle.tiene_vencimiento"
-                                :for="`vencimiento_${index}`"
-                                class="text-sm text-surface-600 cursor-pointer select-none whitespace-nowrap"
+                            <div
+                                class="flex flex-col justify-center gap-2 rounded-lg border border-gray-200 bg-white p-3"
                             >
-                                Tiene vencimiento
-                            </label>
-                            <DatePicker
-                                v-else
-                                v-model="detalle.fecha_vencimiento"
-                                view="month"
-                                dateFormat="mm/yy"
-                                showIcon
-                                class="w-full"
-                                :minDate="fechaMinima"
-                                placeholder="Mes/año"
-                            />
+                                <span
+                                    class="text-xs font-semibold uppercase tracking-wide text-gray-500"
+                                >
+                                    Precios
+                                </span>
+                                <div class="grid grid-cols-2 gap-3">
+                                    <div class="flex min-w-0 flex-col gap-1">
+                                        <label
+                                            :for="`precio_compra_${index}`"
+                                            class="text-xs text-gray-500"
+                                        >
+                                            Compra
+                                        </label>
+                                        <InputNumber
+                                            v-model="detalle.precio_compra"
+                                            :inputId="`precio_compra_${index}`"
+                                            class="w-full"
+                                            mode="currency"
+                                            currency="PEN"
+                                            locale="es-PE"
+                                            :min="0"
+                                            :minFractionDigits="2"
+                                            :maxFractionDigits="2"
+                                            @update:modelValue="
+                                                calcularPrecioVenta(detalle)
+                                            "
+                                        />
+                                    </div>
+                                    <div class="flex min-w-0 flex-col gap-1">
+                                        <label
+                                            :for="`precio_venta_${index}`"
+                                            class="text-xs text-gray-500"
+                                        >
+                                            Venta
+                                        </label>
+                                        <InputNumber
+                                            v-model="detalle.precio_venta"
+                                            :inputId="`precio_venta_${index}`"
+                                            class="w-full"
+                                            mode="currency"
+                                            currency="PEN"
+                                            locale="es-PE"
+                                            :min="0"
+                                            :minFractionDigits="2"
+                                            :maxFractionDigits="2"
+                                            disabled
+                                            inputClass="bg-gray-50"
+                                        />
+                                    </div>
+                                </div>
+                            </div>
+
+                            <div
+                                class="flex flex-col justify-center gap-2 rounded-lg border border-gray-200 bg-white p-3"
+                            >
+                                <span
+                                    class="text-xs font-semibold uppercase tracking-wide text-gray-500"
+                                >
+                                    Descuento
+                                </span>
+                                <div
+                                    class="flex min-h-9 items-center gap-2"
+                                >
+                                    <Checkbox
+                                        v-model="detalle.tiene_descuento"
+                                        :inputId="`descuento_${index}`"
+                                        :binary="true"
+                                        @update:modelValue="
+                                            cambiarDescuento(detalle)
+                                        "
+                                    />
+                                    <label
+                                        v-if="!detalle.tiene_descuento"
+                                        :for="`descuento_${index}`"
+                                        class="text-sm text-gray-600 cursor-pointer select-none"
+                                    >
+                                        Aplicar
+                                    </label>
+                                    <InputNumber
+                                        v-else
+                                        v-model="detalle.descuento"
+                                        class="w-full"
+                                        mode="currency"
+                                        currency="PEN"
+                                        locale="es-PE"
+                                        :min="0"
+                                        :max="detalle.precio_venta ?? 0"
+                                        :minFractionDigits="2"
+                                        :maxFractionDigits="2"
+                                    />
+                                </div>
+                            </div>
+
+                            <div
+                                class="flex flex-col justify-center gap-2 rounded-lg border border-blue-100 bg-blue-50 px-3 py-2"
+                            >
+                                <span
+                                    class="text-xs font-semibold uppercase tracking-wide text-blue-700"
+                                >
+                                    Subtotal
+                                </span>
+                                <span
+                                    class="text-right text-base font-semibold text-blue-900"
+                                >
+                                    {{
+                                        Number(
+                                            detalle.subtotal,
+                                        ).toLocaleString("es-PE", {
+                                            style: "currency",
+                                            currency: "PEN",
+                                        })
+                                    }}
+                                </span>
+                            </div>
+
+                            <div
+                                class="flex flex-col justify-center gap-2 rounded-lg border border-gray-200 bg-white p-3"
+                            >
+                                <span
+                                    class="text-xs font-semibold uppercase tracking-wide text-gray-500"
+                                >
+                                    Vencimiento
+                                </span>
+                                <div class="flex flex-col gap-2">
+                                    <div class="flex items-center gap-2">
+                                        <Checkbox
+                                            v-model="detalle.tiene_vencimiento"
+                                            :inputId="`vencimiento_${index}`"
+                                            :binary="true"
+                                            @update:modelValue="
+                                                cambiarVencimiento(detalle)
+                                            "
+                                        />
+                                        <label
+                                            :for="`vencimiento_${index}`"
+                                            class="text-sm text-gray-600 cursor-pointer select-none"
+                                        >
+                                            Tiene vencimiento
+                                        </label>
+                                    </div>
+                                    <DatePicker
+                                        v-if="detalle.tiene_vencimiento"
+                                        v-model="detalle.fecha_vencimiento"
+                                        view="month"
+                                        dateFormat="mm/yy"
+                                        showIcon
+                                        class="w-full"
+                                        :minDate="fechaMinima"
+                                        placeholder="Mes/año"
+                                    />
+                                </div>
+                            </div>
+
+                            <div class="flex items-center justify-center">
+                                <Button
+                                    icon="pi pi-trash"
+                                    severity="danger"
+                                    text
+                                    rounded
+                                    type="button"
+                                    aria-label="Eliminar producto"
+                                    @click="eliminarDetalle(index)"
+                                />
+                            </div>
                         </div>
                     </div>
-
-                    <div class="flex justify-center pb-1">
-                        <Button
-                            icon="pi pi-trash"
-                            severity="danger"
-                            text
-                            rounded
-                            type="button"
-                            aria-label="Eliminar producto"
-                            @click="eliminarDetalle(index)"
-                        />
-                    </div>
-                </div>
-            </div>
                 </div>
             </div>
 
