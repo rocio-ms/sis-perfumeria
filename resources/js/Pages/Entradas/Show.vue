@@ -682,6 +682,16 @@ const cerrar = () => {
                                         <span v-else class="text-gray-400">
                                             —
                                         </span>
+                                        <small
+                                            v-if="loteDeDetalle(detalle)?.codigo_barras"
+                                            class="block mt-1 text-gray-500"
+                                        >
+                                            Cód. barras:
+                                            {{
+                                                loteDeDetalle(detalle)
+                                                    .codigo_barras
+                                            }}
+                                        </small>
                                     </td>
 
                                     <!-- Vencimiento -->

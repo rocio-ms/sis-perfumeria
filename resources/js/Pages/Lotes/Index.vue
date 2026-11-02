@@ -1,5 +1,6 @@
 <script setup>
 import { ref } from "vue";
+import { router } from "@inertiajs/vue3";
 import AppLayout from "@/Layouts/AppLayout.vue";
 import DataTableBase from "@/Components/DataTableBase.vue";
 
@@ -9,19 +10,28 @@ defineOptions({
     layout: AppLayout,
 });
 
-const loading = ref(false);
-
 const props = defineProps({
     lotes: {
-        type: Array,
-        default: () => [],
+        type: Object,
+        default: () => ({ data: [], total: 0, current_page: 1, per_page: 20 }),
+    },
+    filtros: {
+        type: Object,
+        default: () => ({}),
     },
 });
+
+const cargandoLotes = ref(false);
 
 const columns = [
     {
         field: "numero_lote",
         header: "N° de lote",
+    },
+    {
+        field: "codigo_barras",
+        header: "Código de barras del lote",
+        default: "Sin código",
     },
     {
         field: "detalle_entrada.producto.nombre",
@@ -65,6 +75,44 @@ const home = ref({
 });
 
 const items = ref([{ label: "Lotes" }]);
+
+const formatearFechaConsulta = (fecha) => {
+    if (!fecha) return "";
+    if (typeof fecha === "string") return fecha.slice(0, 10);
+
+    const year = fecha.getFullYear();
+    const month = String(fecha.getMonth() + 1).padStart(2, "0");
+    const day = String(fecha.getDate()).padStart(2, "0");
+    return `${year}-${month}-${day}`;
+};
+
+const buscarLotes = (consulta) => {
+    const fechaIngreso = consulta.filters.fecha_ingreso;
+    const fechaVencimiento = consulta.filters.fecha_vencimiento;
+
+    router.get(
+        route("lotes.index"),
+        {
+            page: consulta.page,
+            per_page: consulta.rows,
+            search: consulta.search,
+            fecha_ingreso_desde: formatearFechaConsulta(fechaIngreso?.[0]),
+            fecha_ingreso_hasta: formatearFechaConsulta(fechaIngreso?.[1]),
+            fecha_vencimiento_desde: formatearFechaConsulta(fechaVencimiento?.[0]),
+            fecha_vencimiento_hasta: formatearFechaConsulta(fechaVencimiento?.[1]),
+            sort: consulta.sortField,
+            direction: consulta.sortOrder === 1 ? "asc" : "desc",
+        },
+        {
+            only: ["lotes", "filtros"],
+            preserveState: true,
+            preserveScroll: true,
+            replace: true,
+            onStart: () => (cargandoLotes.value = true),
+            onFinish: () => (cargandoLotes.value = false),
+        },
+    );
+};
 </script>
 
 <template>
@@ -90,14 +138,20 @@ const items = ref([{ label: "Lotes" }]);
             <template #content>
                 <DataTableBase
                     title="Lotes"
-                    :data="props.lotes"
+                    :data="props.lotes.data"
                     :columns="columns"
-                    :loading="loading"
+                    server-pagination
+                    :total-records="props.lotes.total"
+                    :current-page="props.lotes.current_page"
+                    :rows="props.lotes.per_page"
+                    :server-filters="props.filtros"
+                    :loading="cargandoLotes"
                     :show-view="false"
                     :show-edit="false"
                     :show-delete="false"
                     :show-create="false"
                     :show-filters="true"
+                    @server-query="buscarLotes"
                 />
             </template>
         </Card>

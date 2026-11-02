@@ -6,6 +6,7 @@ use App\Models\Kardex;
 use App\Models\Producto;
 use App\Models\TipoMovimiento;
 use Illuminate\Http\Request;
+use Illuminate\Validation\Rule;
 use Inertia\Inertia;
 
 class KardexController extends Controller
@@ -15,6 +16,26 @@ class KardexController extends Controller
      */
     public function index(Request $request)
     {
+        $validated = $request->validate([
+            'search' => ['nullable', 'string', 'max:100'],
+            'producto_id' => ['nullable', 'integer', 'exists:productos,id'],
+            'tipo_movimiento' => ['nullable', Rule::in(['Entrada', 'Salida'])],
+            'fecha_desde' => ['nullable', 'date'],
+            'fecha_hasta' => ['nullable', 'date'],
+            'page' => ['nullable', 'integer', 'min:1'],
+            'per_page' => ['nullable', 'integer', Rule::in([10, 20, 50])],
+            'sort' => [
+                'nullable',
+                Rule::in([
+                    'id', 'fecha_movimiento', 'tipo_movimiento.nombre',
+                    'producto.nombre', 'lote_id', 'cantidad', 'costo_unitario',
+                    'costo_total', 'saldo_cantidad', 'saldo_costo_unitario',
+                    'observacion',
+                ]),
+            ],
+            'direction' => ['nullable', Rule::in(['asc', 'desc'])],
+        ]);
+
         $query = Kardex::with([
             'producto:id,codigo,nombre',
             'lote:id,numero_lote',
@@ -31,11 +52,8 @@ class KardexController extends Controller
         |--------------------------------------------------------------------------
         */
 
-        if ($request->filled('producto_id')) {
-            $query->where(
-                'producto_id',
-                $request->producto_id
-            );
+        if (!empty($validated['producto_id'])) {
+            $query->where('producto_id', $validated['producto_id']);
         }
 
         /*
@@ -49,11 +67,9 @@ class KardexController extends Controller
         |
         */
 
-        if ($request->filled('tipo_movimiento_id')) {
-            $query->where(
-                'tipo_movimiento_id',
-                $request->tipo_movimiento_id
-            );
+        if (!empty($validated['tipo_movimiento'])) {
+            $query->whereHas('tipoMovimiento', fn ($tipoQuery) => $tipoQuery
+                ->where('nombre', $validated['tipo_movimiento']));
         }
 
         /*
@@ -62,12 +78,8 @@ class KardexController extends Controller
         |--------------------------------------------------------------------------
         */
 
-        if ($request->filled('fecha_desde')) {
-            $query->whereDate(
-                'fecha_movimiento',
-                '>=',
-                $request->fecha_desde
-            );
+        if (!empty($validated['fecha_desde'])) {
+            $query->whereDate('fecha_movimiento', '>=', $validated['fecha_desde']);
         }
 
         /*
@@ -76,26 +88,50 @@ class KardexController extends Controller
         |--------------------------------------------------------------------------
         */
 
-        if ($request->filled('fecha_hasta')) {
-            $query->whereDate(
-                'fecha_movimiento',
-                '<=',
-                $request->fecha_hasta
-            );
+        if (!empty($validated['fecha_hasta'])) {
+            $query->whereDate('fecha_movimiento', '<=', $validated['fecha_hasta']);
         }
 
-        /*
-        |--------------------------------------------------------------------------
-        | ORDEN DEL KARDEX
-        |--------------------------------------------------------------------------
-        |
-        | Primero por fecha y luego por ID para mantener
-        | el orden exacto de los movimientos.
-        |
-        */
+        $search = trim($validated['search'] ?? '');
+        if ($search !== '') {
+            $termino = "%{$search}%";
+            $query->where(function ($searchQuery) use ($termino) {
+                $searchQuery->where('observacion', 'like', $termino)
+                    ->orWhereHas('producto', fn ($productoQuery) => $productoQuery
+                        ->where('nombre', 'like', $termino)
+                        ->orWhere('codigo', 'like', $termino))
+                    ->orWhereHas('lote', fn ($loteQuery) => $loteQuery
+                        ->where('numero_lote', 'like', $termino))
+                    ->orWhereHas('tipoMovimiento', fn ($tipoQuery) => $tipoQuery
+                        ->where('nombre', 'like', $termino));
+            });
+        }
 
-        $query->orderBy('fecha_movimiento', 'desc')
-              ->orderBy('id', 'desc');
+        $sort = $validated['sort'] ?? 'fecha_movimiento';
+        $direction = $validated['direction'] ?? 'desc';
+
+        if ($sort === 'tipo_movimiento.nombre') {
+            $query->orderBy(
+                TipoMovimiento::select('nombre')
+                    ->whereColumn('tipo_movimientos.id', 'kardexs.tipo_movimiento_id'),
+                $direction,
+            );
+        } elseif ($sort === 'producto.nombre') {
+            $query->orderBy(
+                Producto::select('nombre')
+                    ->whereColumn('productos.id', 'kardexs.producto_id'),
+                $direction,
+            );
+        } else {
+            $sortColumn = in_array($sort, [
+                'fecha_movimiento', 'lote_id', 'cantidad', 'costo_unitario',
+                'costo_total', 'saldo_cantidad', 'saldo_costo_unitario',
+                'observacion',
+            ], true) ? $sort : 'id';
+            $query->orderBy($sortColumn, $direction);
+        }
+
+        $query->orderBy('id', 'desc');
 
         /*
         |--------------------------------------------------------------------------
@@ -103,7 +139,7 @@ class KardexController extends Controller
         |--------------------------------------------------------------------------
         */
 
-        $kardexs = $query->get();
+        $kardexs = $query->paginate($validated['per_page'] ?? 20)->withQueryString();
 
         /*
         |--------------------------------------------------------------------------
@@ -154,10 +190,15 @@ class KardexController extends Controller
             'tiposMovimiento' => $tiposMovimiento,
 
             'filtros' => [
-                'producto_id' => $request->producto_id,
-                'tipo_movimiento_id' => $request->tipo_movimiento_id,
-                'fecha_desde' => $request->fecha_desde,
-                'fecha_hasta' => $request->fecha_hasta,
+                'producto.nombre' => $validated['producto_id'] ?? '',
+                'tipo_movimiento.nombre' => $validated['tipo_movimiento'] ?? '',
+                'fecha_movimiento' => [
+                    $validated['fecha_desde'] ?? '',
+                    $validated['fecha_hasta'] ?? '',
+                ],
+                'search' => $search,
+                'sort' => $sort,
+                'direction' => $direction,
             ],
         ]);
     }

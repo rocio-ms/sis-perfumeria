@@ -73,27 +73,42 @@ const subtitulo = computed(() => {
         : "Registra un nuevo proveedor para tu inventario";
 });
 
+const limpiarFormulario = () => {
+    form.reset();
+    form.clearErrors();
+    form.activo = true;
+};
+
+const cargarProveedor = (proveedor) => {
+    form.razon_social = proveedor.razon_social ?? "";
+    form.nombre_comercial = proveedor.nombre_comercial ?? "";
+    form.tipo_documento = proveedor.tipo_documento ?? null;
+    form.n_documento = proveedor.n_documento ?? "";
+    form.nombre_contacto = proveedor.nombre_contacto ?? "";
+    form.direccion = proveedor.direccion ?? "";
+    form.telefono = proveedor.telefono ?? "";
+    form.email = proveedor.email ?? "";
+    form.activo = Boolean(proveedor.activo);
+    form.clearErrors();
+};
+
 watch(
     () => props.proveedor,
     (proveedor) => {
         if (proveedor) {
-            form.razon_social = proveedor.razon_social ?? "";
-            form.nombre_comercial = proveedor.nombre_comercial ?? "";
-            form.tipo_documento = proveedor.tipo_documento ?? null;
-            form.n_documento = proveedor.n_documento ?? "";
-            form.nombre_contacto = proveedor.nombre_contacto ?? "";
-            form.direccion = proveedor.direccion ?? "";
-            form.telefono = proveedor.telefono ?? "";
-            form.email = proveedor.email ?? "";
-            form.activo = Boolean(proveedor.activo);
+            cargarProveedor(proveedor);
         } else {
-            form.reset();
-            form.activo = true;
+            limpiarFormulario();
         }
-        form.clearErrors();
     },
     { immediate: true },
 );
+
+watch(visible, (estaVisible) => {
+    if (!estaVisible && !props.proveedor) {
+        limpiarFormulario();
+    }
+});
 
 //Guardar
 

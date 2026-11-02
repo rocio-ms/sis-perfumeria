@@ -30,6 +30,7 @@ const configuraciones = {
             ["tiene_descuento", "Sí/No; opcional, por defecto No", false],
             ["descuento", "Descuento unitario; opcional", false],
             ["fecha_vencimiento", "Fecha opcional (dd/mm/aaaa)", false],
+            ["codigo_barras_lote", "Código de barras propio del lote; opcional", false],
         ],
     },
     salida: {

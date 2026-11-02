@@ -98,6 +98,8 @@ watch(
     (visible) => {
         if (visible) {
             cargarUsuario();
+        } else if (!props.usuario) {
+            limpiarFormulario();
         }
     },
 );

@@ -152,7 +152,7 @@ const buscarProductos = (event) => {
 |--------------------------------------------------------------------------
 */
 
-const seleccionarProducto = (producto) => {
+const seleccionarProducto = (producto, lotePreferido = null) => {
     if (!producto) {
         productoSeleccionado.value = null;
         loteSeleccionado.value = null;
@@ -173,9 +173,13 @@ const seleccionarProducto = (producto) => {
      * Buscar automáticamente el primer lote
      * que tenga stock.
      */
-    const lote = Array.isArray(producto.lotes)
-        ? producto.lotes.find((lote) => Number(lote.cantidad_actual ?? 0) > 0)
-        : null;
+    const lotesDisponibles = Array.isArray(producto.lotes)
+        ? producto.lotes.filter((lote) => Number(lote.cantidad_actual ?? 0) > 0)
+        : [];
+    const lote =
+        lotesDisponibles.find((disponible) => disponible.id === lotePreferido?.id) ??
+        lotesDisponibles[0] ??
+        null;
 
     loteSeleccionado.value = lote ?? null;
 
@@ -246,6 +250,26 @@ const escanearCodigoBarras = (event) => {
                 | Buscar coincidencia exacta por código de barras
                 |--------------------------------------------------------------------------
                 */
+
+                const coincidenciaLote = productos
+                    .flatMap((producto) =>
+                        (producto.lotes ?? []).map((lote) => ({
+                            producto,
+                            lote,
+                        })),
+                    )
+                    .find(
+                        ({ lote }) =>
+                            String(lote.codigo_barras ?? "").trim() === codigo,
+                    );
+
+                if (coincidenciaLote) {
+                    seleccionarProducto(
+                        coincidenciaLote.producto,
+                        coincidenciaLote.lote,
+                    );
+                    return;
+                }
 
                 const producto = productos.find((producto) => {
                     const codigoProducto = String(
@@ -817,10 +841,32 @@ const subtitulo = computed(() => {
 |--------------------------------------------------------------------------
 */
 
-watch(
-    () => props.salida,
+const limpiarFormulario = () => {
+    form.reset();
+    form.tipo_salida = null;
+    form.fecha_salida = new Date();
+    form.observacion = "";
+    form.total = 0;
+    form.detalles = [];
 
-    (salida) => {
+    productoSeleccionado.value = null;
+    loteSeleccionado.value = null;
+    cantidad.value = 1;
+    busquedaProducto.value = "";
+    productosFiltrados.value = [];
+    form.clearErrors();
+};
+
+watch(
+    [() => props.salida, visible],
+    ([salida, estaVisible]) => {
+        if (!estaVisible) {
+            if (!salida) {
+                limpiarFormulario();
+            }
+            return;
+        }
+
         if (salida) {
             form.tipo_salida = salida.tipo_salida ?? null;
 
@@ -852,17 +898,7 @@ watch(
                   }))
                 : [];
         } else {
-            form.reset();
-
-            form.tipo_salida = null;
-
-            form.fecha_salida = new Date();
-
-            form.observacion = "";
-
-            form.total = 0;
-
-            form.detalles = [];
+            limpiarFormulario();
         }
 
         productoSeleccionado.value = null;
@@ -935,27 +971,7 @@ const guardar = () => {
                 confirmButtonText: "Aceptar",
             });
 
-            form.reset();
-
-            form.tipo_salida = null;
-
-            form.fecha_salida = new Date();
-
-            form.observacion = "";
-
-            form.total = 0;
-
-            form.detalles = [];
-
-            productoSeleccionado.value = null;
-
-            loteSeleccionado.value = null;
-
-            cantidad.value = 1;
-
-            busquedaProducto.value = "";
-
-            productosFiltrados.value = [];
+            limpiarFormulario();
         },
     });
 };

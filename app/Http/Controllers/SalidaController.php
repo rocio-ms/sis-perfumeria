@@ -12,6 +12,7 @@ use App\Models\DetalleSalida;
 use App\Models\Lote;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Validation\Rule;
 use Inertia\Inertia;
 
 class SalidaController extends Controller
@@ -21,6 +22,26 @@ class SalidaController extends Controller
      */
     public function index(Request $request)
     {
+        $validated = $request->validate([
+            'search' => ['nullable', 'string', 'max:100'],
+            'fecha_desde' => ['nullable', 'date'],
+            'fecha_hasta' => ['nullable', 'date'],
+            'tipo_salida' => ['nullable', 'string', 'max:30'],
+            'page' => ['nullable', 'integer', 'min:1'],
+            'per_page' => ['nullable', 'integer', Rule::in([10, 20, 50])],
+            'sort' => [
+                'nullable',
+                Rule::in([
+                    'id',
+                    'codigo_salida',
+                    'fecha_salida',
+                    'tipo_salida',
+                    'cliente.nombre',
+                    'total',
+                ]),
+            ],
+            'direction' => ['nullable', Rule::in(['asc', 'desc'])],
+        ]);
 
         $buscarProducto = trim($request->input('buscar_producto', ''));
 
@@ -44,7 +65,12 @@ class SalidaController extends Controller
 
                         $query->where('codigo_barras', 'like', "{$buscarProducto}%")
                             ->orWhere('codigo', 'like', "{$buscarProducto}%")
-                            ->orWhere('nombre', 'like', "{$buscarProducto}%");
+                            ->orWhere('nombre', 'like', "{$buscarProducto}%")
+                            ->orWhereHas('lotes', function ($loteQuery) use ($buscarProducto) {
+                                $loteQuery
+                                    ->where('codigo_barras', 'like', "{$buscarProducto}%")
+                                    ->where('cantidad_actual', '>', 0);
+                            });
                     })
                     ->orderBy('nombre')
                     ->limit(20)
@@ -63,8 +89,12 @@ class SalidaController extends Controller
         }
 
 
+        $search = trim($validated['search'] ?? '');
+        $sort = $validated['sort'] ?? 'id';
+        $direction = $validated['direction'] ?? 'desc';
+
         // Salidas registradas
-        $salidas = Salida::with([
+        $salidasQuery = Salida::with([
             'cliente',
             'usuario',
             'detalles.producto',
@@ -81,23 +111,70 @@ class SalidaController extends Controller
             'venta.comprobantes.tipoPago',
             'venta.comprobantes.empresaEmisora',
             'venta.comprobantes.detalles.producto',
-        ])
-            ->orderByDesc('id')
-            ->get();
+        ]);
+
+        if ($search !== '') {
+            $termino = "%{$search}%";
+            $salidasQuery->where(function ($query) use ($termino) {
+                $query->where('codigo_salida', 'like', $termino)
+                    ->orWhere('tipo_salida', 'like', $termino)
+                    ->orWhereHas('cliente', fn ($clienteQuery) => $clienteQuery
+                        ->where('razon_social_nombre', 'like', $termino)
+                        ->orWhere('nombres', 'like', $termino)
+                        ->orWhere('ap_paterno', 'like', $termino)
+                        ->orWhere('ap_materno', 'like', $termino));
+            });
+        }
+
+        if (!empty($validated['tipo_salida'])) {
+            $salidasQuery->where('tipo_salida', 'like', '%' . $validated['tipo_salida'] . '%');
+        }
+
+        if (!empty($validated['fecha_desde'])) {
+            $salidasQuery->whereDate('fecha_salida', '>=', $validated['fecha_desde']);
+        }
+
+        if (!empty($validated['fecha_hasta'])) {
+            $salidasQuery->whereDate('fecha_salida', '<=', $validated['fecha_hasta']);
+        }
+
+        if ($sort === 'cliente.nombre') {
+            $salidasQuery->orderBy(
+                Cliente::select('razon_social_nombre')
+                    ->whereColumn('clientes.id', 'salidas.cliente_id'),
+                $direction,
+            );
+        } else {
+            $sortColumn = in_array($sort, [
+                'codigo_salida',
+                'fecha_salida',
+                'tipo_salida',
+                'total',
+            ], true) ? $sort : 'id';
+            $salidasQuery->orderBy($sortColumn, $direction);
+        }
+
+        $salidas = $salidasQuery
+            ->paginate($validated['per_page'] ?? 20)
+            ->withQueryString();
 
         // Productos
         $productos = collect();
 
-        // Clientes activos
-        $clientes = Cliente::where('activo', true)
-            ->orderBy('numero_documento')
-            ->get();
-
         return Inertia::render('Salidas/Index', [
             'salidas' => $salidas,
             'productos' => $productos,
-            'clientes' => $clientes,
             'tienda' => Tienda::first(),
+            'filtros' => [
+                'search' => $search,
+                'fecha_salida' => [
+                    $validated['fecha_desde'] ?? '',
+                    $validated['fecha_hasta'] ?? '',
+                ],
+                'tipo_salida' => $validated['tipo_salida'] ?? '',
+                'sort' => $sort,
+                'direction' => $direction,
+            ],
         ]);
     }
 

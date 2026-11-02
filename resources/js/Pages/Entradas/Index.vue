@@ -1,6 +1,6 @@
 <script setup>
 import { router } from "@inertiajs/vue3";
-import { ref, onMounted, watch } from "vue";
+import { ref } from "vue";
 import AppLayout from "@/Layouts/AppLayout.vue";
 import DataTableBase from "@/Components/DataTableBase.vue";
 
@@ -15,8 +15,8 @@ defineOptions({
 
 const props = defineProps({
     entradas: {
-        type: Array,
-        default: () => [],
+        type: Object,
+        default: () => ({ data: [], total: 0, current_page: 1, per_page: 20 }),
     },
 
     proveedores: {
@@ -40,8 +40,13 @@ const props = defineProps({
         type: Array,
         default: () => [],
     },
+    filtros: {
+        type: Object,
+        default: () => ({}),
+    },
 });
 
+const cargandoEntradas = ref(false);
 const mostrarForm = ref(false);
 const entradaSeleccionada = ref(null);
 
@@ -88,6 +93,40 @@ const columns = [
         type: "currency",
     },
 ];
+
+const formatearFechaConsulta = (fecha) => {
+    if (!fecha) return "";
+    if (typeof fecha === "string") return fecha.slice(0, 10);
+
+    const year = fecha.getFullYear();
+    const month = String(fecha.getMonth() + 1).padStart(2, "0");
+    const day = String(fecha.getDate()).padStart(2, "0");
+    return `${year}-${month}-${day}`;
+};
+
+const buscarEntradas = (consulta) => {
+    const fechas = consulta.filters.fecha_ingreso;
+    router.get(
+        route("entradas.index"),
+        {
+            page: consulta.page,
+            per_page: consulta.rows,
+            search: consulta.search,
+            fecha_desde: formatearFechaConsulta(fechas?.[0]),
+            fecha_hasta: formatearFechaConsulta(fechas?.[1]),
+            sort: consulta.sortField,
+            direction: consulta.sortOrder === 1 ? "asc" : "desc",
+        },
+        {
+            only: ["entradas", "filtros"],
+            preserveState: true,
+            preserveScroll: true,
+            replace: true,
+            onStart: () => (cargandoEntradas.value = true),
+            onFinish: () => (cargandoEntradas.value = false),
+        },
+    );
+};
 
 const abrirForm = () => {
     console.log("1. CLICK NUEVA ENTRADA");
@@ -172,8 +211,14 @@ const cerrarForm = () => {
             <template #content>
                 <DataTableBase
                     title="Entradas"
-                    :data="props.entradas"
+                    :data="props.entradas.data"
                     :columns="columns"
+                    server-pagination
+                    :total-records="props.entradas.total"
+                    :current-page="props.entradas.current_page"
+                    :rows="props.entradas.per_page"
+                    :server-filters="props.filtros"
+                    :loading="cargandoEntradas"
                     titleButton="Nueva entrada"
                     :show-view="true"
                     :show-edit="true"
@@ -183,6 +228,7 @@ const cerrarForm = () => {
                     @nuevo="abrirForm"
                     @editar="editarEntrada"
                     @ver="verEntrada"
+                    @server-query="buscarEntradas"
                 />
             </template>
         </Card>

@@ -57,6 +57,9 @@ watch(
 
 watch(visible, (estaVisible) => {
     if (!estaVisible) {
+        if (!props.subcategoria) {
+            limpiarFormulario();
+        }
         return;
     }
 

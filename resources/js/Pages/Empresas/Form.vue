@@ -164,6 +164,9 @@ watch(
 
     (nuevoValor) => {
         if (!nuevoValor) {
+            if (!props.empresa) {
+                limpiarFormulario();
+            }
             return;
         }
 

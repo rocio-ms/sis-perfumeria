@@ -244,9 +244,33 @@ watch(
 |--------------------------------------------------------------------------
 */
 
+const limpiarFormulario = () => {
+    form.reset();
+    form.codigo_ingreso = props.codigoIngreso;
+    form.tiene_documento = false;
+    form.tipo_comprobante = null;
+    form.numero_comprobante = "";
+    form.fecha_ingreso = new Date();
+    form.proveedor_id = null;
+    form.observacion = "";
+    form.detalles = [];
+    form.clearErrors();
+
+    tieneProveedor.value = false;
+    productoBusqueda.value = null;
+    productosFiltrados.value = [];
+};
+
 watch(
-    [() => props.entrada, () => props.codigoIngreso],
-    ([entrada]) => {
+    [() => props.entrada, () => props.codigoIngreso, visible],
+    ([entrada, codigoIngreso, estaVisible]) => {
+        if (!estaVisible) {
+            if (!entrada) {
+                limpiarFormulario();
+            }
+            return;
+        }
+
         if (entrada) {
             form.codigo_ingreso = entrada.codigo_ingreso ?? "";
 
@@ -301,32 +325,14 @@ watch(
                     fecha_vencimiento: fechaVencimiento
                         ? fechaLocal(fechaVencimiento)
                         : null,
+
+                    codigo_barras_lote:
+                        detalle.lotes?.[0]?.codigo_barras ?? "",
                 };
             });
         } else {
-            form.reset();
-
-            form.codigo_ingreso = props.codigoIngreso;
-
-            form.tiene_documento = false;
-
-            form.tipo_comprobante = null;
-
-            form.numero_comprobante = "";
-
-            form.fecha_ingreso = new Date();
-
-            form.proveedor_id = null;
-
-            form.observacion = "";
-
-            form.detalles = [];
-
-            tieneProveedor.value = false;
-
-            productoBusqueda.value = null;
-
-            productosFiltrados.value = [];
+            limpiarFormulario();
+            form.codigo_ingreso = codigoIngreso;
         }
 
         form.clearErrors();
@@ -427,6 +433,9 @@ const agregarProducto = (producto = null) => {
         tiene_vencimiento: false,
 
         fecha_vencimiento: null,
+
+        codigo_barras_lote: "",
+
     });
 
     productoBusqueda.value = null;
@@ -630,6 +639,9 @@ const importarDetallesExcel = async (filas) => {
                 subtotal,
                 tiene_vencimiento: Boolean(fila.fecha_vencimiento),
                 fecha_vencimiento: fila.fecha_vencimiento,
+                codigo_barras_lote: String(
+                    fila.codigo_barras_lote ?? "",
+                ).trim(),
             });
         });
 
@@ -1250,7 +1262,7 @@ const cerrar = () => {
                 v-if="form.detalles.length > 0"
                 class="border border-gray-200 rounded-lg overflow-x-auto"
             >
-                <table class="w-full min-w-[950px]">
+                <table class="w-full min-w-[1250px]">
                     <thead class="bg-gray-50">
                         <tr>
                             <th
@@ -1292,6 +1304,13 @@ const cerrar = () => {
                                 style="width: 160px"
                             >
                                 Subtotal
+                            </th>
+
+                            <th
+                                class="text-center px-4 py-3 text-sm font-semibold"
+                                style="width: 200px"
+                            >
+                                Código de barras del lote
                             </th>
 
                             <th
@@ -1422,6 +1441,17 @@ const cerrar = () => {
                                         },
                                     )
                                 }}
+                            </td>
+
+                            <!-- CÓDIGO DE BARRAS DEL LOTE -->
+
+                            <td class="px-4 py-3">
+                                <InputText
+                                    v-model="detalle.codigo_barras_lote"
+                                    class="w-full"
+                                    maxlength="50"
+                                    placeholder="Opcional"
+                                />
                             </td>
 
                             <!-- VENCIMIENTO -->

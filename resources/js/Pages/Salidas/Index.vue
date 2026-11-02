@@ -1,5 +1,6 @@
 <script setup>
 import { ref, computed } from "vue";
+import { router } from "@inertiajs/vue3";
 
 import DataTableBase from "@/Components/DataTableBase.vue";
 import Card from "@/Components/Card.vue";
@@ -17,8 +18,8 @@ defineOptions({
 
 const props = defineProps({
     salidas: {
-        type: Array,
-        default: () => [],
+        type: Object,
+        default: () => ({ data: [], total: 0, current_page: 1, per_page: 20 }),
     },
 
     productos: {
@@ -33,13 +34,18 @@ const props = defineProps({
         type: Object,
         default: () => ({}),
     },
+    filtros: {
+        type: Object,
+        default: () => ({}),
+    },
 });
 
+const cargandoSalidas = ref(false);
 const mostrarForm = ref(false);
 const mostrarComprobanteVenta = ref(false);
 const salidaSeleccionada = ref(null);
 const ventaSeleccionada = ref(null);
-const salidasFiltradas = computed(() => props.salidas);
+
 const comprobantesVenta = computed(() => {
     const comprobantes = ventaSeleccionada.value?.comprobantes ?? [];
     const ventas = comprobantes.length
@@ -111,6 +117,41 @@ const columns = [
         type: "currency",
     },
 ];
+
+const formatearFechaConsulta = (fecha) => {
+    if (!fecha) return "";
+    if (typeof fecha === "string") return fecha.slice(0, 10);
+
+    const year = fecha.getFullYear();
+    const month = String(fecha.getMonth() + 1).padStart(2, "0");
+    const day = String(fecha.getDate()).padStart(2, "0");
+    return `${year}-${month}-${day}`;
+};
+
+const buscarSalidas = (consulta) => {
+    const fechas = consulta.filters.fecha_salida;
+    router.get(
+        route("salidas.index"),
+        {
+            page: consulta.page,
+            per_page: consulta.rows,
+            search: consulta.search,
+            tipo_salida: consulta.filters.tipo_salida,
+            fecha_desde: formatearFechaConsulta(fechas?.[0]),
+            fecha_hasta: formatearFechaConsulta(fechas?.[1]),
+            sort: consulta.sortField,
+            direction: consulta.sortOrder === 1 ? "asc" : "desc",
+        },
+        {
+            only: ["salidas", "filtros"],
+            preserveState: true,
+            preserveScroll: true,
+            replace: true,
+            onStart: () => (cargandoSalidas.value = true),
+            onFinish: () => (cargandoSalidas.value = false),
+        },
+    );
+};
 
 /*
 |--------------------------------------------------------------------------
@@ -279,9 +320,14 @@ const formularioGuardado = async (tipo) => {
 
                 <DataTableBase
                     title="Salidas"
-                    :data="salidasFiltradas"
+                    :data="props.salidas.data"
                     :columns="columns"
-                    :loading="false"
+                    server-pagination
+                    :total-records="props.salidas.total"
+                    :current-page="props.salidas.current_page"
+                    :rows="props.salidas.per_page"
+                    :server-filters="props.filtros"
+                    :loading="cargandoSalidas"
                     title-button="Nueva salida"
                     :show-filters="true"
                     :show-view="true"
@@ -290,6 +336,7 @@ const formularioGuardado = async (tipo) => {
                     :mostrarCrear="true"
                     @nuevo="abrirForm"
                     @ver="verSalida"
+                    @server-query="buscarSalidas"
                 />
             </template>
         </Card>

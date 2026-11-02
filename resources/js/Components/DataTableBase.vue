@@ -213,8 +213,14 @@ const inicializarFiltros = () => {
 
     props.columns.forEach((columna) => {
         if (columna.filter) {
+            const valorInicial = props.serverFilters[columna.field] ?? null;
             nuevosFiltros[columna.field] = {
-                value: props.serverFilters[columna.field] ?? null,
+                value:
+                    columna.type === "date" && Array.isArray(valorInicial)
+                        ? valorInicial.map((fecha) =>
+                              fecha ? new Date(`${fecha}T00:00:00`) : null,
+                          )
+                        : valorInicial,
             };
         }
     });
@@ -694,6 +700,7 @@ const estadoTag = (valor, columna) => {
                     <div
                         v-if="
                             columna.filter &&
+                            columna.filterType !== 'select' &&
                             columna.type !== 'select' &&
                             columna.type !== 'date'
                         "
@@ -715,7 +722,13 @@ const estadoTag = (valor, columna) => {
                     <!-- FILTRO SELECT -->
                     <!-- ================================================= -->
 
-                    <div v-if="columna.filter && columna.type === 'select'">
+                    <div
+                        v-if="
+                            columna.filter &&
+                            (columna.type === 'select' ||
+                                columna.filterType === 'select')
+                        "
+                    >
                         <label
                             class="block text-sm font-medium text-gray-600 mb-1.5"
                         >

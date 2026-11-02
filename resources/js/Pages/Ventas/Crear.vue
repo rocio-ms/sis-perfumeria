@@ -45,25 +45,6 @@ const props = defineProps({
 
 /*
 |--------------------------------------------------------------------------
-| BREADCRUMB
-|--------------------------------------------------------------------------
-*/
-
-const home = ref({
-    icon: "pi pi-home",
-    command: () => {
-        router.visit("/dashboard");
-    },
-});
-
-const items = ref([
-    {
-        label: "Ventas",
-    },
-]);
-
-/*
-|--------------------------------------------------------------------------
 | BÚSQUEDA
 |--------------------------------------------------------------------------
 */
@@ -642,16 +623,12 @@ onMounted(() => {
 </script>
 
 <template>
-    <v-container fluid>
+    <v-container fluid class="ventas-page pa-2">
         <Card>
             <!-- HEADER -->
             <template #title>
-                <div class="flex mb-3">
-                    <Breadcrumb :home="home" :model="items" />
-                </div>
-
                 <div
-                    class="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 mb-4"
+                    class="flex flex-col md:flex-row justify-between items-start md:items-center gap-2 mb-2"
                 >
                     <div>
                         <h1 class="text-2xl font-bold text-gray-800">
@@ -670,7 +647,7 @@ onMounted(() => {
             <!-- CONTENIDO -->
             <template #content>
                 <div
-                    class="grid grid-cols-1 gap-5"
+                    class="grid grid-cols-1 gap-3"
                     :class="
                         carrito.length > 0
                             ? 'lg:grid-cols-[minmax(0,3fr)_minmax(420px,2fr)]'
@@ -682,7 +659,7 @@ onMounted(() => {
                         class="border border-[#F5DCE4] rounded-2xl bg-white overflow-hidden"
                     >
                         <!-- HEADER CATÁLOGO -->
-                        <div class="px-5 pt-5 pb-4 border-b border-[#F9E8ED]">
+                        <div class="px-4 pt-3 pb-3 border-b border-[#F9E8ED]">
                             <div
                                 class="flex flex-col md:flex-row md:items-center md:justify-between gap-4"
                             >
@@ -716,7 +693,7 @@ onMounted(() => {
                             </div>
 
                             <!-- BUSCADOR -->
-                            <div class="flex gap-2 mt-5">
+                            <div class="flex gap-2 mt-3">
                                 <IconField class="w-full">
                                     <InputIcon
                                         :class="
@@ -753,7 +730,7 @@ onMounted(() => {
                             </div>
 
                             <div
-                                class="flex items-center gap-2 mt-3 text-xs text-gray-500"
+                                class="flex items-center gap-2 mt-2 text-xs text-gray-500"
                             >
                                 <i class="pi pi-info-circle text-[#7F1D3F]"></i>
 
@@ -769,7 +746,7 @@ onMounted(() => {
                         </div>
 
                         <!-- CATÁLOGO DE PRODUCTOS -->
-                        <div class="p-5">
+                        <div class="p-3">
                             <div
                                 v-if="productosFiltrados.length"
                                 class="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-4 gap-4"
@@ -944,7 +921,7 @@ onMounted(() => {
                         >
                             <!-- HEADER -->
                             <div
-                                class="px-5 py-4 border-b border-[#F9E8ED] flex items-center justify-between shrink-0"
+                                class="px-4 py-3 border-b border-[#F9E8ED] flex items-center justify-between shrink-0"
                             >
                                 <div class="flex items-center gap-3">
                                     <div
@@ -983,7 +960,7 @@ onMounted(() => {
                             </div>
 
                             <!-- PRODUCTOS DEL CARRITO -->
-                            <div class="p-5 pb-0">
+                            <div class="p-3 pb-0">
                                 <transition-group
                                     name="cart-row"
                                     tag="div"
@@ -1158,7 +1135,7 @@ onMounted(() => {
 
                             <!-- RESUMEN -->
                             <div
-                                class="p-5 pt-4 mt-2 border-t border-[#F5DCE4] shrink-0"
+                                class="p-3 pt-3 mt-2 border-t border-[#F5DCE4] shrink-0"
                             >
                                 <!-- SUBTOTAL -->
                                 <div
@@ -1253,6 +1230,14 @@ onMounted(() => {
 </template>
 
 <style scoped>
+.ventas-page :deep(.p-card-body) {
+    padding: 10px;
+}
+
+.ventas-page :deep(.p-card-title) {
+    margin-bottom: 0;
+}
+
 .cart-row-enter-active,
 .cart-row-leave-active {
     transition: all 0.2s ease;

@@ -73,6 +73,9 @@ watch(
 //Cuando se abre el dialog
 watch(visible, (nuevoValor) => {
     if(!nuevoValor){
+        if (!props.categoria) {
+            limpiarFormulario();
+        }
         return;
     }
     if(props.categoria){

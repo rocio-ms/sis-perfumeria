@@ -8,6 +8,7 @@ class Lote extends Model
 {
     protected $fillable = [
         'numero_lote',
+        'codigo_barras',
         'fecha_ingreso',
         'fecha_vencimiento',
         'cantidad_inicial',

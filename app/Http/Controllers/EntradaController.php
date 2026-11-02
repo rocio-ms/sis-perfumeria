@@ -14,6 +14,7 @@ use App\Models\Kardex;
 use App\Models\Notificacion;
 use App\Models\TipoMovimiento;
 use Illuminate\Http\Request;
+use Illuminate\Validation\Rule;
 use Illuminate\Support\Facades\DB;
 use Inertia\Inertia;
 use Carbon\Carbon;
@@ -28,6 +29,26 @@ class EntradaController extends Controller
 
     public function index(Request $request)
     {
+        $validated = $request->validate([
+            'search' => ['nullable', 'string', 'max:100'],
+            'fecha_desde' => ['nullable', 'date'],
+            'fecha_hasta' => ['nullable', 'date'],
+            'page' => ['nullable', 'integer', 'min:1'],
+            'per_page' => ['nullable', 'integer', Rule::in([10, 20, 50])],
+            'sort' => [
+                'nullable',
+                Rule::in([
+                    'id',
+                    'codigo_ingreso',
+                    'tipo_comprobante',
+                    'numero_comprobante',
+                    'proveedor.nombre_comercial',
+                    'fecha_ingreso',
+                    'total_compra',
+                ]),
+            ],
+            'direction' => ['nullable', Rule::in(['asc', 'desc'])],
+        ]);
 
         $buscarProducto = trim($request->input('buscar_producto', ''));
 
@@ -62,23 +83,59 @@ class EntradaController extends Controller
             ]);
         }
 
-        $entradas = Entrada::with([
+        $search = trim($validated['search'] ?? '');
+        $sort = $validated['sort'] ?? 'id';
+        $direction = $validated['direction'] ?? 'desc';
+
+        $entradasQuery = Entrada::with([
             'proveedor',
             'user',
             'detalles.producto',
             'detalles.lotes',
-        ])
-            ->latest()
-            ->get();
+        ]);
+
+        if ($search !== '') {
+            $termino = "%{$search}%";
+            $entradasQuery->where(function ($query) use ($termino) {
+                $query->where('codigo_ingreso', 'like', $termino)
+                    ->orWhere('tipo_comprobante', 'like', $termino)
+                    ->orWhere('numero_comprobante', 'like', $termino)
+                    ->orWhereHas('proveedor', fn ($proveedorQuery) => $proveedorQuery
+                        ->where('nombre_comercial', 'like', $termino)
+                        ->orWhere('razon_social', 'like', $termino));
+            });
+        }
+
+        if (!empty($validated['fecha_desde'])) {
+            $entradasQuery->whereDate('fecha_ingreso', '>=', $validated['fecha_desde']);
+        }
+
+        if (!empty($validated['fecha_hasta'])) {
+            $entradasQuery->whereDate('fecha_ingreso', '<=', $validated['fecha_hasta']);
+        }
+
+        if ($sort === 'proveedor.nombre_comercial') {
+            $entradasQuery->orderBy(
+                Proveedor::select('nombre_comercial')
+                    ->whereColumn('proveedors.id', 'entradas.proveedor_id'),
+                $direction,
+            );
+        } else {
+            $sortColumn = in_array($sort, [
+                'codigo_ingreso',
+                'tipo_comprobante',
+                'numero_comprobante',
+                'fecha_ingreso',
+                'total_compra',
+            ], true) ? $sort : 'id';
+            $entradasQuery->orderBy($sortColumn, $direction);
+        }
+
+        $entradas = $entradasQuery
+            ->paginate($validated['per_page'] ?? 20)
+            ->withQueryString();
 
         $proveedores = Proveedor::where('activo', true)
-            ->get();
-        $categorias = Categoria::where('activo', true)
-            ->orderBy('nombre')
-            ->get();
-
-        $marcas = Marca::where('activo', true)
-            ->orderBy('nombre')
             ->get();
 
         $ultimoId = Entrada::max('id') ?? 0;
@@ -94,13 +151,18 @@ class EntradaController extends Controller
             'entradas' => $entradas,
             'proveedores' => $proveedores,
             'productos' => collect(),
-            'categorias' => Categoria::where('activo', true)
-                ->orderBy('nombre')
-                ->get(),
-            'marcas' => Marca::where('activo', true)
-                ->orderBy('nombre')
-                ->get(),
+            'categorias' => Categoria::where('activo', true)->orderBy('nombre')->get(),
+            'marcas' => Marca::where('activo', true)->orderBy('nombre')->get(),
             'codigoIngreso' => $codigoIngreso,
+            'filtros' => [
+                'search' => $search,
+                'fecha_ingreso' => [
+                    $validated['fecha_desde'] ?? '',
+                    $validated['fecha_hasta'] ?? '',
+                ],
+                'sort' => $sort,
+                'direction' => $direction,
+            ],
         ]);
     }
 
@@ -227,6 +289,12 @@ class EntradaController extends Controller
             'detalles.*.producto_id' => [
                 'required',
                 'exists:productos,id',
+            ],
+
+            'detalles.*.codigo_barras_lote' => [
+                'nullable',
+                'string',
+                'max:50',
             ],
 
             'detalles.*.cantidad' => [
@@ -433,6 +501,9 @@ class EntradaController extends Controller
 
                     'cantidad_actual' => $cantidad,
 
+                    'codigo_barras' =>
+                    $detalle['codigo_barras_lote'] ?? null,
+
                     'detalle_entrada_id' =>
                     $detalleEntrada->id,
                 ]);
@@ -627,6 +698,12 @@ class EntradaController extends Controller
             'detalles.*.producto_id' => [
                 'required',
                 'exists:productos,id',
+            ],
+
+            'detalles.*.codigo_barras_lote' => [
+                'nullable',
+                'string',
+                'max:50',
             ],
 
             'detalles.*.cantidad' => [
@@ -916,6 +993,9 @@ class EntradaController extends Controller
 
                     'cantidad_actual' =>
                     $cantidad,
+
+                    'codigo_barras' =>
+                    $detalle['codigo_barras_lote'] ?? null,
 
                     'detalle_entrada_id' =>
                     $detalleEntrada->id,

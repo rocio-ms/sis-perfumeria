@@ -52,6 +52,17 @@ watch(
     { immediate: true },
 );
 
+watch(visible, (estaVisible) => {
+    if (!estaVisible && !props.caja) {
+        form.reset();
+        form.nombre = "";
+        form.turno = null;
+        form.activo = true;
+        form.clearErrors();
+        errores.value = {};
+    }
+});
+
 const guardar = async () => {
     form.clearErrors();
     if (esEdicion.value) {

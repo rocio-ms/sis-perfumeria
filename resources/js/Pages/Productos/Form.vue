@@ -311,6 +311,9 @@ watch(
 // Cuando se abre el Dialog
 watch(visible, (nuevoValor) => {
     if (!nuevoValor) {
+        if (!props.producto) {
+            limpiarFormulario();
+        }
         return;
     }
 

@@ -78,6 +78,9 @@ watch(
 //Cuando se abre el dialog
 watch(visible, (nuevoValor) => {
     if (!nuevoValor) {
+        if (!props.marca) {
+            limpiarFormulario();
+        }
         return;
     }
     if (props.marca) {

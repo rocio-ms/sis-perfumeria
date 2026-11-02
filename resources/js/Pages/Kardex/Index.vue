@@ -1,5 +1,6 @@
 <script setup>
-import { ref, computed } from "vue";
+import { ref } from "vue";
+import { router } from "@inertiajs/vue3";
 
 import DataTableBase from "@/Components/DataTableBase.vue";
 import AppLayout from "@/Layouts/AppLayout.vue";
@@ -11,138 +12,25 @@ defineOptions({
 
 const props = defineProps({
     kardexs: {
-        type: Array,
-        default: () => [],
+        type: Object,
+        default: () => ({ data: [], total: 0, current_page: 1, per_page: 20 }),
     },
 
     productos: {
         type: Array,
         default: () => [],
     },
+    tiposMovimiento: {
+        type: Array,
+        default: () => [],
+    },
+    filtros: {
+        type: Object,
+        default: () => ({}),
+    },
 });
 
-/*
-|--------------------------------------------------------------------------
-| FILTROS
-|--------------------------------------------------------------------------
-*/
-
-const filtroMovimiento = ref(null);
-const filtroProducto = ref(null);
-const rangoFechas = ref(null);
-
-/*
-|--------------------------------------------------------------------------
-| OPCIONES DE MOVIMIENTO
-|--------------------------------------------------------------------------
-*/
-
-const tiposMovimiento = [
-    {
-        label: "Todos los movimientos",
-        value: null,
-    },
-    {
-        label: "Entrada",
-        value: "entrada",
-    },
-    {
-        label: "Salida",
-        value: "salida",
-    },
-];
-
-/*
-|--------------------------------------------------------------------------
-| OPCIONES DE PRODUCTOS
-|--------------------------------------------------------------------------
-*/
-
-const productosOptions = computed(() => {
-    return [
-        {
-            id: null,
-            nombre: "Todos los productos",
-        },
-        ...props.productos,
-    ];
-});
-
-/*
-|--------------------------------------------------------------------------
-| FILTRADO LOCAL
-|--------------------------------------------------------------------------
-|
-| DataTableBase recibe los registros ya filtrados.
-|
-*/
-
-const kardexFiltrado = computed(() => {
-    const lista = props.kardexs;
-
-    return lista.filter((movimiento) => {
-        /*
-        |--------------------------------------------------------------------------
-        | FILTRO POR TIPO DE MOVIMIENTO
-        |--------------------------------------------------------------------------
-        */
-
-        let coincideMovimiento = true;
-
-        if (filtroMovimiento.value) {
-            const tipo =
-                movimiento.tipo_movimiento?.tipo ??
-                movimiento.tipoMovimiento?.tipo ??
-                movimiento.tipo_movimiento?.nombre ??
-                movimiento.tipoMovimiento?.nombre ??
-                "";
-
-            coincideMovimiento =
-                tipo.toString().toLowerCase() ===
-                filtroMovimiento.value.toString().toLowerCase();
-        }
-
-        /*
-        |--------------------------------------------------------------------------
-        | FILTRO POR PRODUCTO
-        |--------------------------------------------------------------------------
-        */
-
-        let coincideProducto = true;
-
-        if (filtroProducto.value) {
-            coincideProducto =
-                Number(movimiento.producto_id) === Number(filtroProducto.value);
-        }
-
-        /*
-        |--------------------------------------------------------------------------
-        | FILTRO POR FECHAS
-        |--------------------------------------------------------------------------
-        */
-
-        let coincideFecha = true;
-
-        if (rangoFechas.value && rangoFechas.value[0]) {
-            const fechaMovimiento = new Date(movimiento.fecha_movimiento);
-
-            const desde = new Date(rangoFechas.value[0]);
-            desde.setHours(0, 0, 0, 0);
-
-            coincideFecha = fechaMovimiento >= desde;
-
-            if (rangoFechas.value[1]) {
-                const hasta = new Date(rangoFechas.value[1]);
-                hasta.setHours(23, 59, 59, 999);
-
-                coincideFecha =
-                    fechaMovimiento >= desde && fechaMovimiento <= hasta;
-            }
-        }
-
-        return coincideMovimiento && coincideProducto && coincideFecha;
-    });
-});
+const cargandoKardex = ref(false);
 
 /*
 |--------------------------------------------------------------------------
@@ -162,11 +50,21 @@ const columns = [
         header: "Movimiento",
         type: "status",
         filter: true,
+        filterOptions: props.tiposMovimiento.map((tipo) => ({
+            label: tipo.nombre,
+            value: tipo.nombre,
+        })),
+        filterType: "select",
     },
     {
         field: "producto.nombre",
         header: "Producto",
         filter: true,
+        filterOptions: props.productos.map((producto) => ({
+            label: `${producto.codigo} - ${producto.nombre}`,
+            value: producto.id,
+        })),
+        filterType: "select",
     },
     {
         field: "lote_id",
@@ -223,10 +121,40 @@ const items = ref([
 |--------------------------------------------------------------------------
 */
 
-const limpiarFiltros = () => {
-    filtroMovimiento.value = null;
-    filtroProducto.value = null;
-    rangoFechas.value = null;
+const formatearFechaConsulta = (fecha) => {
+    if (!fecha) return "";
+    if (typeof fecha === "string") return fecha.slice(0, 10);
+
+    const year = fecha.getFullYear();
+    const month = String(fecha.getMonth() + 1).padStart(2, "0");
+    const day = String(fecha.getDate()).padStart(2, "0");
+    return `${year}-${month}-${day}`;
+};
+
+const buscarKardex = (consulta) => {
+    const fechas = consulta.filters.fecha_movimiento;
+    router.get(
+        route("kardex.index"),
+        {
+            page: consulta.page,
+            per_page: consulta.rows,
+            search: consulta.search,
+            producto_id: consulta.filters["producto.nombre"],
+            tipo_movimiento: consulta.filters["tipo_movimiento.nombre"],
+            fecha_desde: formatearFechaConsulta(fechas?.[0]),
+            fecha_hasta: formatearFechaConsulta(fechas?.[1]),
+            sort: consulta.sortField,
+            direction: consulta.sortOrder === 1 ? "asc" : "desc",
+        },
+        {
+            only: ["kardexs", "filtros"],
+            preserveState: true,
+            preserveScroll: true,
+            replace: true,
+            onStart: () => (cargandoKardex.value = true),
+            onFinish: () => (cargandoKardex.value = false),
+        },
+    );
 };
 </script>
 
@@ -263,15 +191,21 @@ const limpiarFiltros = () => {
 
                 <DataTableBase
                     title="Movimientos de Kardex"
-                    :data="kardexFiltrado"
+                    :data="props.kardexs.data"
                     :columns="columns"
-                    :loading="false"
+                    server-pagination
+                    :total-records="props.kardexs.total"
+                    :current-page="props.kardexs.current_page"
+                    :rows="props.kardexs.per_page"
+                    :server-filters="props.filtros"
+                    :loading="cargandoKardex"
                     :show-view="false"
                     :mostrarCrear="false"
                     :show-edit="false"
                     :show-delete="false"
                     :show-create="false"
                     :show-filters="true"
+                    @server-query="buscarKardex"
                 />
             </template>
         </Card>
