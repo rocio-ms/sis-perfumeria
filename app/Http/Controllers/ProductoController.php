@@ -144,7 +144,7 @@ class ProductoController extends Controller
                 'categoria:id,nombre',
                 'subcategoria:id,nombre,categoria_id',
                 'marca:id,nombre,empresa_id',
-                'precioActual:id,producto_id,precio_venta,tiene_descuento,descuento,activo',
+                'precioActual:precios_productos.id,precios_productos.producto_id,precios_productos.precio_venta,precios_productos.tiene_descuento,precios_productos.descuento,precios_productos.activo',
             ]);
 
         if ($search !== '') {
