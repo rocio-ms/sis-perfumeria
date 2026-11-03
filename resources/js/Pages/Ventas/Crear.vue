@@ -623,7 +623,7 @@ onMounted(() => {
 </script>
 
 <template>
-    <v-container fluid class="ventas-page pa-2">
+    <v-container fluid class="ventas-page pa-2 mt-2">
         <Card>
             <!-- HEADER -->
             <template #title>
