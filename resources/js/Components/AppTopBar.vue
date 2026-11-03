@@ -36,6 +36,7 @@ const userInitials = computed(() => {
 
 const op = ref();
 const notificationsOpen = ref(false);
+const expandedNotifications = ref(new Set());
 
 const notifications = computed(() => {
     return (page.props.notificaciones?.items ?? []).filter(
@@ -56,6 +57,18 @@ const verTodas = () => {
 
 const toggleNotifications = (event) => {
     op.value.toggle(event);
+};
+
+const toggleNotificationMessage = (id) => {
+    const expanded = new Set(expandedNotifications.value);
+
+    if (expanded.has(id)) {
+        expanded.delete(id);
+    } else {
+        expanded.add(id);
+    }
+
+    expandedNotifications.value = expanded;
 };
 
 //Menú de usuario
@@ -152,6 +165,7 @@ const logout = async () => {
             <Popover
                 ref="op"
                 class="notification-panel"
+                :baseZIndex="1200"
                 @show="notificationsOpen = true"
                 @hide="notificationsOpen = false"
             >
@@ -195,9 +209,27 @@ const logout = async () => {
                                 {{ item.titulo }}
                             </div>
 
-                            <div class="notification-message">
+                            <div
+                                class="notification-message"
+                                :class="{
+                                    'notification-message--collapsed':
+                                        !expandedNotifications.has(item.id),
+                                }"
+                            >
                                 {{ item.mensaje }}
                             </div>
+                            <button
+                                v-if="item.mensaje?.length > 120"
+                                class="notification-more"
+                                type="button"
+                                @click="toggleNotificationMessage(item.id)"
+                            >
+                                {{
+                                    expandedNotifications.has(item.id)
+                                        ? "Ver menos"
+                                        : "Ver más"
+                                }}
+                            </button>
 
                             <!-- Tipo de notificación -->
                             <div class="notification-type">
@@ -547,7 +579,16 @@ const logout = async () => {
    ========================================================= */
 
 .notification-panel {
-    width: 340px;
+    width: min(340px, calc(100vw - 24px));
+    max-width: calc(100vw - 24px);
+    max-height: calc(100vh - 96px);
+    overflow: hidden;
+}
+
+.notification-panel :deep(.p-popover-content) {
+    max-height: calc(100vh - 96px);
+    display: flex;
+    flex-direction: column;
 }
 
 .notification-header {
@@ -585,7 +626,7 @@ const logout = async () => {
 /* Lista */
 
 .notification-list {
-    max-height: 380px;
+    max-height: min(380px, calc(100vh - 220px));
 
     overflow-y: auto;
 
@@ -686,6 +727,32 @@ const logout = async () => {
     color: #64748b;
 
     line-height: 1.4;
+
+    overflow-wrap: anywhere;
+}
+
+.notification-message--collapsed {
+    display: -webkit-box;
+    -webkit-box-orient: vertical;
+    -webkit-line-clamp: 3;
+    overflow: hidden;
+}
+
+.notification-more {
+    align-self: flex-start;
+
+    padding: 0;
+
+    border: 0;
+
+    background: transparent;
+
+    color: #7b1e3a;
+
+    font-size: 0.7rem;
+    font-weight: 600;
+
+    cursor: pointer;
 }
 
 .notification-type {

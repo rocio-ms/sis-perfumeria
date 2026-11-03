@@ -129,20 +129,28 @@ const verVenta = (venta) => router.visit(route("ventas.show", venta.id));
 
 //Helpers
 
-const obtenerSeveridadStock = (stock) => {
+const obtenerSeveridadStock = (producto) => {
+    const stock = Number(producto.stock || 0);
+    const minimo = Number(producto.stock_minimo || 0);
+
     if (stock === 0) return "danger";
-    if (stock <= 5) return "warn";
+    if (stock <= minimo) return "warn";
     return "success";
 };
 
-const etiquetaStock = (stock) => {
+const etiquetaStock = (producto) => {
+    const stock = Number(producto.stock || 0);
+    const minimo = Number(producto.stock_minimo || 0);
+
     if (stock === 0) return "Agotado";
-    if (stock === 1) return "Mínimo";
-    return `${stock} und.`;
+    return `${stock} / ${minimo} mín.`;
 };
 
-const porcentajeStock = (stock) => {
-    return Math.min(100, Math.round((stock / 10) * 100));
+const porcentajeStock = (producto) => {
+    const stock = Number(producto.stock || 0);
+    const minimo = Number(producto.stock_minimo || 0);
+
+    return Math.min(100, Math.round((stock / Math.max(minimo, 1)) * 100));
 };
 
 //Formatera moneda
@@ -445,19 +453,19 @@ const iniciales = (texto) => {
                                         producto.nombre
                                     }}</span>
                                     <Tag
-                                        :value="etiquetaStock(producto.stock)"
+                                        :value="etiquetaStock(producto)"
                                         :severity="
                                             obtenerSeveridadStock(
-                                                producto.stock,
+                                                producto,
                                             )
                                         "
                                     />
                                 </div>
 
                                 <ProgressBar
-                                    :value="porcentajeStock(producto.stock)"
+                                    :value="porcentajeStock(producto)"
                                     :showValue="false"
-                                    :class="`stock-progress stock-progress-${obtenerSeveridadStock(producto.stock)}`"
+                                    :class="`stock-progress stock-progress-${obtenerSeveridadStock(producto)}`"
                                 />
                             </div>
                         </div>

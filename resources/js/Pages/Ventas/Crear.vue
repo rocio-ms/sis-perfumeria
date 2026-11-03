@@ -623,7 +623,7 @@ onMounted(() => {
 </script>
 
 <template>
-    <v-container fluid class="ventas-page pa-2 mt-2">
+    <v-container fluid class="ventas-page pa-2">
         <Card>
             <!-- HEADER -->
             <template #title>
@@ -631,7 +631,7 @@ onMounted(() => {
                     class="flex flex-col md:flex-row justify-between items-start md:items-center gap-2 mb-2"
                 >
                     <div>
-                        <h1 class="text-2xl font-bold text-gray-800">
+                        <h1 class="text-2xl font-bold text-gray-800 my-2">
                             Registrar venta
                         </h1>
 

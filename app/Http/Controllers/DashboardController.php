@@ -175,7 +175,8 @@ class DashboardController extends Controller
             ->get([
                 'id',
                 'nombre',
-                'stock_actual'
+                'stock_actual',
+                'stock_minimo',
             ])
             ->map(function ($producto) {
 
@@ -183,6 +184,7 @@ class DashboardController extends Controller
                     'id' => $producto->id,
                     'nombre' => $producto->nombre,
                     'stock' => (float) $producto->stock_actual,
+                    'stock_minimo' => (float) $producto->stock_minimo,
                 ];
             });
 
