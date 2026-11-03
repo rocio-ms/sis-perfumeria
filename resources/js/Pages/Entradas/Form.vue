@@ -295,8 +295,10 @@ watch(
                 const precioCompra = Number(detalle.precio_compra) || 0;
 
                 const precioVenta =
-                    Number(detalle.precio_venta) ||
-                    Math.round(precioCompra * 1.3 * 10 + Number.EPSILON) / 10;
+                    detalle.precio_venta === null ||
+                    detalle.precio_venta === undefined
+                        ? Math.round(precioCompra * 1.3)
+                        : Number(detalle.precio_venta);
 
                 const fechaVencimiento =
                     detalle.lotes?.[0]?.fecha_vencimiento ??
@@ -683,8 +685,7 @@ const calcularPrecioVenta = (detalle) => {
         return;
     }
 
-    detalle.precio_venta =
-        Math.round(precioCompra * 1.3 * 10 + Number.EPSILON) / 10;
+    detalle.precio_venta = Math.round(precioCompra * 1.3);
 
     calcularSubtotal(detalle);
 };
@@ -821,7 +822,11 @@ const guardar = () => {
     */
 
     form.detalles.forEach((detalle) => {
-        calcularPrecioVenta(detalle);
+        if (detalle.precio_venta === null || detalle.precio_venta === undefined) {
+            calcularPrecioVenta(detalle);
+        } else {
+            calcularSubtotal(detalle);
+        }
 
         if (!detalle.tiene_descuento) {
             detalle.descuento = 0;
@@ -1371,8 +1376,7 @@ const cerrar = () => {
                                             :min="0"
                                             :minFractionDigits="2"
                                             :maxFractionDigits="2"
-                                            disabled
-                                            inputClass="w-full bg-gray-50"
+                                            inputClass="w-full"
                                         />
                                     </div>
                                 </div>

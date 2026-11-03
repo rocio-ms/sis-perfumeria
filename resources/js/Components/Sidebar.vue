@@ -226,6 +226,12 @@ const items = [
                 route: "usuarios.index",
                 permiso: "usuarios.index",
             },
+            {
+                title: "Roles y permisos",
+                icon: "mdi-shield-key",
+                route: "roles-permisos.index",
+                soloAdministrador: true,
+            },
         ],
     },
 ];
@@ -250,6 +256,10 @@ const itemsFiltrados = computed(() => {
 
             // GRUPO
             const childrenPermitidos = item.children.filter((child) => {
+                if (child.soloAdministrador && !esAdmin.value) {
+                    return false;
+                }
+
                 if (!child.permiso) {
                     return true;
                 }

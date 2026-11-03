@@ -26,6 +26,7 @@ use App\Http\Controllers\SalidaController;
 use App\Http\Controllers\UsuarioController;
 use App\Http\Controllers\NotificacionController;
 use App\Http\Controllers\DashboardController;
+use App\Http\Controllers\RolesPermisosController;
 use App\Models\Categoria;
 use Illuminate\Support\Facades\Route;
 use Illuminate\Support\Facades\Auth;
@@ -423,6 +424,23 @@ Route::middleware([
     */
 
     Route::resource('/usuarios', UsuarioController::class);
+
+    /*
+    |--------------------------------------------------------------------------
+    | ROLES Y PERMISOS
+    |--------------------------------------------------------------------------
+    */
+
+    Route::middleware('role:Administrador')->group(function () {
+        Route::get('/roles-permisos', [RolesPermisosController::class, 'index'])
+            ->name('roles-permisos.index');
+
+        Route::post('/roles-permisos', [RolesPermisosController::class, 'store'])
+            ->name('roles-permisos.store');
+
+        Route::put('/roles-permisos/{role}', [RolesPermisosController::class, 'update'])
+            ->name('roles-permisos.update');
+    });
 
 
     /*

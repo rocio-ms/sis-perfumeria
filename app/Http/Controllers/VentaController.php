@@ -18,6 +18,7 @@ use App\Models\Salida;
 use App\Models\DetalleSalida;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Validation\ValidationException;
 use Inertia\Inertia;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Str;
@@ -546,6 +547,8 @@ class VentaController extends Controller
                 'id',
                 $productoIds
             )
+                ->with('marca:id,empresa_id')
+                ->with('marca.empresa:id,razon_social')
                 ->get([
                     'id',
                     'empresa_id',
@@ -575,16 +578,6 @@ class VentaController extends Controller
             |
             */
 
-            $productoSinEmpresa = $productosVenta->first(
-                fn($producto) => is_null($producto->empresa_id)
-            );
-
-            if ($productoSinEmpresa) {
-                throw new \Exception(
-                    "El producto {$productoSinEmpresa->nombre} no tiene una empresa asignada."
-                );
-            }
-
             /*
             |--------------------------------------------------------------------------
             | VALIDAR MARCA
@@ -595,7 +588,7 @@ class VentaController extends Controller
             */
 
             $productoSinMarca = $productosVenta->first(
-                fn($producto) => is_null($producto->marca_id)
+                fn($producto) => is_null($producto->marca_id) || !$producto->marca
             );
 
             if ($productoSinMarca) {
@@ -603,6 +596,22 @@ class VentaController extends Controller
                     "El producto {$productoSinMarca->nombre} no tiene una marca asignada."
                 );
             }
+
+            $productoConMarcaSinEmpresa = $productosVenta->first(
+                fn($producto) => is_null($producto->marca->empresa_id)
+            );
+
+            if ($productoConMarcaSinEmpresa) {
+                throw new \Exception(
+                    "La marca del producto {$productoConMarcaSinEmpresa->nombre} no tiene una empresa asignada."
+                );
+            }
+
+            $empresaPorProducto = $productosVenta->mapWithKeys(
+                fn($producto) => [
+                    $producto->id => $producto->marca->empresa_id,
+                ]
+            );
 
             /*
             |--------------------------------------------------------------------------
@@ -627,15 +636,9 @@ class VentaController extends Controller
             |
             */
             $detallesPorEmpresa = collect($validated['detalles'])
-                ->groupBy(function ($detalle) use ($productosVenta) {
-
-                    $producto = $productosVenta->firstWhere(
-                        'id',
-                        $detalle['producto_id']
-                    );
-
-                    return $producto->empresa_id;
-                });
+                ->groupBy(
+                    fn($detalle) => $empresaPorProducto[$detalle['producto_id']]
+                );
 
             $ventas = collect();
             $grupoVenta = (string) Str::uuid();
@@ -647,7 +650,7 @@ class VentaController extends Controller
                     $detallesEmpresa->first()['producto_id']
                 );
 
-                $empresaEmisoraId = $primerProducto->empresa_id;
+                $empresaEmisoraId = $empresaPorProducto[$primerProducto->id];
                 /*
             |--------------------------------------------------------------------------
             | BUSCAR SERIE DEL COMPROBANTE
@@ -663,6 +666,11 @@ class VentaController extends Controller
             | y un comprobante independiente para cada empresa.
             |
             */
+
+                DB::table('empresas')
+                    ->where('id', $empresaEmisoraId)
+                    ->lockForUpdate()
+                    ->first();
 
                 $serieComprobante = SerieComprobante::where(
                     'tienda_id',
@@ -680,16 +688,57 @@ class VentaController extends Controller
                     ->lockForUpdate()
                     ->first();
 
-                /*
-                |--------------------------------------------------------------------------
-                | VALIDAR SERIE
-                |--------------------------------------------------------------------------
-                */
-
                 if (!$serieComprobante) {
-                    throw new \Exception(
-                        "No existe una serie activa configurada para la empresa seleccionada y el comprobante {$tipoComprobante->nombre}."
+                    $nombreTipoComprobante = Str::lower(
+                        $tipoComprobante->nombre
                     );
+                    $seriePorDefecto = Str::contains(
+                        $nombreTipoComprobante,
+                        ['boleta', 'boleto']
+                    )
+                        ? 'B001'
+                        : (Str::contains($nombreTipoComprobante, 'factura')
+                            ? 'F001'
+                            : null);
+
+                    if ($seriePorDefecto === null) {
+                        $nombreEmpresa =
+                            $primerProducto->marca->empresa?->razon_social
+                            ?? "ID {$empresaEmisoraId}";
+
+                        throw ValidationException::withMessages([
+                            'tipo_comprobante_id' =>
+                                "La empresa {$nombreEmpresa} no tiene una serie activa configurada para {$tipoComprobante->nombre}.",
+                        ]);
+                    }
+
+                    $serieComprobante = SerieComprobante::where(
+                        'tienda_id',
+                        $tienda->id
+                    )
+                        ->where('empresa_id', $empresaEmisoraId)
+                        ->where(
+                            'tipo_comprobante_id',
+                            $validated['tipo_comprobante_id']
+                        )
+                        ->where('serie', $seriePorDefecto)
+                        ->lockForUpdate()
+                        ->first();
+
+                    if ($serieComprobante) {
+                        $serieComprobante->activo = true;
+                        $serieComprobante->save();
+                    } else {
+                        $serieComprobante = SerieComprobante::create([
+                            'tienda_id' => $tienda->id,
+                            'empresa_id' => $empresaEmisoraId,
+                            'tipo_comprobante_id' =>
+                                $validated['tipo_comprobante_id'],
+                            'serie' => $seriePorDefecto,
+                            'correlativo_actual' => 0,
+                            'activo' => true,
+                        ]);
+                    }
                 }
 
                 /*
@@ -794,14 +843,10 @@ class VentaController extends Controller
 
                     /*
                 |--------------------------------------------------------------------------
-                | EMPRESA EMISORA
+                | EMPRESA EMISORA DEL COMPROBANTE
                 |--------------------------------------------------------------------------
                 |
-                | Venta de una empresa:
-                |     ID de empresa.
-                |
-                | Venta mixta:
-                |     NULL.
+                | Cada venta del grupo contiene productos de una sola empresa.
                 |
                 */
 
@@ -1077,7 +1122,7 @@ class VentaController extends Controller
                             ?? $producto->nombre,
 
                         'empresa_id' =>
-                        $producto->empresa_id,
+                        $empresaPorProducto[$producto->id],
                     ]);
 
                     /*

@@ -30,8 +30,7 @@ class Venta extends Model
         'tienda_id',
         'grupo_venta',
 
-        // Se mantiene por compatibilidad con tu BD.
-        // Ya no determina la serie ni el emisor.
+        // La empresa emisora determina la serie y el emisor del comprobante.
         'empresa_emisora_id',
 
         'serie_comprobante_id',
@@ -102,15 +101,8 @@ class Venta extends Model
     | EMPRESA EMISORA
     |--------------------------------------------------------------------------
     |
-    | Se mantiene esta relación por compatibilidad con la estructura actual.
-    | Sin embargo, ya NO se utiliza para decidir la serie del comprobante.
-    |
-    | En la nueva lógica:
-    |
-    | Boleta  -> B001
-    | Factura -> F001
-    |
-    | independientemente de la empresa/marca del producto vendido.
+    | La empresa emisora se obtiene de las marcas de los productos vendidos.
+    | Las ventas con productos de varias empresas se separan por empresa.
     |
     */
 
@@ -160,27 +152,25 @@ class Venta extends Model
     | EMISOR
     |--------------------------------------------------------------------------
     |
-    | Ahora el emisor siempre será la TIENDA.
-    |
-    | No importa si los productos pertenecen a diferentes empresas
-    | o marcas.
+    | Las nuevas ventas tienen una empresa emisora. Las ventas mixtas
+    | existentes pueden no tenerla.
     |
     */
 
     public function getRucEmisorAttribute(): ?string
     {
-        return $this->tienda?->ruc;
+        return $this->empresaEmisora?->ruc;
     }
 
     public function getRazonSocialEmisorAttribute(): ?string
     {
-        return $this->tienda?->razon_social;
+        return $this->empresaEmisora?->razon_social;
     }
 
     public function getNombreComercialEmisorAttribute(): ?string
     {
-        return $this->tienda?->nombre_comercial
-            ?? $this->tienda?->nombre;
+        return $this->empresaEmisora?->razon_social
+            ?? $this->tienda?->nombre_comercial;
     }
 
     /*
@@ -188,19 +178,14 @@ class Venta extends Model
     | VENTA MIXTA
     |--------------------------------------------------------------------------
     |
-    | Este concepto ya no aplica.
-    |
-    | Antes:
-    |   empresa_emisora_id = NULL -> venta mixta
-    |
-    | Ahora:
-    |   TODAS las ventas son emitidas por la tienda.
+    | Las ventas nuevas se separan por empresa emisora. Este indicador
+    | identifica registros anteriores sin empresa emisora asignada.
     |
     */
 
     public function getEsVentaMixtaAttribute(): bool
     {
-        return false;
+        return is_null($this->empresa_emisora_id);
     }
 
     /*

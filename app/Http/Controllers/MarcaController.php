@@ -4,6 +4,8 @@ namespace App\Http\Controllers;
 
 use App\Models\Marca;
 use App\Models\Empresa;
+use App\Models\Producto;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Http\Request;
 use Illuminate\Validation\Rule;
 use Inertia\Inertia;
@@ -113,7 +115,12 @@ class MarcaController extends Controller
             ],
         ]);
 
-        $marca->update($validated);
+        DB::transaction(function () use ($marca, $validated) {
+            $marca->update($validated);
+
+            Producto::where('marca_id', $marca->id)
+                ->update(['empresa_id' => $marca->empresa_id]);
+        });
 
         return back()->with(
             'success',

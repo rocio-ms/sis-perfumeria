@@ -80,6 +80,10 @@ class PermissionSeeder extends Seeder
 
             'configuracion.index',
 
+            'tiendas.index',
+            'empresas.index',
+            'reportes.index',
+
             'usuarios.index',
             'usuarios.crear',
             'usuarios.editar',

@@ -419,21 +419,36 @@ const expandirSecciones = () => {
     calculadoraActiva.value = false;
 };
 
+const abrirCalculadora = () => {
+    calculadoraActiva.value = true;
+};
+
+const finalizarIngresoMonto = () => {
+    if (montoRecibido.value !== null) {
+        calculadoraActiva.value = false;
+    }
+};
+
 /**
  * Sincroniza el texto de la calculadora con el monto recibido.
  */
-watch(montoCalculadora, (valor) => {
+watch(montoCalculadora, (valor, _, onCleanup) => {
     if (valor === "" || valor === null) {
         montoRecibido.value = null;
-        calculadoraActiva.value = false;
+        calculadoraActiva.value = true;
         return;
     }
 
     calculadoraActiva.value = true;
 
     const numero = Number(valor);
-
     montoRecibido.value = Number.isFinite(numero) ? numero : null;
+
+    const timeout = setTimeout(() => {
+        calculadoraActiva.value = false;
+    }, 700);
+
+    onCleanup(() => clearTimeout(timeout));
 });
 
 /**
@@ -494,6 +509,7 @@ const limpiarMonto = () => {
  */
 const establecerMonto = (monto) => {
     montoCalculadora.value = redondear(monto).toFixed(2);
+    calculadoraActiva.value = false;
 };
 
 /**
@@ -698,7 +714,7 @@ watch(
 
         montoRecibido.value = null;
         montoCalculadora.value = "";
-        calculadoraActiva.value = false;
+        calculadoraActiva.value = true;
     },
 );
 </script>
@@ -973,6 +989,8 @@ watch(
                                 autocomplete="off"
                                 class="!w-40 !text-right !text-2xl !font-bold !text-rose-800"
                                 placeholder="0.00"
+                                @focus="abrirCalculadora"
+                                @keydown.enter.prevent="finalizarIngresoMonto"
                             />
                         </div>
                     </div>
@@ -1013,6 +1031,7 @@ watch(
 
                     <!-- TECLADO -->
                     <div
+                        v-if="calculadoraActiva"
                         class="grid grid-cols-3 gap-2 p-3"
                         :class="modoPagoActivo ? 'pt-3' : ''"
                     >
@@ -1079,6 +1098,14 @@ watch(
                             @click="agregarNumero('00')"
                         >
                             00
+                        </button>
+
+                        <button
+                            type="button"
+                            class="col-span-3 h-11 rounded-lg bg-rose-700 text-sm font-semibold text-white hover:bg-rose-800 active:scale-95 transition"
+                            @click="finalizarIngresoMonto"
+                        >
+                            Listo
                         </button>
                     </div>
 

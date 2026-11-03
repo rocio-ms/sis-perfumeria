@@ -52,6 +52,14 @@ const props = defineProps({
         type: Object,
         default: () => ({}),
     },
+    searchPlaceholder: {
+        type: String,
+        default: "Buscar...",
+    },
+    searchIcon: {
+        type: String,
+        default: "pi pi-search",
+    },
 
     columns: {
         type: Array,
@@ -244,6 +252,15 @@ const emitirConsultaServidor = (page = 1, rows = props.rows) => {
         sortField: ordenamiento.value.sortField,
         sortOrder: ordenamiento.value.sortOrder,
     });
+};
+
+const buscarAlPresionarEnter = () => {
+    if (!props.serverPagination) {
+        return;
+    }
+
+    clearTimeout(temporizadorBusqueda);
+    emitirConsultaServidor();
 };
 
 watch(
@@ -648,12 +665,13 @@ const estadoTag = (valor, columna) => {
 
         <div class="flex flex-col md:flex-row gap-3">
             <IconField class="w-full">
-                <InputIcon class="pi pi-search" />
+                <InputIcon :class="searchIcon" />
 
                 <InputText
                     v-model="busqueda"
-                    placeholder="Buscar..."
+                    :placeholder="searchPlaceholder"
                     class="w-full"
+                    @keydown.enter.prevent="buscarAlPresionarEnter"
                 />
             </IconField>
         </div>

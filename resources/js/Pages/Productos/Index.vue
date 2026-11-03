@@ -246,6 +246,8 @@ const eliminarProducto = async (producto) => {
                     :current-page="props.productos.current_page"
                     :rows="props.productos.per_page"
                     :server-filters="props.filtros"
+                    search-placeholder="Busca por nombre o código; también puedes escanearlo"
+                    search-icon="pi pi-barcode"
                     :show-filters="true"
                     title-button="Nuevo producto"
                     :show-view="true"

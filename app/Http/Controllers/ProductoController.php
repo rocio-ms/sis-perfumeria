@@ -152,6 +152,7 @@ class ProductoController extends Controller
 
             $productos->where(function ($query) use ($termino, $search) {
                 $query->where('codigo', 'like', $termino)
+                    ->orWhere('codigo_barras', 'like', $termino)
                     ->orWhere('nombre', 'like', $termino)
                     ->orWhere('imagen_url', 'like', $termino)
                     ->orWhere('stock_actual', 'like', $termino)

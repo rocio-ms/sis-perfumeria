@@ -16,7 +16,6 @@ const venta = computed(() => props.venta);
 const cliente = computed(() => venta.value.cliente ?? null);
 const detalles = computed(() => venta.value.detalles ?? []);
 const empresa = computed(() => venta.value.empresa_emisora ?? null);
-const esVentaMixta = computed(() => !venta.value.empresa_emisora_id);
 const tienda = computed(() => props.tienda ?? {});
 
 const logoUrl = computed(() => {
@@ -29,15 +28,11 @@ const logoUrl = computed(() => {
 });
 
 const nombreTienda = computed(
-    () =>
-        tienda.value.nombre_comercial ||
-        "MI TIENDA",
+    () => tienda.value.nombre_comercial || "MI TIENDA",
 );
 
 const rucEmisor = computed(
-    () =>
-        (!esVentaMixta.value && empresa.value?.ruc) ||
-        "",
+    () => empresa.value?.ruc || "",
 );
 
 const direccionEmisor = computed(

@@ -70,6 +70,7 @@ const mostrarPago = ref(false);
 const procesandoVenta = ref(false);
 const mostrarComprobantesEmitidos = ref(false);
 const comprobantesEmitidos = ref([]);
+const comprobanteSeleccionadoParaImprimir = ref(null);
 
 /*
 |--------------------------------------------------------------------------
@@ -477,12 +478,20 @@ const cerrarDialogoComprobantes = () => {
     comprobantesEmitidos.value = [];
 };
 
-const imprimirComprobantesEmitidos = () => {
+const imprimirComprobantesEmitidos = async (comprobanteId = null) => {
+    comprobanteSeleccionadoParaImprimir.value = comprobanteId;
+    await nextTick();
+
     const limpiarModoImpresion = () => {
         document.body.classList.remove("printing-emitted-receipts");
+        document.body.classList.remove("printing-single-receipt");
+        comprobanteSeleccionadoParaImprimir.value = null;
     };
 
     document.body.classList.add("printing-emitted-receipts");
+    if (comprobanteId !== null) {
+        document.body.classList.add("printing-single-receipt");
+    }
     window.addEventListener("afterprint", limpiarModoImpresion, {
         once: true,
     });
@@ -1204,12 +1213,29 @@ onMounted(() => {
             </p>
 
             <div class="emitted-receipts-print-area">
-                <ComprobanteTicket
+                <div
                     v-for="comprobante in comprobantesEmitidos"
                     :key="comprobante.id"
-                    :venta="comprobante"
-                    :tienda="props.tienda"
-                />
+                    class="emitted-receipt-item"
+                    :class="{
+                        'emitted-receipt-item--selected':
+                            comprobante.id ===
+                            comprobanteSeleccionadoParaImprimir,
+                    }"
+                >
+                    <div class="emitted-receipt-actions no-print">
+                        <Button
+                            label="Imprimir comprobante"
+                            icon="pi pi-print"
+                            size="small"
+                            @click="imprimirComprobantesEmitidos(comprobante.id)"
+                        />
+                    </div>
+                    <ComprobanteTicket
+                        :venta="comprobante"
+                        :tienda="props.tienda"
+                    />
+                </div>
             </div>
 
             <template #footer>
@@ -1254,9 +1280,17 @@ onMounted(() => {
 .emitted-receipts-print-area {
     display: flex;
     flex-direction: column;
+    gap: 1rem;
     align-items: center;
     max-height: none !important;
     overflow: visible !important;
+}
+
+.emitted-receipt-item {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 0.5rem;
 }
 
 @media print {
@@ -1277,6 +1311,18 @@ onMounted(() => {
         width: 80mm;
         max-height: none;
         overflow: visible;
+    }
+
+    :global(body.printing-emitted-receipts .emitted-receipt-actions) {
+        display: none !important;
+    }
+
+    :global(body.printing-single-receipt .emitted-receipt-item--selected) {
+        display: flex !important;
+    }
+
+    :global(body.printing-single-receipt .emitted-receipt-item:not(.emitted-receipt-item--selected)) {
+        display: none !important;
     }
 
     :global(body.printing-emitted-receipts .p-dialog-mask) {
@@ -1310,7 +1356,7 @@ onMounted(() => {
         overflow: visible !important;
     }
 
-    :global(body.printing-emitted-receipts .emitted-receipts-print-area > .ticket-page) {
+    :global(body.printing-emitted-receipts .emitted-receipt-item > .ticket-page) {
         margin: 0 !important;
         break-inside: avoid;
         page-break-inside: avoid;
