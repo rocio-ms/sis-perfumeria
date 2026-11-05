@@ -68,6 +68,8 @@ class ProductoController extends Controller
                 }
             });
 
+        $consulta->with('categoria:id,nombre');
+
         if ($request->boolean('incluir_lotes')) {
             $consulta->with([
                 'lotes' => function ($query) {
@@ -84,6 +86,7 @@ class ProductoController extends Controller
                 'codigo',
                 'codigo_barras',
                 'nombre',
+                'categoria_id',
                 'unidad_medida',
                 'stock_actual',
             ]);
@@ -145,6 +148,13 @@ class ProductoController extends Controller
                 'subcategoria:id,nombre,categoria_id',
                 'marca:id,nombre,empresa_id',
                 'precioActual:precios_productos.id,precios_productos.producto_id,precios_productos.precio_venta,precios_productos.tiene_descuento,precios_productos.descuento,precios_productos.activo',
+                'lotes' => fn ($query) => $query->select([
+                    'lotes.id',
+                    'lotes.numero_lote',
+                    'lotes.fecha_vencimiento',
+                    'lotes.cantidad_actual',
+                    'lotes.detalle_entrada_id',
+                ]),
             ]);
 
         if ($search !== '') {
@@ -356,7 +366,14 @@ class ProductoController extends Controller
             'subcategoria',
             'marca',
             'empresa',
-            'precioActual'
+            'precioActual',
+            'lotes' => fn ($query) => $query->select([
+                'lotes.id',
+                'lotes.numero_lote',
+                'lotes.fecha_vencimiento',
+                'lotes.cantidad_actual',
+                'lotes.detalle_entrada_id',
+            ]),
         ]);
 
         return Inertia::render('Productos/Show', [

@@ -71,9 +71,11 @@ class EntradaController extends Controller
                         'nombre',
                         'codigo',
                         'codigo_barras',
+                        'categoria_id',
                         'unidad_medida',
                         'stock_actual',
                     ])
+                    ->with('categoria:id,nombre')
                     ->limit(20)
                     ->get();
             }

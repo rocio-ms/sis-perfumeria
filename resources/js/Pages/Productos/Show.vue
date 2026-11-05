@@ -55,6 +55,18 @@ const contenidoProducto = computed(() => {
     return `${producto.value.volumen_ml} ${sufijo}`;
 });
 
+const lotes = computed(() => producto.value?.lotes ?? []);
+
+const formatearFecha = (fecha) => {
+    if (!fecha) {
+        return "Sin fecha";
+    }
+
+    const [year, month] = fecha.slice(0, 10).split("-");
+
+    return year && month ? `${month}/${year}` : fecha;
+};
+
 const cerrar = () => {
     visible.value = false;
 };
@@ -126,6 +138,31 @@ const formatearMoneda = (valor) =>
                     <div class="border border-gray-200 rounded-lg p-3"><span class="text-xs text-gray-500 block mb-1">Contenido</span><span class="text-xl font-bold text-gray-800">{{ contenidoProducto }}</span></div>
                     <div class="border border-gray-200 rounded-lg p-3"><span class="text-xs text-gray-500 block mb-1">Precio venta</span><span class="text-lg font-bold text-gray-800">{{ formatearMoneda(precioVenta) }}</span></div>
                 </div>
+            </div>
+
+            <div>
+                <h4 class="font-semibold text-gray-800 mb-3 text-sm flex items-center gap-2"><i class="pi pi-list text-blue-600"></i>Lotes</h4>
+                <div v-if="lotes.length" class="overflow-x-auto rounded-lg border border-gray-200">
+                    <table class="w-full text-sm text-left">
+                        <thead class="bg-gray-50 text-xs uppercase text-gray-500">
+                            <tr>
+                                <th scope="col" class="px-4 py-3">Lote</th>
+                                <th scope="col" class="px-4 py-3">Fecha de vencimiento</th>
+                                <th scope="col" class="px-4 py-3 text-right">Stock</th>
+                            </tr>
+                        </thead>
+                        <tbody class="divide-y divide-gray-100">
+                            <tr v-for="lote in lotes" :key="lote.id" class="bg-white">
+                                <td class="px-4 py-3 font-medium text-gray-800">{{ lote.numero_lote || "—" }}</td>
+                                <td class="px-4 py-3 text-gray-600">{{ formatearFecha(lote.fecha_vencimiento) }}</td>
+                                <td class="px-4 py-3 text-right font-semibold text-gray-800">{{ lote.cantidad_actual ?? 0 }}</td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+                <p v-else class="rounded-lg border border-dashed border-gray-300 p-4 text-sm text-gray-500">
+                    Este producto no tiene lotes registrados.
+                </p>
             </div>
 
             <div class="rounded-xl border border-gray-200 bg-gray-50 p-4 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">

@@ -9,3 +9,31 @@ html {
 .swal2-container {
     z-index: 10000 !important;
 }
+
+.p-datatable-table-container,
+.v-data-table .v-table__wrapper,
+.overflow-x-auto:has(> table) {
+    max-height: 70vh;
+    overflow-y: auto;
+}
+
+.p-datatable-thead > tr > th,
+.v-data-table thead th,
+.overflow-x-auto:has(> table) > table thead th {
+    position: sticky;
+    top: 0;
+    z-index: 5;
+}
+
+table:not(.p-datatable-table) thead th {
+    position: sticky;
+    top: 73px;
+    z-index: 5;
+    background-color: #f8fafc;
+}
+
+@media print {
+    table thead th {
+        position: static;
+    }
+}

@@ -139,6 +139,31 @@ const subtitulo = computed(() => {
         : "Registra los productos ingresados al inventario";
 });
 
+const porcentajesGanancia = [0, 10, 20, 30, 40, 50, 60, 70, 80, 90, 100].map(
+    (porcentaje) => ({
+        label: `${porcentaje}%`,
+        value: porcentaje,
+    }),
+);
+
+const porcentajePorDefecto = (producto) => {
+    const categoria =
+        producto?.categoria?.nombre ??
+        props.categorias.find(
+            (item) => Number(item.id) === Number(producto?.categoria_id),
+        )?.nombre ??
+        "";
+    const categoriaNormalizada = String(categoria)
+        .normalize("NFD")
+        .replace(/[\u0300-\u036f]/g, "")
+        .toLowerCase();
+
+    return categoriaNormalizada.includes("portabilidad personal") ||
+        categoriaNormalizada.includes("joya")
+        ? 50
+        : 30;
+};
+
 const fechaLocal = (fecha) => {
     if (!fecha) {
         return null;
@@ -293,11 +318,12 @@ watch(
 
             form.detalles = (entrada.detalles ?? []).map((detalle) => {
                 const precioCompra = Number(detalle.precio_compra) || 0;
+                const porcentaje = porcentajePorDefecto(detalle.producto);
 
                 const precioVenta =
                     detalle.precio_venta === null ||
                     detalle.precio_venta === undefined
-                        ? Math.round(precioCompra * 1.3)
+                        ? Math.round(precioCompra * (1 + porcentaje / 100))
                         : Number(detalle.precio_venta);
 
                 const fechaVencimiento =
@@ -315,6 +341,8 @@ watch(
                     precio_compra: precioCompra,
 
                     precio_venta: precioVenta,
+
+                    porcentaje_ganancia: porcentaje,
 
                     tiene_descuento: Boolean(detalle.tiene_descuento),
 
@@ -425,6 +453,8 @@ const agregarProducto = (producto = null) => {
         precio_compra: null,
 
         precio_venta: null,
+
+        porcentaje_ganancia: porcentajePorDefecto(productoSeleccionado),
 
         tiene_descuento: false,
 
@@ -636,6 +666,7 @@ const importarDetallesExcel = async (filas) => {
                 cantidad: fila.cantidad,
                 precio_compra: fila.precio_compra,
                 precio_venta: fila.precio_venta,
+                porcentaje_ganancia: porcentajePorDefecto(producto),
                 tiene_descuento: fila.tiene_descuento,
                 descuento: fila.descuento,
                 subtotal,
@@ -685,7 +716,13 @@ const calcularPrecioVenta = (detalle) => {
         return;
     }
 
-    detalle.precio_venta = Math.round(precioCompra * 1.3);
+    const porcentaje = Number(
+        detalle.porcentaje_ganancia ??
+            porcentajePorDefecto(detalle.producto),
+    );
+    detalle.precio_venta = Math.round(
+        precioCompra * (1 + porcentaje / 100),
+    );
 
     calcularSubtotal(detalle);
 };
@@ -1379,6 +1416,25 @@ const cerrar = () => {
                                             inputClass="w-full"
                                         />
                                     </div>
+                                </div>
+                                <div class="mt-2 flex flex-col gap-1">
+                                    <label
+                                        :for="`porcentaje_ganancia_${index}`"
+                                        class="text-xs text-gray-500"
+                                    >
+                                        Margen sobre compra
+                                    </label>
+                                    <Select
+                                        v-model="detalle.porcentaje_ganancia"
+                                        :inputId="`porcentaje_ganancia_${index}`"
+                                        :options="porcentajesGanancia"
+                                        optionLabel="label"
+                                        optionValue="value"
+                                        class="w-full"
+                                        @update:modelValue="
+                                            calcularPrecioVenta(detalle)
+                                        "
+                                    />
                                 </div>
                             </div>
 
