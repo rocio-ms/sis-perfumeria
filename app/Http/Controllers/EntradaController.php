@@ -13,6 +13,8 @@ use App\Models\Marca;
 use App\Models\Kardex;
 use App\Models\Notificacion;
 use App\Models\TipoMovimiento;
+use App\Models\Empresa;
+use App\Models\Subcategoria;
 use Illuminate\Http\Request;
 use Illuminate\Validation\Rule;
 use Illuminate\Support\Facades\DB;
@@ -21,6 +23,30 @@ use Carbon\Carbon;
 
 class EntradaController extends Controller
 {
+    public function buscarPorCodigoBarras(Request $request)
+    {
+        $validated = $request->validate([
+            'codigo_barras' => ['required', 'string', 'max:100'],
+        ]);
+
+        $producto = Producto::where('activo', true)
+            ->where('codigo_barras', $validated['codigo_barras'])
+            ->with('categoria:id,nombre')
+            ->first([
+                'id',
+                'nombre',
+                'codigo',
+                'codigo_barras',
+                'categoria_id',
+                'unidad_medida',
+                'stock_actual',
+            ]);
+
+        return response()->json([
+            'producto' => $producto,
+        ]);
+    }
+
     /*
     |--------------------------------------------------------------------------
     | INDEX
@@ -155,6 +181,9 @@ class EntradaController extends Controller
             'productos' => collect(),
             'categorias' => Categoria::where('activo', true)->orderBy('nombre')->get(),
             'marcas' => Marca::where('activo', true)->orderBy('nombre')->get(),
+            'subcategorias' => Subcategoria::where('activo', true)->orderBy('nombre')->get(),
+            'ubicaciones' => Producto::UBICACIONES,
+            'empresas' => Empresa::where('activo', true)->orderBy('razon_social')->get(),
             'codigoIngreso' => $codigoIngreso,
             'filtros' => [
                 'search' => $search,
@@ -191,6 +220,16 @@ class EntradaController extends Controller
 
             'marcas' => Marca::where('activo', true)
                 ->orderBy('nombre')
+                ->get(),
+
+            'subcategorias' => Subcategoria::where('activo', true)
+                ->orderBy('nombre')
+                ->get(),
+
+            'ubicaciones' => Producto::UBICACIONES,
+
+            'empresas' => Empresa::where('activo', true)
+                ->orderBy('razon_social')
                 ->get(),
         ]);
     }

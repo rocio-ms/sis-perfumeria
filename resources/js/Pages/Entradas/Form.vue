@@ -40,6 +40,18 @@ const props = defineProps({
         type: Array,
         default: () => [],
     },
+    subcategorias: {
+        type: Array,
+        default: () => [],
+    },
+    ubicaciones: {
+        type: Array,
+        default: () => [],
+    },
+    empresas: {
+        type: Array,
+        default: () => [],
+    },
 });
 
 const visible = defineModel("visible");
@@ -76,6 +88,9 @@ const productoBusqueda = ref(null);
 const productosFiltrados = ref([]);
 
 const buscandoProducto = ref(false);
+const codigoEscaner = ref("");
+const escaneandoProducto = ref(false);
+const codigoBarrasProductoPendiente = ref("");
 const importandoExcel = ref(false);
 
 /*
@@ -222,6 +237,47 @@ const productoGuardado = async (producto) => {
         productoBusqueda.value = productoNuevo;
 
         agregarProducto(productoNuevo);
+    } else if (codigoBarrasProductoPendiente.value) {
+        try {
+            const { data } = await axios.get(
+                route("entradas.buscarPorCodigoBarras"),
+                {
+                    params: {
+                        codigo_barras: codigoBarrasProductoPendiente.value,
+                    },
+                },
+            );
+
+            if (!data.producto) {
+                throw new Error(
+                    "El producto fue registrado, pero no se pudo recuperar para añadirlo a la entrada.",
+                );
+            }
+
+            agregarProducto(data.producto);
+            codigoBarrasProductoPendiente.value = "";
+
+            await Swal.fire({
+                title: "¡Producto agregado!",
+                text: "El producto fue registrado y añadido a la entrada.",
+                icon: "success",
+                confirmButtonText: "Aceptar",
+            });
+        } catch (error) {
+            codigoBarrasProductoPendiente.value = "";
+
+            await Swal.fire({
+                title: "Producto registrado",
+                text:
+                    error.response?.data?.message ||
+                    error.message ||
+                    "No se pudo añadir el producto a la entrada. Búsquelo por nombre para continuar.",
+                icon: "warning",
+                confirmButtonText: "Aceptar",
+            });
+        }
+
+        return;
     }
 
     await Swal.fire({
@@ -284,6 +340,8 @@ const limpiarFormulario = () => {
     tieneProveedor.value = false;
     productoBusqueda.value = null;
     productosFiltrados.value = [];
+    codigoEscaner.value = "";
+    codigoBarrasProductoPendiente.value = "";
 };
 
 watch(
@@ -414,6 +472,67 @@ const buscarProducto = (event) => {
             },
         );
     }, 150);
+};
+
+const escanearProducto = async () => {
+    const codigo = String(codigoEscaner.value ?? "").trim();
+
+    if (!codigo || escaneandoProducto.value) {
+        return;
+    }
+
+    escaneandoProducto.value = true;
+
+    try {
+        const { data } = await axios.get(
+            route("entradas.buscarPorCodigoBarras"),
+            {
+                params: {
+                    codigo_barras: codigo,
+                },
+            },
+        );
+
+        codigoEscaner.value = "";
+
+        if (data.producto) {
+            agregarProducto(data.producto);
+            return;
+        }
+
+        const resultado = await Swal.fire({
+            title: "Producto no encontrado",
+            text: "Búsquelo por nombre o regístrelo como nuevo producto. Después podrá ingresar el código del lote en la entrada.",
+            icon: "warning",
+            showCancelButton: true,
+            confirmButtonText: "Añadir nuevo producto",
+            cancelButtonText: "Buscar por nombre",
+            reverseButtons: true,
+        });
+
+        if (resultado.isConfirmed) {
+            codigoBarrasProductoPendiente.value = codigo;
+            mostrarProductoForm.value = true;
+        } else if (resultado.dismiss === Swal.DismissReason.cancel) {
+            document.getElementById("producto")?.focus();
+        }
+    } catch (error) {
+        await Swal.fire({
+            title: "No se pudo buscar el producto",
+            text:
+                error.response?.data?.message ||
+                error.message ||
+                "Ocurrió un error al consultar el código escaneado.",
+            icon: "error",
+            confirmButtonText: "Aceptar",
+        });
+    } finally {
+        escaneandoProducto.value = false;
+    }
+};
+
+const cancelarRegistroProducto = () => {
+    codigoBarrasProductoPendiente.value = "";
 };
 
 /*
@@ -1239,6 +1358,39 @@ const cerrar = () => {
 
                 <!-- BUSCADOR -->
 
+                <div class="mb-3">
+                    <div class="flex items-end gap-3">
+                        <FloatLabel variant="on" class="w-full">
+                            <InputText
+                                id="codigo_producto_escaneado"
+                                v-model="codigoEscaner"
+                                class="w-full"
+                                autocomplete="off"
+                                placeholder="Escanee el código y presione Enter"
+                                :disabled="escaneandoProducto"
+                                @keydown.enter.prevent="escanearProducto"
+                            />
+                            <label for="codigo_producto_escaneado">
+                                Escanear código de barras o QR
+                            </label>
+                        </FloatLabel>
+
+                        <Button
+                            type="button"
+                            icon="pi pi-barcode"
+                            label="Buscar código"
+                            class="whitespace-nowrap flex-shrink-0"
+                            :loading="escaneandoProducto"
+                            :disabled="!codigoEscaner.trim()"
+                            @click="escanearProducto"
+                        />
+                    </div>
+                    <small class="mt-1 block text-gray-500">
+                        Si no se encuentra, podrá buscarlo por nombre o
+                        registrarlo como nuevo producto.
+                    </small>
+                </div>
+
                 <div class="flex items-end gap-3">
                     <FloatLabel variant="on" class="w-full">
                         <AutoComplete
@@ -1639,7 +1791,12 @@ const cerrar = () => {
             v-model:visible="mostrarProductoForm"
             :categorias="props.categorias"
             :marcas="props.marcas"
+            :subcategorias="props.subcategorias"
+            :ubicaciones="props.ubicaciones"
+            :empresas="props.empresas"
+            :codigo-barras-inicial="codigoBarrasProductoPendiente"
             @saved="productoGuardado"
+            @cancel="cancelarRegistroProducto"
         />
     </Dialog>
 </template>

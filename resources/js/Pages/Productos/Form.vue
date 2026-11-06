@@ -35,6 +35,10 @@ const props = defineProps({
         type: String,
         default: "000001",
     },
+    codigoBarrasInicial: {
+        type: String,
+        default: "",
+    },
 });
 const visible = defineModel("visible");
 
@@ -209,7 +213,7 @@ const limpiarFormulario = () => {
     form.clearErrors();
 
     form.codigo = props.codigoInicial;
-    form.codigo_barras = "";
+    form.codigo_barras = props.codigoBarrasInicial;
     form.nombre = "";
     form.descripcion = "";
     form.ubicacion = "";
@@ -470,6 +474,7 @@ const cerrar = () => {
                         v-model="form.codigo_barras"
                         class="w-full"
                         :invalid="!!form.errors.codigo_barras"
+                        :readonly="Boolean(codigoBarrasInicial)"
                     />
 
                     <label for="codigo_barras"> Código de barras </label>

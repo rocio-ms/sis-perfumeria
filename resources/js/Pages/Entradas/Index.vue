@@ -40,6 +40,18 @@ const props = defineProps({
         type: Array,
         default: () => [],
     },
+    subcategorias: {
+        type: Array,
+        default: () => [],
+    },
+    ubicaciones: {
+        type: Array,
+        default: () => [],
+    },
+    empresas: {
+        type: Array,
+        default: () => [],
+    },
     filtros: {
         type: Object,
         default: () => ({}),
@@ -239,6 +251,9 @@ const cerrarForm = () => {
             :proveedores="props.proveedores"
             :categorias="props.categorias"
             :marcas="props.marcas"
+            :subcategorias="props.subcategorias"
+            :ubicaciones="props.ubicaciones"
+            :empresas="props.empresas"
             :productos="props.productos"
             :codigo-ingreso="codigoIngreso"
             @saved="formularioGuardado"
