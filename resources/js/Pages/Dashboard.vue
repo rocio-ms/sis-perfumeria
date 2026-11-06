@@ -16,7 +16,7 @@ const props = defineProps({
             ventas: 0,
             productos: 0,
             ingresos: 0,
-            stock_bajo: 0,
+            stock_total: 0,
         }),
     },
 
@@ -239,16 +239,16 @@ const iniciales = (texto) => {
                 <span class="stat-description">Productos activos</span>
             </div>
 
-            <!-- STOCK BAJO -->
+            <!-- STOCK TOTAL -->
             <div class="stat-card" @click="irStock">
                 <div class="stat-top-row">
-                    <span class="stat-label">STOCK BAJO</span>
-                    <div class="stat-icon stock-icon">
-                        <i class="pi pi-exclamation-triangle"></i>
+                    <span class="stat-label">STOCK TOTAL</span>
+                    <div class="stat-icon productos-icon">
+                        <i class="pi pi-box"></i>
                     </div>
                 </div>
-                <span class="stat-value">{{ estadisticas.stock_bajo }}</span>
-                <span class="stat-description">Productos por reponer</span>
+                <span class="stat-value">{{ estadisticas.stock_total }}</span>
+                <span class="stat-description">Unidades en inventario</span>
             </div>
         </div>
 

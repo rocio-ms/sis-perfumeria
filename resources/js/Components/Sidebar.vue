@@ -334,11 +334,16 @@ const abrirSidebar = () => {
             <v-list-item>
                 <template v-if="!rail">
                     <div class="sidebar-header-content">
-                        <img
-                            src="/images/logo_colocar.png"
-                            alt="Belleza"
-                            class="sidebar-logo"
-                        />
+                        <div class="sidebar-brand">
+                            <img
+                                src="/images/logo_colocar.png"
+                                alt="Belleza"
+                                class="sidebar-logo"
+                            />
+                            <span class="sidebar-tagline">
+                                sistema de ventas e inventario
+                            </span>
+                        </div>
 
                         <v-btn
                             icon="mdi-chevron-left"
@@ -474,7 +479,7 @@ const abrirSidebar = () => {
 }
 
 .sidebar-header :deep(.v-list-item) {
-    min-height: 64px;
+    min-height: 80px;
     padding: 0 16px !important;
     background: transparent !important;
 }
@@ -490,11 +495,27 @@ const abrirSidebar = () => {
     justify-content: space-between;
 }
 
+.sidebar-brand {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+}
+
 .sidebar-logo {
     width: 150px;
     height: auto;
     object-fit: contain;
     display: block;
+}
+
+.sidebar-tagline {
+    margin-top: 2px;
+    color: rgba(255, 255, 255, 0.8);
+    font-size: 14px;
+    font-weight: 700;
+    line-height: 1.2;
+    text-align: center;
+    text-transform: uppercase;
 }
 
 /* =========================================================

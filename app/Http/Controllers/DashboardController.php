@@ -42,9 +42,7 @@ class DashboardController extends Controller
 
             'productos' => Producto::where('activo', true)->count(),
 
-            'stock_bajo' => Producto::where('activo', true)
-                ->whereColumn('stock_actual', '<=', 'stock_minimo')
-                ->count(),
+            'stock_total' => Producto::sum('stock_actual'),
         ];
 
         /*
