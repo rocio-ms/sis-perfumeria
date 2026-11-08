@@ -26,8 +26,9 @@ const configuraciones = {
             ["codigo_producto", "Código interno o código de barras del producto", true],
             ["cantidad", "Unidades que ingresan", true],
             ["precio_compra", "Costo unitario", true],
-            ["precio_venta", "Precio de venta unitario", true],
-            ["tiene_descuento", "Sí/No; opcional, por defecto No", false],
+            ["porcentaje_ganancia", "Margen opcional; si se deja vacío, usa el margen predeterminado del sistema", false],
+            ["precio_venta", "Precio de venta unitario; se calcula automáticamente y puedes reemplazarlo", false],
+            ["tiene_descuento", "Sí/No; se activa automáticamente si descuento es mayor a cero", false],
             ["descuento", "Descuento unitario; opcional", false],
             ["fecha_vencimiento", "Fecha opcional (dd/mm/aaaa)", false],
             ["codigo_barras_lote", "Código de barras propio del lote; opcional", false],
@@ -54,6 +55,7 @@ const normalizarEncabezado = (valor) =>
 const descargarPlantilla = async () => {
     try {
         const libro = new ExcelJS.Workbook();
+        libro.calcProperties.fullCalcOnLoad = true;
         const hoja = libro.addWorksheet(configuracion.hoja);
         const encabezados = configuracion.columnas.map(([nombre]) => nombre);
 
@@ -75,12 +77,89 @@ const descargarPlantilla = async () => {
         }));
         hoja.getColumn(1).numFmt = "@";
 
+        if (props.tipo === "entrada") {
+            const columnaCodigo = hoja.getColumn(
+                encabezados.indexOf("codigo_producto") + 1,
+            ).letter;
+            const columnaCompra = hoja.getColumn(
+                encabezados.indexOf("precio_compra") + 1,
+            ).letter;
+            const columnaMargen = hoja.getColumn(
+                encabezados.indexOf("porcentaje_ganancia") + 1,
+            ).letter;
+            const columnaVenta = encabezados.indexOf("precio_venta") + 1;
+            const columnaDescuento = encabezados.indexOf("descuento") + 1;
+
+            for (let fila = 2; fila <= 501; fila += 1) {
+                hoja.getCell(fila, columnaVenta).value = {
+                    formula: `IF(OR(${columnaCodigo}${fila}="",${columnaCompra}${fila}=""),"",ROUND(${columnaCompra}${fila}*(1+IF(${columnaMargen}${fila}="",30,${columnaMargen}${fila})/100),0))`,
+                };
+            }
+
+            hoja.getColumn(columnaCompra).numFmt = "0.00";
+            hoja.getColumn(columnaMargen).numFmt = "0.##";
+            hoja.getColumn(columnaVenta).numFmt = "0.00";
+            hoja.getColumn(columnaDescuento).numFmt = "0.00";
+            hoja.getColumn(columnaVenta).eachCell((celda, numeroFila) => {
+                if (numeroFila > 1) {
+                    celda.fill = {
+                        type: "pattern",
+                        pattern: "solid",
+                        fgColor: { argb: "FFECFDF5" },
+                    };
+                }
+            });
+        }
+
         const instrucciones = libro.addWorksheet("Instrucciones");
+        instrucciones.addRow(["Guía rápida"]);
+        instrucciones.addRow([
+            props.tipo === "entrada"
+                ? "Completa una fila por producto. El precio de venta con fondo verde se calcula automáticamente."
+                : "Completa una fila por producto y lote.",
+        ]);
+        if (props.tipo === "entrada") {
+            instrucciones.addRow([
+                "Precio de venta: se calcula con el precio de compra y un margen de 30% cuando no indiques otro. Puedes escribir otro margen o reemplazar el precio calculado.",
+            ]);
+            instrucciones.addRow([
+                "Descuento: ingresa el monto unitario. Si es mayor a cero, se aplicará automáticamente al producto.",
+            ]);
+            instrucciones.addRow([
+                "Si dejas precio_venta vacío, el sistema calculará el precio usando el margen predeterminado del producto.",
+            ]);
+        }
+        const filaEncabezado = instrucciones.rowCount + 1;
         instrucciones.addRow(["Columna", "Uso", "Requerida"]);
         configuracion.columnas.forEach(([nombre, uso, requerida]) => {
             instrucciones.addRow([nombre, uso, requerida ? "Sí" : "No"]);
         });
-        instrucciones.getRow(1).font = { bold: true };
+        instrucciones.mergeCells("A1:C1");
+        instrucciones.getRow(1).font = {
+            bold: true,
+            size: 16,
+            color: { argb: "FF1E3A8A" },
+        };
+        instrucciones.getRow(2).height = 30;
+        for (let fila = 2; fila < filaEncabezado; fila += 1) {
+            instrucciones.mergeCells(`A${fila}:C${fila}`);
+            if (fila > 2) {
+                instrucciones.getRow(fila).height = 36;
+            }
+            instrucciones.getRow(fila).alignment = {
+                vertical: "middle",
+                wrapText: true,
+            };
+        }
+        instrucciones.getRow(filaEncabezado).font = {
+            bold: true,
+            color: { argb: "FFFFFFFF" },
+        };
+        instrucciones.getRow(filaEncabezado).fill = {
+            type: "pattern",
+            pattern: "solid",
+            fgColor: { argb: "FF2563EB" },
+        };
         instrucciones.columns = [
             { width: 26 },
             { width: 62 },
@@ -179,11 +258,18 @@ const leerArchivo = async (event) => {
                 const valor = columna ? fila.getCell(columna).value : null;
                 datos[nombre] =
                     valor && typeof valor === "object" && "result" in valor
-                        ? valor.result
+                        ? valor.result ?? null
                         : valor;
             });
 
-            if (Object.values(datos).some((valor) => valor !== null && valor !== "")) {
+            if (
+                Object.values(datos).some(
+                    (valor) =>
+                        valor !== null &&
+                        valor !== undefined &&
+                        valor !== "",
+                )
+            ) {
                 filas.push({ numero_fila: numeroFila, ...datos });
             }
         });
@@ -216,6 +302,9 @@ const leerArchivo = async (event) => {
             </p>
             <small class="text-blue-700">
                 La importación agrega productos al formulario; revisa los datos y guarda normalmente.
+            </small>
+            <small v-if="tipo === 'entrada'" class="mt-1 block text-blue-700">
+                El precio de venta se calcula desde el precio de compra. Un descuento mayor a cero se aplicará automáticamente.
             </small>
         </div>
         <input

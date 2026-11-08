@@ -652,32 +652,45 @@ const importarDetallesExcel = async (filas) => {
             const cantidad = valorNumericoExcel(fila.cantidad);
             const precioCompra = valorNumericoExcel(fila.precio_compra);
             const precioVenta = valorNumericoExcel(fila.precio_venta);
+            const margen = valorNumericoExcel(fila.porcentaje_ganancia);
             const descuento = valorNumericoExcel(fila.descuento) ?? 0;
             const tieneDescuento = ["si", "sí", "true", "1", "yes"].includes(
                 String(fila.tiene_descuento ?? "").trim().toLocaleLowerCase(),
             );
             const fechaVencimiento = fechaExcel(fila.fecha_vencimiento);
+            const precioVentaIngresado =
+                String(fila.precio_venta ?? "").trim() !== "";
+            const margenIngresado =
+                String(fila.porcentaje_ganancia ?? "").trim() !== "";
+            const descuentoIngresado =
+                String(fila.descuento ?? "").trim() !== "";
 
             if (!codigo || !Number.isInteger(cantidad) || cantidad < 1) {
                 errores.push(`Fila ${fila.numero_fila}: código y cantidad entera mayor a cero son obligatorios.`);
                 return;
             }
 
-            if (
-                precioCompra === null ||
-                precioCompra < 0 ||
-                precioVenta === null ||
-                precioVenta < 0
-            ) {
-                errores.push(`Fila ${fila.numero_fila}: precio de compra y precio de venta deben ser números iguales o mayores a cero.`);
+            if (precioCompra === null || precioCompra < 0) {
+                errores.push(`Fila ${fila.numero_fila}: el precio de compra debe ser un número igual o mayor a cero.`);
                 return;
             }
 
             if (
-                descuento < 0 ||
-                (tieneDescuento && descuento > precioVenta)
+                (precioVentaIngresado &&
+                    (precioVenta === null || precioVenta < 0)) ||
+                (margenIngresado &&
+                    (margen === null || margen < 0 || margen > 100))
             ) {
-                errores.push(`Fila ${fila.numero_fila}: el descuento debe estar entre cero y el precio de venta.`);
+                errores.push(`Fila ${fila.numero_fila}: el precio de venta debe ser válido y el margen debe estar entre 0 y 100.`);
+                return;
+            }
+
+            if (
+                (descuentoIngresado &&
+                    valorNumericoExcel(fila.descuento) === null) ||
+                descuento < 0
+            ) {
+                errores.push(`Fila ${fila.numero_fila}: el descuento debe ser un número igual o mayor a cero.`);
                 return;
             }
 
@@ -701,8 +714,9 @@ const importarDetallesExcel = async (filas) => {
                 cantidad,
                 precio_compra: precioCompra,
                 precio_venta: precioVenta,
-                tiene_descuento: tieneDescuento,
-                descuento: tieneDescuento ? descuento : 0,
+                porcentaje_ganancia: margen,
+                tiene_descuento: tieneDescuento || descuento > 0,
+                descuento,
                 fecha_vencimiento: fechaVencimiento,
             });
         });
@@ -771,21 +785,34 @@ const importarDetallesExcel = async (filas) => {
             return;
         }
 
-        filasValidas.forEach((fila) => {
+        const detallesImportados = filasValidas.map((fila) => {
             const producto =
                 productoPorCodigo.get(fila.codigo) ??
                 productoPorCodigoNumerico.get(
                     fila.codigo.replace(/^0+(?=\d)/, ""),
                 );
+            const porcentaje =
+                fila.porcentaje_ganancia ?? porcentajePorDefecto(producto);
+            const precioVenta =
+                fila.precio_venta ??
+                Math.round(
+                    fila.precio_compra * (1 + porcentaje / 100),
+                );
+
+            if (fila.descuento > precioVenta) {
+                errores.push(`Fila ${fila.numero_fila}: el descuento no puede ser mayor al precio de venta (${precioVenta}).`);
+                return null;
+            }
+
             const subtotal = Math.round(fila.cantidad * fila.precio_compra * 100) / 100;
 
-            form.detalles.push({
+            return {
                 producto_id: producto.id,
                 producto,
                 cantidad: fila.cantidad,
                 precio_compra: fila.precio_compra,
-                precio_venta: fila.precio_venta,
-                porcentaje_ganancia: porcentajePorDefecto(producto),
+                precio_venta: precioVenta,
+                porcentaje_ganancia: porcentaje,
                 tiene_descuento: fila.tiene_descuento,
                 descuento: fila.descuento,
                 subtotal,
@@ -794,8 +821,25 @@ const importarDetallesExcel = async (filas) => {
                 codigo_barras_lote: String(
                     fila.codigo_barras_lote ?? "",
                 ).trim(),
-            });
+            };
         });
+
+        if (errores.length) {
+            await Swal.fire({
+                title: "Revisa las filas del Excel",
+                text: [
+                    ...errores.slice(0, 12),
+                    ...(errores.length > 12
+                        ? [`Y ${errores.length - 12} errores más.`]
+                        : []),
+                ].join("\n"),
+                icon: "warning",
+                confirmButtonText: "Aceptar",
+            });
+            return;
+        }
+
+        form.detalles.push(...detallesImportados.filter(Boolean));
 
         await Swal.fire({
             title: "Excel importado",
