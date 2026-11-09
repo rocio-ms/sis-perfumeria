@@ -1,5 +1,5 @@
 <script setup>
-import { computed, ref, watch } from "vue";
+import { computed, onBeforeUnmount, ref, watch } from "vue";
 import { router, useForm } from "@inertiajs/vue3";
 import axios from "axios";
 import Swal from "sweetalert2";
@@ -67,6 +67,50 @@ const buscandoProducto = ref(false);
 const importandoExcel = ref(false);
 
 let temporizadorBusqueda = null;
+
+onBeforeUnmount(() => clearTimeout(temporizadorBusqueda));
+
+const parsearFechaLocal = (fecha) => {
+    if (fecha instanceof Date) {
+        return fecha;
+    }
+
+    if (typeof fecha === "string") {
+        const partes = /^(\d{4})-(\d{2})-(\d{2})/.exec(fecha);
+
+        if (partes) {
+            return new Date(
+                Number(partes[1]),
+                Number(partes[2]) - 1,
+                Number(partes[3]),
+            );
+        }
+    }
+
+    return new Date(fecha);
+};
+
+const formatearFechaLocal = (fecha) => {
+    const date = parsearFechaLocal(fecha);
+
+    if (Number.isNaN(date.getTime())) {
+        return "";
+    }
+
+    const year = date.getFullYear();
+    const month = String(date.getMonth() + 1).padStart(2, "0");
+    const day = String(date.getDate()).padStart(2, "0");
+
+    return `${year}-${month}-${day}`;
+};
+
+const mostrarFecha = (fecha) => {
+    const date = parsearFechaLocal(fecha);
+
+    return Number.isNaN(date.getTime())
+        ? ""
+        : date.toLocaleDateString("es-PE");
+};
 
 /*
 |--------------------------------------------------------------------------
@@ -871,7 +915,7 @@ watch(
             form.tipo_salida = salida.tipo_salida ?? null;
 
             form.fecha_salida = salida.fecha_salida
-                ? new Date(salida.fecha_salida)
+                ? parsearFechaLocal(salida.fecha_salida)
                 : new Date();
 
             form.observacion = salida.observacion ?? "";
@@ -958,21 +1002,20 @@ const guardar = () => {
 
     calcularTotal();
 
-    form.post(route("salidas.store"), {
+    form.transform((data) => ({
+        tipo_salida: data.tipo_salida,
+        fecha_salida: formatearFechaLocal(data.fecha_salida),
+        observacion: data.observacion,
+        detalles: data.detalles.map((detalle) => ({
+            producto_id: detalle.producto_id,
+            lote_id: detalle.lote_id,
+            cantidad: detalle.cantidad,
+            costo_unitario: detalle.costo_unitario,
+            precio_unitario: detalle.precio_unitario,
+        })),
+    })).post(route("salidas.store"), {
         preserveScroll: true,
-
-        onSuccess: async () => {
-            emit("saved", "guardado");
-
-            await Swal.fire({
-                title: "¡Salida registrada!",
-                text: "La salida de inventario fue registrada correctamente.",
-                icon: "success",
-                confirmButtonText: "Aceptar",
-            });
-
-            limpiarFormulario();
-        },
+        onSuccess: () => emit("saved", "guardado"),
     });
 };
 
@@ -1111,11 +1154,7 @@ const nombreTipoSalida = (tipo) => {
                             <InputText
                                 id="fecha_salida"
                                 :modelValue="
-                                    form.fecha_salida
-                                        ? new Date(
-                                              form.fecha_salida,
-                                          ).toLocaleDateString('es-PE')
-                                        : ''
+                                    mostrarFecha(form.fecha_salida)
                                 "
                                 class="w-full"
                                 disabled
@@ -1182,6 +1221,14 @@ const nombreTipoSalida = (tipo) => {
                     :disabled="importandoExcel"
                     @imported="importarDetallesExcel"
                 />
+
+                <small
+                    v-if="form.errors.detalles"
+                    class="mb-4 block text-red-500"
+                    role="alert"
+                >
+                    {{ form.errors.detalles }}
+                </small>
 
                 <!-- ================================================= -->
                 <!-- AUTOCOMPLETE PRODUCTO -->
@@ -1504,11 +1551,7 @@ const nombreTipoSalida = (tipo) => {
                                     <div class="font-medium">
                                         {{
                                             detalle.producto?.nombre ??
-                                            productosDisponibles.find(
-                                                (p) =>
-                                                    Number(p.id) ===
-                                                    Number(detalle.producto_id),
-                                            )?.nombre ??
+                                            detalle.producto?.nombre ??
                                             "Producto"
                                         }}
                                     </div>
@@ -1517,11 +1560,7 @@ const nombreTipoSalida = (tipo) => {
                                         Código:
                                         {{
                                             detalle.producto?.codigo ??
-                                            productosDisponibles.find(
-                                                (p) =>
-                                                    Number(p.id) ===
-                                                    Number(detalle.producto_id),
-                                            )?.codigo ??
+                                            detalle.producto?.codigo ??
                                             "---"
                                         }}
                                     </small>

@@ -1,6 +1,5 @@
 <script setup>
 import { computed } from "vue";
-import { router } from "@inertiajs/vue3";
 
 import Card from "primevue/card";
 
@@ -170,14 +169,6 @@ const precioFinal = (detalle) => {
 | Navegación
 |--------------------------------------------------------------------------
 */
-
-const volver = () => {
-    router.visit(route("entradas.index"));
-};
-
-const editar = () => {
-    router.visit(route("entradas.edit", props.entrada.id));
-};
 
 const cerrar = () => {
     emit("update:visible", false);

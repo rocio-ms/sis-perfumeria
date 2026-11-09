@@ -1140,6 +1140,23 @@ const guardar = () => {
                 confirmButtonText: "Aceptar",
             });
         },
+
+        onError: (errors) => {
+            const primerError = Object.values(errors)
+                .flat()
+                .find((error) => typeof error === "string");
+
+            Swal.fire({
+                title: esEdicion.value
+                    ? "No se pudo actualizar"
+                    : "No se pudo guardar",
+                text:
+                    primerError ??
+                    "Revisa los datos ingresados e inténtalo nuevamente.",
+                icon: "error",
+                confirmButtonText: "Aceptar",
+            });
+        },
     };
 
     if (esEdicion.value) {

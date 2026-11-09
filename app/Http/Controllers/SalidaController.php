@@ -13,6 +13,8 @@ use App\Models\Lote;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\Rule;
+use Illuminate\Validation\ValidationException;
+use Illuminate\Support\Str;
 use Inertia\Inertia;
 
 class SalidaController extends Controller
@@ -36,7 +38,7 @@ class SalidaController extends Controller
                     'codigo_salida',
                     'fecha_salida',
                     'tipo_salida',
-                    'cliente.nombre',
+                    'cliente.nombre_completo',
                     'total',
                 ]),
             ],
@@ -138,9 +140,11 @@ class SalidaController extends Controller
             $salidasQuery->whereDate('fecha_salida', '<=', $validated['fecha_hasta']);
         }
 
-        if ($sort === 'cliente.nombre') {
+        if ($sort === 'cliente.nombre_completo') {
             $salidasQuery->orderBy(
-                Cliente::select('razon_social_nombre')
+                Cliente::selectRaw(
+                    "CASE WHEN tipo_documento = 'RUC' THEN razon_social_nombre ELSE nombres END"
+                )
                     ->whereColumn('clientes.id', 'salidas.cliente_id'),
                 $direction,
             );
@@ -240,114 +244,136 @@ class SalidaController extends Controller
         ]);
 
         DB::transaction(function () use ($validated, $request) {
+            $detalles = collect($validated['detalles']);
+            $productoIds = $detalles->pluck('producto_id')->unique()->sort()->values();
+            $loteIds = $detalles->pluck('lote_id')->unique()->sort()->values();
 
-            $total = 0;
+            $productos = Producto::whereIn('id', $productoIds)
+                ->orderBy('id')
+                ->lockForUpdate()
+                ->get()
+                ->keyBy('id');
+            $lotes = Lote::with('detalleEntrada')
+                ->whereIn('id', $loteIds)
+                ->orderBy('id')
+                ->lockForUpdate()
+                ->get()
+                ->keyBy('id');
 
-            foreach ($validated['detalles'] as $detalle) {
-                $subtotal =
-                    $detalle['cantidad'] *
-                    $detalle['costo_unitario'];
-
-                $total += $subtotal;
+            if ($productos->count() !== $productoIds->count() || $lotes->count() !== $loteIds->count()) {
+                throw ValidationException::withMessages([
+                    'detalles' => 'Uno o más productos o lotes ya no están disponibles. Actualiza la página e inténtalo nuevamente.',
+                ]);
             }
 
-            //Generar código de salida
+            $cantidadesPorProducto = $detalles->groupBy('producto_id')
+                ->map(fn ($items) => $items->sum('cantidad'));
+            $cantidadesPorLote = $detalles->groupBy('lote_id')
+                ->map(fn ($items) => $items->sum('cantidad'));
 
-            $ultimaSalida = Salida::orderByDesc('id')->first();
+            foreach ($cantidadesPorProducto as $productoId => $cantidadSolicitada) {
+                $producto = $productos->get($productoId);
 
-            $siguienteNumero = $ultimaSalida
-                ? $ultimaSalida->id + 1
-                : 1;
+                if (!$producto->activo) {
+                    throw ValidationException::withMessages([
+                        'detalles' => "El producto {$producto->nombre} está inactivo y no puede salir del inventario.",
+                    ]);
+                }
 
-            $codigoSalida = 'SAL-' . str_pad(
-                $siguienteNumero,
-                6,
-                '0',
-                STR_PAD_LEFT
-            );
+                if ($producto->stock_actual < $cantidadSolicitada) {
+                    throw ValidationException::withMessages([
+                        'detalles' => "Stock insuficiente para {$producto->nombre}. Disponible: {$producto->stock_actual}.",
+                    ]);
+                }
+            }
+
+            foreach ($detalles as $detalle) {
+                $lote = $lotes->get($detalle['lote_id']);
+                $detalleEntrada = $lote->detalleEntrada;
+
+                if (!$detalleEntrada || (int) $detalleEntrada->producto_id !== (int) $detalle['producto_id']) {
+                    throw ValidationException::withMessages([
+                        'detalles' => 'Uno de los lotes seleccionados no pertenece al producto indicado.',
+                    ]);
+                }
+            }
+
+            foreach ($cantidadesPorLote as $loteId => $cantidadSolicitada) {
+                $lote = $lotes->get($loteId);
+                if ($lote->cantidad_actual < $cantidadSolicitada) {
+                    throw ValidationException::withMessages([
+                        'detalles' => "Stock insuficiente en el lote {$lote->numero_lote}. Disponible: {$lote->cantidad_actual}.",
+                    ]);
+                }
+            }
+
+            $tipoMovimiento = TipoMovimiento::where('tipo', 'salida')->first();
+            if (!$tipoMovimiento) {
+                throw ValidationException::withMessages([
+                    'detalles' => 'No está configurado el tipo de movimiento de salida.',
+                ]);
+            }
 
             $salida = Salida::create([
-                'codigo_salida' => $codigoSalida,
+                'codigo_salida' => 'T-' . Str::random(16),
                 'tipo_salida' => $validated['tipo_salida'],
                 'fecha_salida' => $validated['fecha_salida'],
                 'cliente_id' => $validated['cliente_id'] ?? null,
                 'observacion' => $validated['observacion'] ?? null,
-                'total' => $total,
+                'total' => 0,
                 'user_id' => $request->user()->id,
             ]);
 
-            $tipoMovimiento = TipoMovimiento::where('tipo', 'salida')->firstOrFail();
+            $salida->update([
+                'codigo_salida' => 'SAL-' . str_pad(
+                    $salida->id,
+                    6,
+                    '0',
+                    STR_PAD_LEFT,
+                ),
+            ]);
 
-            foreach ($validated['detalles'] as $detalle) {
+            $total = 0;
 
-                $lote = Lote::findOrFail($detalle['lote_id']);
+            foreach ($detalles as $detalle) {
+                $lote = $lotes->get($detalle['lote_id']);
+                $producto = $productos->get($detalle['producto_id']);
+                $cantidad = (int) $detalle['cantidad'];
+                $costoUnitario = (float) $lote->detalleEntrada->precio_compra;
+                $precioUnitario = (float) $lote->detalleEntrada->precio_venta;
+                $subtotal = round($cantidad * $costoUnitario, 2);
+                $total = round($total + $subtotal, 2);
 
-                $producto = Producto::findOrFail(
-                    $detalle['producto_id']
-                );
-
-                // Validar stock del lote
-                if ($lote->cantidad_actual < $detalle['cantidad']) {
-                    throw new \Exception(
-                        "El lote {$lote->numero_lote} no tiene suficiente stock."
-                    );
-                }
-
-                // Validar stock del producto
-                if ($producto->stock_actual < $detalle['cantidad']) {
-                    throw new \Exception(
-                        "El producto {$producto->nombre} no tiene suficiente stock."
-                    );
-                }
-
-                $stockAnterior = $producto->stock_actual;
-                $subtotal = $detalle['cantidad'] * $detalle['costo_unitario'];
-
-                // Crear detalle
                 DetalleSalida::create([
                     'salida_id' => $salida->id,
                     'producto_id' => $producto->id,
                     'lote_id' => $lote->id,
-                    'cantidad' => $detalle['cantidad'],
-                    'costo_unitario' => $detalle['costo_unitario'],
-                    'precio_unitario' => $detalle['precio_unitario'],
+                    'cantidad' => $cantidad,
+                    'costo_unitario' => $costoUnitario,
+                    'precio_unitario' => $precioUnitario,
                     'subtotal' => $subtotal,
                 ]);
 
-                // Descontar lote
-                $lote->decrement(
-                    'cantidad_actual',
-                    $detalle['cantidad']
-                );
+                $lote->decrement('cantidad_actual', $cantidad);
+                $producto->decrement('stock_actual', $cantidad);
 
-                // Descontar stock general
-                $producto->decrement(
-                    'stock_actual',
-                    $detalle['cantidad']
-                );
-
-                $stockNuevo =
-                    $stockAnterior - $detalle['cantidad'];
-
-                // Registrar Kardex
                 Kardex::create([
                     'producto_id' => $producto->id,
                     'lote_id' => $lote->id,
                     'tipo_movimiento_id' => $tipoMovimiento->id,
-                    'entrada_id' => null,
                     'salida_id' => $salida->id,
-                    'venta_id' => null,
                     'user_id' => $request->user()->id,
                     'fecha_movimiento' => $validated['fecha_salida'],
-                    'cantidad' => $detalle['cantidad'],
-                    'stock_anterior' => $stockAnterior,
-                    'stock_nuevo' => $stockNuevo,
-                    'saldo_cantidad' => $stockNuevo,
-                    'costo_unitario' => $detalle['costo_unitario'],
-                    'costo_total' => $detalle['cantidad'] * $detalle['costo_unitario'],
-                    'saldo_costo_unitario' => $detalle['costo_unitario'],
+                    'cantidad' => -$cantidad,
+                    'observacion' => 'Salida ' . $salida->codigo_salida,
+                    'saldo_cantidad' => $producto->stock_actual,
+                    'costo_unitario' => $costoUnitario,
+                    'costo_total' => $subtotal,
+                    'saldo_costo_unitario' => $costoUnitario,
                 ]);
             }
+
+            $salida->update(['total' => $total]);
         });
 
         return redirect()

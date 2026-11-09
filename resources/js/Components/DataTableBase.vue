@@ -52,6 +52,10 @@ const props = defineProps({
         type: Object,
         default: () => ({}),
     },
+    waitForCompleteDateRange: {
+        type: Boolean,
+        default: false,
+    },
     searchPlaceholder: {
         type: String,
         default: "Buscar...",
@@ -224,10 +228,12 @@ const inicializarFiltros = () => {
             const valorInicial = props.serverFilters[columna.field] ?? null;
             nuevosFiltros[columna.field] = {
                 value:
-                    columna.type === "date" && Array.isArray(valorInicial)
-                        ? valorInicial.map((fecha) =>
-                              fecha ? new Date(`${fecha}T00:00:00`) : null,
-                          )
+                    columna.type === "date"
+                        ? Array.isArray(valorInicial)
+                            ? valorInicial.map((fecha) =>
+                                  fecha ? new Date(`${fecha}T00:00:00`) : null,
+                              )
+                            : [null, null]
                         : valorInicial,
             };
         }
@@ -271,6 +277,27 @@ watch(
         }
 
         clearTimeout(temporizadorBusqueda);
+
+        if (props.waitForCompleteDateRange) {
+            const rangoFechaIncompleto = props.columns.some((columna) => {
+                if (!columna.filter || columna.type !== "date") {
+                    return false;
+                }
+
+                const rango = filtros.value[columna.field]?.value;
+
+                return (
+                    Array.isArray(rango) &&
+                    rango.some(Boolean) &&
+                    (!rango[0] || !rango[1])
+                );
+            });
+
+            if (rangoFechaIncompleto) {
+                return;
+            }
+        }
+
         temporizadorBusqueda = setTimeout(() => emitirConsultaServidor(), 300);
     },
     { deep: true },
@@ -512,6 +539,22 @@ const formatearMoneda = (valor) => {
 const formatearFecha = (valor) => {
     if (!valor) {
         return "—";
+    }
+
+    const fechaSolo = typeof valor === "string"
+        ? /^(\d{4})-(\d{2})-(\d{2})(?:$|T00:00:00(?:\.0+)?Z$)/.exec(valor)
+        : null;
+
+    if (fechaSolo) {
+        return new Date(
+            Number(fechaSolo[1]),
+            Number(fechaSolo[2]) - 1,
+            Number(fechaSolo[3]),
+        ).toLocaleDateString("es-PE", {
+            day: "2-digit",
+            month: "2-digit",
+            year: "numeric",
+        });
     }
 
     const fecha = new Date(valor);
@@ -770,22 +813,51 @@ const estadoTag = (valor, columna) => {
                     <!-- FILTRO FECHA -->
                     <!-- ================================================= -->
 
-                    <div v-if="columna.filter && columna.type === 'date'">
+                    <div
+                        v-if="columna.filter && columna.type === 'date'"
+                        class="md:col-span-2"
+                    >
                         <label
                             class="block text-sm font-medium text-gray-600 mb-1.5"
                         >
                             {{ columna.header }}
                         </label>
 
-                        <DatePicker
-                            v-model="filtros[columna.field].value"
-                            selectionMode="range"
-                            dateFormat="dd/mm/yy"
-                            placeholder="Seleccionar rango"
-                            showIcon
-                            :manualInput="false"
-                            class="w-full"
-                        />
+                        <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                            <div>
+                                <label
+                                    class="block text-xs font-medium text-gray-500 mb-1"
+                                >
+                                    Fecha inicio
+                                </label>
+
+                                <DatePicker
+                                    v-model="filtros[columna.field].value[0]"
+                                    dateFormat="dd/mm/yy"
+                                    placeholder="Fecha inicio"
+                                    showIcon
+                                    :manualInput="false"
+                                    class="w-full"
+                                />
+                            </div>
+
+                            <div>
+                                <label
+                                    class="block text-xs font-medium text-gray-500 mb-1"
+                                >
+                                    Fecha fin
+                                </label>
+
+                                <DatePicker
+                                    v-model="filtros[columna.field].value[1]"
+                                    dateFormat="dd/mm/yy"
+                                    placeholder="Fecha fin"
+                                    showIcon
+                                    :manualInput="false"
+                                    class="w-full"
+                                />
+                            </div>
+                        </div>
                     </div>
                 </template>
             </div>

@@ -152,11 +152,6 @@ const abrirForm = () => {
     console.log("3. MOSTRAR FORM:", mostrarForm.value);
 };
 
-const editarEntrada = (entrada) => {
-    entradaSeleccionada.value = entrada;
-    mostrarForm.value = true;
-};
-
 const verEntrada = (entrada) => {
     entradaSeleccionada.value = entrada;
     mostrarShow.value = true;
@@ -230,15 +225,15 @@ const cerrarForm = () => {
                     :current-page="props.entradas.current_page"
                     :rows="props.entradas.per_page"
                     :server-filters="props.filtros"
+                    wait-for-complete-date-range
                     :loading="cargandoEntradas"
                     titleButton="Nueva entrada"
                     :show-view="true"
-                    :show-edit="true"
+                    :show-edit="false"
                     :show-delete="false"
                     :show-filters="true"
                     :mostrarCrear="true"
                     @nuevo="abrirForm"
-                    @editar="editarEntrada"
                     @ver="verEntrada"
                     @server-query="buscarEntradas"
                 />

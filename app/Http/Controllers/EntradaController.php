@@ -17,6 +17,7 @@ use App\Models\Empresa;
 use App\Models\Subcategoria;
 use Illuminate\Http\Request;
 use Illuminate\Validation\Rule;
+use Illuminate\Validation\ValidationException;
 use Illuminate\Support\Facades\DB;
 use Inertia\Inertia;
 use Carbon\Carbon;
@@ -785,6 +786,12 @@ class EntradaController extends Controller
 
 
         DB::transaction(function () use ($validated, $entrada) {
+
+            if ($entrada->detalles()->whereHas('lotes.kardexs')->exists()) {
+                throw ValidationException::withMessages([
+                    'detalles' => 'No se puede editar esta entrada porque sus lotes ya tienen movimientos en el Kardex. El historial de inventario debe conservarse.',
+                ]);
+            }
 
             /*
             |--------------------------------------------------------------------------

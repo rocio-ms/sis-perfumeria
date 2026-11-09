@@ -83,6 +83,7 @@ const columns = [
         header: "Tipo de salida",
         type: "salida",
         filter: true,
+        filterType: "select",
         filterOptions: [
             {
                 label: "Venta Automática",
@@ -107,7 +108,7 @@ const columns = [
     },
 
     {
-        field: "cliente.nombre",
+        field: "cliente.nombre_completo",
         header: "Cliente / Destino",
     },
 
