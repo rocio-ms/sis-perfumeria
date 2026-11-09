@@ -626,6 +626,9 @@ const totalVenta = computed(() => {
 }
 
 .products-table th {
+    position: static;
+    top: auto;
+    z-index: auto;
     padding: 11px 14px;
     background: #f8f6f8;
     color: #6b6470;
