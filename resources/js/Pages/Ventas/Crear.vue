@@ -55,6 +55,9 @@ const props = defineProps({
 
 const busqueda = ref("");
 const categoriaSeleccionada = ref(null);
+const categoriaScroller = ref(null);
+const puedeDesplazarCategoriasIzquierda = ref(false);
+const puedeDesplazarCategoriasDerecha = ref(false);
 const inputBusqueda = ref(null);
 const productosBuscados = ref(props.productos);
 const buscandoProductos = ref(false);
@@ -63,6 +66,7 @@ const errorBusqueda = ref("");
 let temporizadorBusqueda = null;
 let controladorBusqueda = null;
 let busquedaPendiente = 0;
+let observadorCategorias = null;
 
 /*
 |--------------------------------------------------------------------------
@@ -112,6 +116,27 @@ const productosFiltrados = computed(() => {
             Number(categoriaSeleccionada.value),
     );
 });
+
+const actualizarDesplazamientoCategorias = () => {
+    const scroller = categoriaScroller.value;
+
+    if (!scroller) return;
+
+    puedeDesplazarCategoriasIzquierda.value = scroller.scrollLeft > 1;
+    puedeDesplazarCategoriasDerecha.value =
+        scroller.scrollLeft + scroller.clientWidth < scroller.scrollWidth - 1;
+};
+
+const desplazarCategorias = (direccion) => {
+    const scroller = categoriaScroller.value;
+
+    if (!scroller) return;
+
+    scroller.scrollBy({
+        left: direccion * Math.max(scroller.clientWidth * 0.7, 160),
+        behavior: "smooth",
+    });
+};
 
 const solicitarProductos = async (texto = "", categoriaId = null) => {
     controladorBusqueda?.abort();
@@ -191,6 +216,8 @@ watch(categoriaSeleccionada, (categoriaId) => {
 onBeforeUnmount(() => {
     clearTimeout(temporizadorBusqueda);
     controladorBusqueda?.abort();
+    window.removeEventListener("resize", actualizarDesplazamientoCategorias);
+    observadorCategorias?.disconnect();
 });
 
 /*
@@ -638,6 +665,21 @@ const procesarVenta = (datosPago) => {
 };
 
 onMounted(() => {
+    nextTick(() => {
+        actualizarDesplazamientoCategorias();
+
+        if (typeof ResizeObserver === "undefined" || !categoriaScroller.value) {
+            return;
+        }
+
+        observadorCategorias = new ResizeObserver(
+            actualizarDesplazamientoCategorias,
+        );
+        observadorCategorias.observe(categoriaScroller.value);
+        observadorCategorias.observe(categoriaScroller.value.firstElementChild);
+    });
+    window.addEventListener("resize", actualizarDesplazamientoCategorias);
+
     if (!props.cajaAbierta) {
         Swal.fire({
             icon: "warning",
@@ -663,44 +705,80 @@ onMounted(() => {
                 <div
                     class="flex flex-col md:flex-row justify-between items-start md:items-center gap-2 mb-2"
                 >
-                    <div>
-                        <div
-                            class="flex max-w-full gap-2 overflow-x-auto pb-2"
-                            role="group"
-                            aria-label="Filtrar productos por categoría"
-                        >
+                    <div class="min-w-0 w-full">
+                        <div class="category-filter">
                             <Button
-                                label="Todas"
+                                icon="pi pi-chevron-left"
+                                rounded
+                                outlined
                                 size="small"
-                                :outlined="categoriaSeleccionada !== null"
-                                :class="
-                                    categoriaSeleccionada === null
-                                        ? '!bg-[#7F1D3F] !border-[#7F1D3F] !text-white'
-                                        : '!border-[#E8C8D2] !text-gray-700'
-                                "
-                                :aria-pressed="categoriaSeleccionada === null"
-                                @click="categoriaSeleccionada = null"
+                                class="category-scroll-button"
+                                aria-label="Desplazar categorías a la izquierda"
+                                :disabled="!puedeDesplazarCategoriasIzquierda"
+                                @click="desplazarCategorias(-1)"
                             />
+
+                            <div
+                                ref="categoriaScroller"
+                                class="category-scroller"
+                                @scroll="actualizarDesplazamientoCategorias"
+                            >
+                                <div
+                                    class="category-list"
+                                    role="group"
+                                    aria-label="Filtrar productos por categoría"
+                                >
+                                    <Button
+                                        label="Todas"
+                                        size="small"
+                                        :outlined="
+                                            categoriaSeleccionada !== null
+                                        "
+                                        :class="
+                                            categoriaSeleccionada === null
+                                                ? '!bg-[#7F1D3F] !border-[#7F1D3F] !text-white'
+                                                : '!border-[#E8C8D2] !text-gray-700'
+                                        "
+                                        :aria-pressed="
+                                            categoriaSeleccionada === null
+                                        "
+                                        @click="categoriaSeleccionada = null"
+                                    />
+                                    <Button
+                                        v-for="categoria in categorias"
+                                        :key="categoria.id"
+                                        :label="categoria.nombre"
+                                        size="small"
+                                        :outlined="
+                                            Number(categoriaSeleccionada) !==
+                                            Number(categoria.id)
+                                        "
+                                        :class="
+                                            Number(categoriaSeleccionada) ===
+                                            Number(categoria.id)
+                                                ? '!bg-[#7F1D3F] !border-[#7F1D3F] !text-white'
+                                                : '!border-[#E8C8D2] !text-gray-700'
+                                        "
+                                        :aria-pressed="
+                                            Number(categoriaSeleccionada) ===
+                                            Number(categoria.id)
+                                        "
+                                        @click="
+                                            categoriaSeleccionada = categoria.id
+                                        "
+                                    />
+                                </div>
+                            </div>
+
                             <Button
-                                v-for="categoria in categorias"
-                                :key="categoria.id"
-                                :label="categoria.nombre"
+                                icon="pi pi-chevron-right"
+                                rounded
+                                outlined
                                 size="small"
-                                :outlined="
-                                    Number(categoriaSeleccionada) !==
-                                    Number(categoria.id)
-                                "
-                                :class="
-                                    Number(categoriaSeleccionada) ===
-                                    Number(categoria.id)
-                                        ? '!bg-[#7F1D3F] !border-[#7F1D3F] !text-white'
-                                        : '!border-[#E8C8D2] !text-gray-700'
-                                "
-                                :aria-pressed="
-                                    Number(categoriaSeleccionada) ===
-                                    Number(categoria.id)
-                                "
-                                @click="categoriaSeleccionada = categoria.id"
+                                class="category-scroll-button"
+                                aria-label="Desplazar categorías a la derecha"
+                                :disabled="!puedeDesplazarCategoriasDerecha"
+                                @click="desplazarCategorias(1)"
                             />
                         </div>
                         <h1 class="text-2xl font-bold text-gray-800 my-2">
@@ -1319,6 +1397,47 @@ onMounted(() => {
 </template>
 
 <style scoped>
+.category-filter {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    width: 100%;
+    max-width: none;
+    min-width: 0;
+}
+
+.category-scroll-button {
+    flex: 0 0 auto;
+}
+
+.category-scroller {
+    flex: 1 1 0;
+    min-width: 0;
+    overflow-x: auto;
+    overflow-y: hidden;
+    overscroll-behavior-x: contain;
+    scrollbar-width: none;
+    scroll-behavior: smooth;
+}
+
+.category-scroller::-webkit-scrollbar {
+    display: none;
+}
+
+.category-list {
+    display: flex;
+    width: max-content;
+    min-width: 100%;
+    align-items: center;
+    gap: 8px;
+    padding: 2px 1px 8px;
+}
+
+.category-list :deep(.p-button) {
+    flex: 0 0 auto;
+    white-space: nowrap;
+}
+
 .ventas-page :deep(.p-card-body) {
     padding: 10px;
 }

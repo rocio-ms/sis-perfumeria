@@ -1,5 +1,5 @@
 <script setup>
-import { computed, ref, watch } from "vue";
+import { computed, nextTick, ref, watch } from "vue";
 import { router, useForm } from "@inertiajs/vue3";
 import axios from "axios";
 
@@ -84,13 +84,14 @@ const form = useForm({
 const tieneProveedor = ref(false);
 
 const productoBusqueda = ref(null);
+const productoAutocomplete = ref(null);
 
 const productosFiltrados = ref([]);
 
 const buscandoProducto = ref(false);
-const codigoEscaner = ref("");
 const escaneandoProducto = ref(false);
 const codigoBarrasProductoPendiente = ref("");
+const codigoBarrasLotePendiente = ref("");
 const importandoExcel = ref(false);
 
 /*
@@ -234,9 +235,8 @@ const productoGuardado = async (producto) => {
     if (producto && typeof producto === "object") {
         const productoNuevo = producto.producto ?? producto;
 
-        productoBusqueda.value = productoNuevo;
-
-        agregarProducto(productoNuevo);
+        codigoBarrasProductoPendiente.value = "";
+        seleccionarProducto(productoNuevo);
     } else if (codigoBarrasProductoPendiente.value) {
         try {
             const { data } = await axios.get(
@@ -340,8 +340,8 @@ const limpiarFormulario = () => {
     tieneProveedor.value = false;
     productoBusqueda.value = null;
     productosFiltrados.value = [];
-    codigoEscaner.value = "";
     codigoBarrasProductoPendiente.value = "";
+    codigoBarrasLotePendiente.value = "";
 };
 
 watch(
@@ -474,13 +474,24 @@ const buscarProducto = (event) => {
     }, 150);
 };
 
+const enfocarAutocompleteProducto = () => {
+    productoAutocomplete.value?.$el?.querySelector("input")?.focus();
+};
+
 const escanearProducto = async () => {
-    const codigo = String(codigoEscaner.value ?? "").trim();
+    await Promise.resolve();
+
+    if (typeof productoBusqueda.value !== "string") {
+        return;
+    }
+
+    const codigo = productoBusqueda.value.trim();
 
     if (!codigo || escaneandoProducto.value) {
         return;
     }
 
+    codigoBarrasLotePendiente.value = "";
     escaneandoProducto.value = true;
 
     try {
@@ -493,28 +504,41 @@ const escanearProducto = async () => {
             },
         );
 
-        codigoEscaner.value = "";
-
         if (data.producto) {
+            productoBusqueda.value = null;
             agregarProducto(data.producto);
+            escaneandoProducto.value = false;
+            await nextTick();
+            enfocarAutocompleteProducto();
             return;
         }
 
+        codigoBarrasLotePendiente.value = codigo;
+        productoBusqueda.value = null;
+
         const resultado = await Swal.fire({
-            title: "Producto no encontrado",
-            text: "Búsquelo por nombre o regístrelo como nuevo producto. Después podrá ingresar el código del lote en la entrada.",
+            title: "Producto no registrado",
+            text: "Producto no registrado, puede buscarlo manualmente o agregarlo como nuevo",
             icon: "warning",
+            showDenyButton: true,
             showCancelButton: true,
-            confirmButtonText: "Añadir nuevo producto",
-            cancelButtonText: "Buscar por nombre",
+            confirmButtonText: "Buscar por nombre",
+            denyButtonText: "Agregar como nuevo",
+            cancelButtonText: "Ahora no",
             reverseButtons: true,
         });
 
         if (resultado.isConfirmed) {
+            escaneandoProducto.value = false;
+            await nextTick();
+            enfocarAutocompleteProducto();
+        } else if (resultado.isDenied) {
+            escaneandoProducto.value = false;
+            codigoBarrasLotePendiente.value = "";
             codigoBarrasProductoPendiente.value = codigo;
             mostrarProductoForm.value = true;
-        } else if (resultado.dismiss === Swal.DismissReason.cancel) {
-            document.getElementById("producto")?.focus();
+        } else {
+            codigoBarrasLotePendiente.value = "";
         }
     } catch (error) {
         await Swal.fire({
@@ -531,8 +555,20 @@ const escanearProducto = async () => {
     }
 };
 
+const seleccionarProducto = (producto) => {
+    const codigoBarrasLote = codigoBarrasLotePendiente.value;
+    codigoBarrasLotePendiente.value = "";
+    agregarProducto(producto, codigoBarrasLote);
+};
+
 const cancelarRegistroProducto = () => {
     codigoBarrasProductoPendiente.value = "";
+};
+
+const abrirNuevoProducto = () => {
+    codigoBarrasLotePendiente.value = "";
+    codigoBarrasProductoPendiente.value = "";
+    mostrarProductoForm.value = true;
 };
 
 /*
@@ -541,16 +577,18 @@ const cancelarRegistroProducto = () => {
 |--------------------------------------------------------------------------
 */
 
-const agregarProducto = (producto = null) => {
+const agregarProducto = (producto = null, codigoBarrasLote = "") => {
     const productoSeleccionado = producto ?? productoBusqueda.value;
 
     if (!productoSeleccionado || !productoSeleccionado.id) {
         return;
     }
 
-    const existe = form.detalles.find(
-        (detalle) => detalle.producto_id === productoSeleccionado.id,
-    );
+    const existe = codigoBarrasLote
+        ? null
+        : form.detalles.find(
+              (detalle) => detalle.producto_id === productoSeleccionado.id,
+          );
 
     if (existe) {
         existe.cantidad = Number(existe.cantidad || 0) + 1;
@@ -585,7 +623,7 @@ const agregarProducto = (producto = null) => {
 
         fecha_vencimiento: null,
 
-        codigo_barras_lote: "",
+        codigo_barras_lote: codigoBarrasLote,
 
     });
 
@@ -1373,8 +1411,8 @@ const cerrar = () => {
                         </h3>
 
                         <p class="text-sm text-gray-500 mt-1">
-                            Busca un producto por nombre, código o código de
-                            barras
+                            Escanea el código de barras o busca el producto
+                            por nombre, código o código de barras
                         </p>
                     </div>
 
@@ -1402,43 +1440,11 @@ const cerrar = () => {
 
                 <!-- BUSCADOR -->
 
-                <div class="mb-3">
-                    <div class="flex items-end gap-3">
-                        <FloatLabel variant="on" class="w-full">
-                            <InputText
-                                id="codigo_producto_escaneado"
-                                v-model="codigoEscaner"
-                                class="w-full"
-                                autocomplete="off"
-                                placeholder="Escanee el código y presione Enter"
-                                :disabled="escaneandoProducto"
-                                @keydown.enter.prevent="escanearProducto"
-                            />
-                            <label for="codigo_producto_escaneado">
-                                Escanear código de barras o QR
-                            </label>
-                        </FloatLabel>
-
-                        <Button
-                            type="button"
-                            icon="pi pi-barcode"
-                            label="Buscar código"
-                            class="whitespace-nowrap flex-shrink-0"
-                            :loading="escaneandoProducto"
-                            :disabled="!codigoEscaner.trim()"
-                            @click="escanearProducto"
-                        />
-                    </div>
-                    <small class="mt-1 block text-gray-500">
-                        Si no se encuentra, podrá buscarlo por nombre o
-                        registrarlo como nuevo producto.
-                    </small>
-                </div>
-
                 <div class="flex items-end gap-3">
                     <FloatLabel variant="on" class="w-full">
                         <AutoComplete
                             id="producto"
+                            ref="productoAutocomplete"
                             v-model="productoBusqueda"
                             :suggestions="productosFiltrados"
                             optionLabel="nombre"
@@ -1446,9 +1452,12 @@ const cerrar = () => {
                             inputClass="w-full"
                             fluid
                             dropdown
+                            :loading="buscandoProducto || escaneandoProducto"
+                            :disabled="escaneandoProducto"
+                            @keydown.enter="escanearProducto"
                             @complete="buscarProducto"
                             @option-select="
-                                (event) => agregarProducto(event.value)
+                                (event) => seleccionarProducto(event.value)
                             "
                         >
                             <template #option="{ option }">
@@ -1478,7 +1487,9 @@ const cerrar = () => {
                             </template>
                         </AutoComplete>
 
-                        <label for="producto"> Buscar producto </label>
+                        <label for="producto">
+                            Escanear o buscar producto
+                        </label>
                     </FloatLabel>
 
                     <Button
@@ -1487,9 +1498,13 @@ const cerrar = () => {
                         type="button"
                         label="Nuevo producto"
                         class="whitespace-nowrap flex-shrink-0"
-                        @click="mostrarProductoForm = true"
+                        @click="abrirNuevoProducto"
                     />
                 </div>
+                <small class="mt-1 block text-gray-500">
+                    Si el código escaneado no está registrado, podrás buscar el
+                    producto y asignar ese código a su nuevo lote.
+                </small>
             </div>
 
             <!-- ========================================================= -->
@@ -1503,7 +1518,7 @@ const cerrar = () => {
                 <div class="min-w-[1150px]">
                     <div
                         v-for="(detalle, index) in form.detalles"
-                        :key="detalle.producto_id"
+                        :key="`${detalle.producto_id}-${index}`"
                         class="border-b border-gray-100 p-4 last:border-b-0"
                     >
                         <div
