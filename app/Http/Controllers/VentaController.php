@@ -5,6 +5,7 @@ namespace App\Http\Controllers;
 use App\Models\Venta;
 use App\Models\DetalleVenta;
 use App\Models\Cliente;
+use App\Models\Categoria;
 use App\Models\Producto;
 use App\Models\Lote;
 use App\Models\TipoComprobante;
@@ -136,6 +137,9 @@ class VentaController extends Controller
         return Inertia::render('Ventas/Crear', [
             'clientes' => $clientes,
             'productos' => $productos,
+            'categorias' => Categoria::where('activo', true)
+                ->orderBy('nombre')
+                ->get(['id', 'nombre']),
             'tiposComprobante' => $tiposComprobante,
             'tiposPago' => $tiposPago,
             'sesionCaja' => $sesionCaja,
@@ -149,16 +153,20 @@ class VentaController extends Controller
     {
         $validated = $request->validate([
             'search' => ['nullable', 'string', 'max:100'],
+            'categoria_id' => ['nullable', 'integer', 'exists:categorias,id'],
         ]);
 
         return response()->json([
             'productos' => $this->productosParaVenta(
-                trim($validated['search'] ?? '')
+                trim($validated['search'] ?? ''),
+                isset($validated['categoria_id'])
+                    ? (int) $validated['categoria_id']
+                    : null,
             ),
         ]);
     }
 
-    private function productosParaVenta(string $search = '')
+    private function productosParaVenta(string $search = '', ?int $categoriaId = null)
     {
         $crearConsulta = fn() => Producto::query()
             ->select([
@@ -169,11 +177,16 @@ class VentaController extends Controller
                 'stock_actual',
                 'stock_minimo',
                 'imagen_url',
+                'categoria_id',
                 'empresa_id',
                 'marca_id',
             ])
             ->where('activo', true)
             ->where('stock_actual', '>', 0)
+            ->when(
+                $categoriaId,
+                fn($query) => $query->where('categoria_id', $categoriaId),
+            )
             ->with([
                 'precioActual',
                 'lotes' => function ($query) {
@@ -227,10 +240,15 @@ class VentaController extends Controller
                 }
             }
         } else {
-            $productos = $crearConsulta()
+            $consulta = $crearConsulta()
                 ->orderBy('nombre')
-                ->limit(24)
-                ->get();
+                ;
+
+            if (!$categoriaId) {
+                $consulta->limit(24);
+            }
+
+            $productos = $consulta->get();
         }
 
         return $productos
@@ -243,6 +261,7 @@ class VentaController extends Controller
                     'nombre' => $producto->nombre,
                     'codigo' => $producto->codigo,
                     'codigo_barras' => $producto->codigo_barras,
+                    'categoria_id' => $producto->categoria_id,
                     'empresa_id' => $producto->empresa_id,
                     'marca_id' => $producto->marca_id,
                     'stock_actual' => $producto->stock_actual,

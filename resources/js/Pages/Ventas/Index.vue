@@ -394,7 +394,10 @@ const totalVenta = computed(() => {
             :breakpoints="{ '1199px': '80vw', '575px': '95vw' }"
             @hide="mostrarComprobantes = false"
         >
-            <div v-if="ventaSeleccionada && !mostrarComprobantes" class="space-y-6">
+            <div
+                v-if="ventaSeleccionada && !mostrarComprobantes"
+                class="sale-detail space-y-6"
+            >
                 <!-- Información de la venta -->
                 <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
                     <div>
@@ -427,31 +430,23 @@ const totalVenta = computed(() => {
 
                 <!-- Productos -->
                 <div>
-                    <h3 class="text-lg font-semibold mb-3">
-                        Productos vendidos
-                    </h3>
+                    <div class="products-heading">
+                        <h3>Productos vendidos</h3>
+                        <span class="products-count">
+                            {{ detallesVenta.length }}
+                            {{ detallesVenta.length === 1 ? "producto" : "productos" }}
+                        </span>
+                    </div>
 
-                    <div class="border rounded-lg overflow-hidden">
-                        <table class="w-full">
-                            <thead class="bg-gray-100">
+                    <div class="products-table-scroll">
+                        <table class="products-table">
+                            <thead>
                                 <tr>
-                                    <th class="text-left px-4 py-3">
-                                        Producto
-                                    </th>
-
-                                    <th class="text-center px-4 py-3">
-                                        Cantidad
-                                    </th>
-
-                                    <th class="text-right px-4 py-3">Precio</th>
-
-                                    <th class="text-right px-4 py-3">
-                                        Descuento
-                                    </th>
-
-                                    <th class="text-right px-4 py-3">
-                                        Subtotal
-                                    </th>
+                                    <th class="product-column">Producto</th>
+                                    <th class="quantity-column">Cantidad</th>
+                                    <th class="money-column">Precio unitario</th>
+                                    <th class="money-column">Descuento</th>
+                                    <th class="money-column">Subtotal</th>
                                 </tr>
                             </thead>
 
@@ -459,79 +454,71 @@ const totalVenta = computed(() => {
                                 <tr
                                     v-for="detalle in detallesVenta"
                                     :key="detalle.id"
-                                    class="border-t"
                                 >
-                                    <td class="px-4 py-3">
-                                        <div class="font-medium">
+                                    <td class="product-cell">
+                                        <div class="product-name">
                                             {{
                                                 detalle.producto?.nombre ??
                                                 "Producto"
                                             }}
                                         </div>
 
-                                        <small class="text-gray-500">
-                                            Código:
-                                            {{
+                                        <span class="product-code">
+                                            Código
+                                            <span>{{
                                                 detalle.producto?.codigo ?? "—"
-                                            }}
-                                        </small>
+                                            }}</span>
+                                        </span>
                                     </td>
 
-                                    <td class="text-center px-4 py-3">
+                                    <td class="quantity-cell">
+                                        <span class="quantity-badge">
                                         {{ detalle.cantidad }}
+                                        </span>
                                     </td>
 
-                                    <td class="text-right px-4 py-3">
-                                        S/
-                                        {{
+                                    <td class="money-cell">
+                                        <span class="currency-value">S/ {{
                                             Number(
                                                 detalle.precio_unitario ?? 0,
                                             ).toFixed(2)
-                                        }}
+                                        }}</span>
                                     </td>
 
-                                    <!-- Descuento -->
-
-                                    <td class="text-right px-4 py-3">
+                                    <td class="money-cell">
                                         <span
                                             v-if="
                                                 Number(detalle.descuento ?? 0) >
                                                 0
                                             "
-                                            class="font-medium text-green-600"
+                                            class="discount-value"
                                         >
-                                            - S/
-                                            {{
+                                            − S/ {{
                                                 Number(
                                                     detalle.descuento,
                                                 ).toFixed(2)
                                             }}
                                         </span>
-                                        <span v-else class="text-gray-400">
-                                            Sin descuento
+                                        <span v-else class="no-discount">
+                                            —
                                         </span>
                                     </td>
 
-                                    <!-- Subtotal -->
-
-                                    <td
-                                        class="text-right px-4 py-3 font-medium"
-                                    >
-                                        S/
-                                        {{
+                                    <td class="money-cell subtotal-cell">
+                                        <span class="currency-value">S/ {{
                                             Number(
                                                 detalle.subtotal ?? 0,
                                             ).toFixed(2)
-                                        }}
+                                        }}</span>
                                     </td>
                                 </tr>
 
                                 <tr v-if="detallesVenta.length === 0">
                                     <td
-                                        colspan="4"
-                                        class="text-center py-6 text-gray-500"
+                                        colspan="5"
+                                        class="empty-products"
                                     >
-                                        No hay productos registrados.
+                                        No hay productos registrados en esta venta.
                                     </td>
                                 </tr>
                             </tbody>
@@ -596,6 +583,167 @@ const totalVenta = computed(() => {
 </template>
 
 <style scoped>
+.products-heading {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    margin-bottom: 12px;
+}
+
+.products-heading h3 {
+    margin: 0;
+    color: #1f2937;
+    font-size: 1rem;
+    font-weight: 700;
+}
+
+.products-count {
+    flex-shrink: 0;
+    border-radius: 9999px;
+    background: #f3e8ef;
+    color: #843d68;
+    padding: 4px 10px;
+    font-size: 0.75rem;
+    font-weight: 600;
+}
+
+.products-table-scroll {
+    overflow-x: auto;
+    border: 1px solid #e5e7eb;
+    border-radius: 12px;
+    background: #fff;
+    -webkit-overflow-scrolling: touch;
+}
+
+.products-table {
+    width: 100%;
+    min-width: 680px;
+    border-collapse: separate;
+    border-spacing: 0;
+    color: #374151;
+    font-size: 0.875rem;
+}
+
+.products-table th {
+    padding: 11px 14px;
+    background: #f8f6f8;
+    color: #6b6470;
+    font-size: 0.7rem;
+    font-weight: 700;
+    letter-spacing: 0.045em;
+    text-align: right;
+    text-transform: uppercase;
+    white-space: nowrap;
+}
+
+.products-table th:first-child {
+    text-align: left;
+}
+
+.products-table th.quantity-column {
+    text-align: center;
+}
+
+.products-table tbody tr:not(:last-child) td {
+    border-bottom: 1px solid #f0edf0;
+}
+
+.products-table tbody tr {
+    transition: background-color 140ms ease;
+}
+
+.products-table tbody tr:hover {
+    background: #fcfafb;
+}
+
+.products-table td {
+    padding: 13px 14px;
+    vertical-align: middle;
+}
+
+.products-table .product-column {
+    width: 38%;
+}
+
+.products-table .quantity-column {
+    width: 12%;
+}
+
+.products-table .money-column {
+    width: 16.67%;
+}
+
+.product-cell {
+    min-width: 220px;
+}
+
+.product-name {
+    color: #25212a;
+    font-weight: 600;
+    overflow-wrap: anywhere;
+}
+
+.product-code {
+    display: inline-flex;
+    flex-wrap: wrap;
+    gap: 4px;
+    margin-top: 4px;
+    color: #85808a;
+    font-size: 0.75rem;
+}
+
+.product-code span {
+    color: #6b6470;
+    font-variant-numeric: tabular-nums;
+}
+
+.quantity-cell {
+    text-align: center;
+}
+
+.quantity-badge {
+    display: inline-flex;
+    min-width: 34px;
+    justify-content: center;
+    border-radius: 9999px;
+    background: #f3f4f6;
+    padding: 4px 9px;
+    color: #374151;
+    font-weight: 600;
+    font-variant-numeric: tabular-nums;
+}
+
+.money-cell {
+    text-align: right;
+    white-space: nowrap;
+    font-variant-numeric: tabular-nums;
+}
+
+.currency-value {
+    color: #4b4650;
+}
+
+.discount-value {
+    color: #15803d;
+    font-weight: 600;
+}
+
+.no-discount {
+    color: #a19ba5;
+}
+
+.subtotal-cell .currency-value {
+    color: #25212a;
+    font-weight: 700;
+}
+
+.empty-products {
+    padding: 28px 16px !important;
+    color: #77717d;
+    text-align: center;
+}
+
 @media print {
     :global(body.printing-receipts #app) {
         display: none !important;

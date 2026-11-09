@@ -29,6 +29,10 @@ const props = defineProps({
         type: Array,
         default: () => [],
     },
+    categorias: {
+        type: Array,
+        default: () => [],
+    },
     cajaAbierta: {
         type: Boolean,
         default: false,
@@ -50,6 +54,7 @@ const props = defineProps({
 */
 
 const busqueda = ref("");
+const categoriaSeleccionada = ref(null);
 const inputBusqueda = ref(null);
 const productosBuscados = ref(props.productos);
 const buscandoProductos = ref(false);
@@ -97,10 +102,18 @@ const productosDisponibles = computed(() => {
 */
 
 const productosFiltrados = computed(() => {
-    return productosDisponibles.value;
+    if (categoriaSeleccionada.value === null) {
+        return productosDisponibles.value;
+    }
+
+    return productosDisponibles.value.filter(
+        (producto) =>
+            Number(producto.categoria_id) ===
+            Number(categoriaSeleccionada.value),
+    );
 });
 
-const solicitarProductos = async (texto = "") => {
+const solicitarProductos = async (texto = "", categoriaId = null) => {
     controladorBusqueda?.abort();
 
     const controlador = new AbortController();
@@ -111,7 +124,10 @@ const solicitarProductos = async (texto = "") => {
 
     try {
         const response = await fetch(
-            route("ventas.productos.buscar", { search: texto }),
+            route("ventas.productos.buscar", {
+                search: texto,
+                categoria_id: categoriaId,
+            }),
             {
                 headers: { Accept: "application/json" },
                 signal: controlador.signal,
@@ -157,11 +173,19 @@ watch(busqueda, (valor) => {
     temporizadorBusqueda = setTimeout(
         () => {
             if (solicitud === busquedaPendiente) {
-                solicitarProductos(termino);
+                solicitarProductos(
+                    termino,
+                    categoriaSeleccionada.value,
+                );
             }
         },
         termino ? 180 : 0,
     );
+});
+
+watch(categoriaSeleccionada, (categoriaId) => {
+    clearTimeout(temporizadorBusqueda);
+    solicitarProductos(busqueda.value.trim(), categoriaId);
 });
 
 onBeforeUnmount(() => {
@@ -239,7 +263,7 @@ const recargarCatalogo = async () => {
     await nextTick();
 
     clearTimeout(temporizadorBusqueda);
-    await solicitarProductos("");
+    await solicitarProductos("", categoriaSeleccionada.value);
 
     inputBusqueda.value?.$el?.focus();
 };
@@ -640,6 +664,45 @@ onMounted(() => {
                     class="flex flex-col md:flex-row justify-between items-start md:items-center gap-2 mb-2"
                 >
                     <div>
+                        <div
+                            class="flex max-w-full gap-2 overflow-x-auto pb-2"
+                            role="group"
+                            aria-label="Filtrar productos por categoría"
+                        >
+                            <Button
+                                label="Todas"
+                                size="small"
+                                :outlined="categoriaSeleccionada !== null"
+                                :class="
+                                    categoriaSeleccionada === null
+                                        ? '!bg-[#7F1D3F] !border-[#7F1D3F] !text-white'
+                                        : '!border-[#E8C8D2] !text-gray-700'
+                                "
+                                :aria-pressed="categoriaSeleccionada === null"
+                                @click="categoriaSeleccionada = null"
+                            />
+                            <Button
+                                v-for="categoria in categorias"
+                                :key="categoria.id"
+                                :label="categoria.nombre"
+                                size="small"
+                                :outlined="
+                                    Number(categoriaSeleccionada) !==
+                                    Number(categoria.id)
+                                "
+                                :class="
+                                    Number(categoriaSeleccionada) ===
+                                    Number(categoria.id)
+                                        ? '!bg-[#7F1D3F] !border-[#7F1D3F] !text-white'
+                                        : '!border-[#E8C8D2] !text-gray-700'
+                                "
+                                :aria-pressed="
+                                    Number(categoriaSeleccionada) ===
+                                    Number(categoria.id)
+                                "
+                                @click="categoriaSeleccionada = categoria.id"
+                            />
+                        </div>
                         <h1 class="text-2xl font-bold text-gray-800 my-2">
                             Registrar venta
                         </h1>
