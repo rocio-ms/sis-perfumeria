@@ -1,5 +1,5 @@
 <script setup>
-import { computed, nextTick, ref, watch } from "vue";
+import { computed, nextTick, onBeforeUnmount, ref, watch } from "vue";
 import { router, useForm } from "@inertiajs/vue3";
 import axios from "axios";
 
@@ -93,6 +93,13 @@ const escaneandoProducto = ref(false);
 const codigoBarrasProductoPendiente = ref("");
 const codigoBarrasLotePendiente = ref("");
 const importandoExcel = ref(false);
+let temporizadorEscaner = null;
+let ultimaTeclaEscaner = 0;
+let caracteresEscaner = 0;
+
+onBeforeUnmount(() => {
+    clearTimeout(temporizadorEscaner);
+});
 
 /*
 |--------------------------------------------------------------------------
@@ -342,6 +349,9 @@ const limpiarFormulario = () => {
     productosFiltrados.value = [];
     codigoBarrasProductoPendiente.value = "";
     codigoBarrasLotePendiente.value = "";
+    clearTimeout(temporizadorEscaner);
+    ultimaTeclaEscaner = 0;
+    caracteresEscaner = 0;
 };
 
 watch(
@@ -478,14 +488,28 @@ const enfocarAutocompleteProducto = () => {
     productoAutocomplete.value?.$el?.querySelector("input")?.focus();
 };
 
-const escanearProducto = async () => {
-    await Promise.resolve();
+const escanearProducto = async (evento = null) => {
+    clearTimeout(temporizadorEscaner);
+    ultimaTeclaEscaner = 0;
+    caracteresEscaner = 0;
 
-    if (typeof productoBusqueda.value !== "string") {
+    if (evento?.key === "Enter" || evento?.key === "NumpadEnter") {
+        evento.preventDefault();
+        evento.stopImmediatePropagation();
+    }
+
+    const textoIngresado =
+        typeof evento === "string"
+            ? evento
+            : typeof evento?.target?.value === "string"
+              ? evento.target.value
+              : productoBusqueda.value;
+
+    if (typeof textoIngresado !== "string") {
         return;
     }
 
-    const codigo = productoBusqueda.value.trim();
+    const codigo = textoIngresado.trim();
 
     if (!codigo || escaneandoProducto.value) {
         return;
@@ -553,6 +577,42 @@ const escanearProducto = async () => {
     } finally {
         escaneandoProducto.value = false;
     }
+};
+
+const detectarEscaneo = (evento) => {
+    if (evento.key === "Enter" || evento.key === "NumpadEnter") {
+        void escanearProducto(evento);
+        return;
+    }
+
+    if (evento.key.length !== 1 || evento.ctrlKey || evento.altKey || evento.metaKey) {
+        clearTimeout(temporizadorEscaner);
+        ultimaTeclaEscaner = 0;
+        caracteresEscaner = 0;
+        return;
+    }
+
+    const ahora = performance.now();
+    const intervalo = ahora - ultimaTeclaEscaner;
+
+    caracteresEscaner =
+        ultimaTeclaEscaner > 0 && intervalo <= 80
+            ? caracteresEscaner + 1
+            : 1;
+    ultimaTeclaEscaner = ahora;
+
+    clearTimeout(temporizadorEscaner);
+
+    if (caracteresEscaner < 4) {
+        return;
+    }
+
+    const input = evento.target;
+    temporizadorEscaner = setTimeout(() => {
+        if (input instanceof HTMLInputElement) {
+            void escanearProducto(input.value);
+        }
+    }, 200);
 };
 
 const seleccionarProducto = (producto) => {
@@ -689,17 +749,11 @@ const importarDetallesExcel = async (filas) => {
             const codigo = String(fila.codigo_producto ?? "").trim();
             const cantidad = valorNumericoExcel(fila.cantidad);
             const precioCompra = valorNumericoExcel(fila.precio_compra);
-            const precioVenta = valorNumericoExcel(fila.precio_venta);
-            const margen = valorNumericoExcel(fila.porcentaje_ganancia);
             const descuento = valorNumericoExcel(fila.descuento) ?? 0;
             const tieneDescuento = ["si", "sí", "true", "1", "yes"].includes(
                 String(fila.tiene_descuento ?? "").trim().toLocaleLowerCase(),
             );
             const fechaVencimiento = fechaExcel(fila.fecha_vencimiento);
-            const precioVentaIngresado =
-                String(fila.precio_venta ?? "").trim() !== "";
-            const margenIngresado =
-                String(fila.porcentaje_ganancia ?? "").trim() !== "";
             const descuentoIngresado =
                 String(fila.descuento ?? "").trim() !== "";
 
@@ -710,16 +764,6 @@ const importarDetallesExcel = async (filas) => {
 
             if (precioCompra === null || precioCompra < 0) {
                 errores.push(`Fila ${fila.numero_fila}: el precio de compra debe ser un número igual o mayor a cero.`);
-                return;
-            }
-
-            if (
-                (precioVentaIngresado &&
-                    (precioVenta === null || precioVenta < 0)) ||
-                (margenIngresado &&
-                    (margen === null || margen < 0 || margen > 100))
-            ) {
-                errores.push(`Fila ${fila.numero_fila}: el precio de venta debe ser válido y el margen debe estar entre 0 y 100.`);
                 return;
             }
 
@@ -751,8 +795,6 @@ const importarDetallesExcel = async (filas) => {
                 codigo,
                 cantidad,
                 precio_compra: precioCompra,
-                precio_venta: precioVenta,
-                porcentaje_ganancia: margen,
                 tiene_descuento: tieneDescuento || descuento > 0,
                 descuento,
                 fecha_vencimiento: fechaVencimiento,
@@ -829,13 +871,10 @@ const importarDetallesExcel = async (filas) => {
                 productoPorCodigoNumerico.get(
                     fila.codigo.replace(/^0+(?=\d)/, ""),
                 );
-            const porcentaje =
-                fila.porcentaje_ganancia ?? porcentajePorDefecto(producto);
-            const precioVenta =
-                fila.precio_venta ??
-                Math.round(
-                    fila.precio_compra * (1 + porcentaje / 100),
-                );
+            const porcentaje = porcentajePorDefecto(producto);
+            const precioVenta = Math.round(
+                fila.precio_compra * (1 + porcentaje / 100),
+            );
 
             if (fila.descuento > precioVenta) {
                 errores.push(`Fila ${fila.numero_fila}: el descuento no puede ser mayor al precio de venta (${precioVenta}).`);
@@ -1454,7 +1493,13 @@ const cerrar = () => {
                             dropdown
                             :loading="buscandoProducto || escaneandoProducto"
                             :disabled="escaneandoProducto"
-                            @keydown.enter="escanearProducto"
+                            :pt="{
+                                pcInputText: {
+                                    root: {
+                                        onKeydownCapture: detectarEscaneo,
+                                    },
+                                },
+                            }"
                             @complete="buscarProducto"
                             @option-select="
                                 (event) => seleccionarProducto(event.value)
@@ -1502,8 +1547,9 @@ const cerrar = () => {
                     />
                 </div>
                 <small class="mt-1 block text-gray-500">
-                    Si el código escaneado no está registrado, podrás buscar el
-                    producto y asignar ese código a su nuevo lote.
+                    El código se consulta automáticamente al escanear. Si no
+                    está registrado, podrás buscar el producto y asignarlo a un
+                    nuevo lote.
                 </small>
             </div>
 

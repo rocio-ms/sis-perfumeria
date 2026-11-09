@@ -26,10 +26,8 @@ const configuraciones = {
             ["codigo_producto", "Código interno o código de barras del producto", true],
             ["cantidad", "Unidades que ingresan", true],
             ["precio_compra", "Costo unitario", true],
-            ["porcentaje_ganancia", "Margen opcional; si se deja vacío, usa el margen predeterminado del sistema", false],
-            ["precio_venta", "Precio de venta unitario; se calcula automáticamente y puedes reemplazarlo", false],
-            ["tiene_descuento", "Sí/No; se activa automáticamente si descuento es mayor a cero", false],
-            ["descuento", "Descuento unitario; opcional", false],
+            ["tiene_descuento", "Sí/No; por defecto es Sí. Se aplicará el monto indicado en descuento", false],
+            ["descuento", "Monto de descuento unitario; opcional. Si es mayor a cero, se aplicará automáticamente", false],
             ["fecha_vencimiento", "Fecha opcional (dd/mm/aaaa)", false],
             ["codigo_barras_lote", "Código de barras propio del lote; opcional", false],
         ],
@@ -78,34 +76,25 @@ const descargarPlantilla = async () => {
         hoja.getColumn(1).numFmt = "@";
 
         if (props.tipo === "entrada") {
-            const columnaCodigo = hoja.getColumn(
-                encabezados.indexOf("codigo_producto") + 1,
-            ).letter;
             const columnaCompra = hoja.getColumn(
                 encabezados.indexOf("precio_compra") + 1,
             ).letter;
-            const columnaMargen = hoja.getColumn(
-                encabezados.indexOf("porcentaje_ganancia") + 1,
-            ).letter;
-            const columnaVenta = encabezados.indexOf("precio_venta") + 1;
             const columnaDescuento = encabezados.indexOf("descuento") + 1;
+            const columnaTieneDescuento =
+                encabezados.indexOf("tiene_descuento") + 1;
 
             for (let fila = 2; fila <= 501; fila += 1) {
-                hoja.getCell(fila, columnaVenta).value = {
-                    formula: `IF(OR(${columnaCodigo}${fila}="",${columnaCompra}${fila}=""),"",ROUND(${columnaCompra}${fila}*(1+IF(${columnaMargen}${fila}="",30,${columnaMargen}${fila})/100),0))`,
-                };
+                hoja.getCell(fila, columnaTieneDescuento).value = "Sí";
             }
 
             hoja.getColumn(columnaCompra).numFmt = "0.00";
-            hoja.getColumn(columnaMargen).numFmt = "0.##";
-            hoja.getColumn(columnaVenta).numFmt = "0.00";
             hoja.getColumn(columnaDescuento).numFmt = "0.00";
-            hoja.getColumn(columnaVenta).eachCell((celda, numeroFila) => {
-                if (numeroFila > 1) {
-                    celda.fill = {
-                        type: "pattern",
-                        pattern: "solid",
-                        fgColor: { argb: "FFECFDF5" },
+            hoja.getColumn(columnaTieneDescuento).eachCell((celda, numeroFila) => {
+                if (numeroFila > 1 && numeroFila <= 501) {
+                    celda.dataValidation = {
+                        type: "list",
+                        allowBlank: true,
+                        formulae: ['"No,Sí"'],
                     };
                 }
             });
@@ -115,18 +104,15 @@ const descargarPlantilla = async () => {
         instrucciones.addRow(["Guía rápida"]);
         instrucciones.addRow([
             props.tipo === "entrada"
-                ? "Completa una fila por producto. El precio de venta con fondo verde se calcula automáticamente."
+                ? "Completa una fila por producto. El precio de venta se calcula automáticamente al importar."
                 : "Completa una fila por producto y lote.",
         ]);
         if (props.tipo === "entrada") {
             instrucciones.addRow([
-                "Precio de venta: se calcula con el precio de compra y un margen de 30% cuando no indiques otro. Puedes escribir otro margen o reemplazar el precio calculado.",
+                "Precio de venta: el sistema lo calcula automáticamente al importar, usando el margen predeterminado del producto.",
             ]);
             instrucciones.addRow([
-                "Descuento: ingresa el monto unitario. Si es mayor a cero, se aplicará automáticamente al producto.",
-            ]);
-            instrucciones.addRow([
-                "Si dejas precio_venta vacío, el sistema calculará el precio usando el margen predeterminado del producto.",
+                "Tiene descuento: comienza en Sí. El sistema aplicará el monto de la columna descuento; si es mayor a cero, el descuento se activa automáticamente.",
             ]);
         }
         const filaEncabezado = instrucciones.rowCount + 1;
@@ -262,14 +248,21 @@ const leerArchivo = async (event) => {
                         : valor;
             });
 
-            if (
-                Object.values(datos).some(
-                    (valor) =>
-                        valor !== null &&
-                        valor !== undefined &&
-                        valor !== "",
-                )
-            ) {
+            const tieneDatos = Object.entries(datos).some(([nombre, valor]) => {
+                if (
+                    props.tipo === "entrada" &&
+                    nombre === "tiene_descuento" &&
+                    ["no", "sí", "si", "false", "true", "0", "1"].includes(
+                        String(valor ?? "").trim().toLocaleLowerCase(),
+                    )
+                ) {
+                    return false;
+                }
+
+                return valor !== null && valor !== undefined && valor !== "";
+            });
+
+            if (tieneDatos) {
                 filas.push({ numero_fila: numeroFila, ...datos });
             }
         });
@@ -304,7 +297,7 @@ const leerArchivo = async (event) => {
                 La importación agrega productos al formulario; revisa los datos y guarda normalmente.
             </small>
             <small v-if="tipo === 'entrada'" class="mt-1 block text-blue-700">
-                El precio de venta se calcula desde el precio de compra. Un descuento mayor a cero se aplicará automáticamente.
+                El precio de venta se calcula automáticamente. El descuento inicia en Sí y se aplicará según el monto indicado.
             </small>
         </div>
         <input
