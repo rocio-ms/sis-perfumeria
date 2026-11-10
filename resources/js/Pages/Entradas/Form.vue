@@ -107,6 +107,8 @@ const productoBusqueda = ref(null);
 const productoAutocomplete = ref(null);
 
 const productosFiltrados = ref([]);
+const consultaProductos = ref("");
+const siguienteCursorProductos = ref(null);
 
 const buscandoProducto = ref(false);
 const errorBusquedaProducto = ref("");
@@ -387,6 +389,8 @@ const limpiarFormulario = () => {
     tieneProveedor.value = false;
     productoBusqueda.value = null;
     productosFiltrados.value = [];
+    consultaProductos.value = "";
+    siguienteCursorProductos.value = null;
     errorBusquedaProducto.value = "";
     codigoBarrasProductoPendiente.value = "";
     codigoBarrasLotePendiente.value = "";
@@ -488,53 +492,60 @@ watch(
 |--------------------------------------------------------------------------
 */
 
-const buscarProducto = (event) => {
-    const query = String(event.query ?? "").trim();
-
-    cancelarBusquedaProducto();
+const cargarProductos = async (query, cursor = null) => {
+    const solicitud = new AbortController();
+    solicitudBusqueda = solicitud;
+    buscandoProducto.value = true;
     errorBusquedaProducto.value = "";
 
-    if (!query) {
-        productosFiltrados.value = [];
+    try {
+        const { data } = await axios.get(route("entradas.buscarProductos"), {
+            params: { q: query, cursor },
+            signal: solicitud.signal,
+        });
+        if (solicitud.signal.aborted) return;
 
-        return;
-    }
+        const productos = data.productos ?? [];
+        productosFiltrados.value = cursor
+            ? [...productosFiltrados.value, ...productos]
+            : productos;
+        siguienteCursorProductos.value = data.siguiente_cursor ?? null;
+    } catch {
+        if (solicitud.signal.aborted) return;
 
-    temporizadorBusqueda = setTimeout(async () => {
-        const solicitud = new AbortController();
-        solicitudBusqueda = solicitud;
-        buscandoProducto.value = true;
-
-        try {
-            const { data } = await axios.get(route("entradas.buscarProductos"), {
-                params: { q: query },
-                signal: solicitud.signal,
-            });
-            if (!solicitud.signal.aborted) {
-                productosFiltrados.value = data.productos ?? [];
-            }
-        } catch {
-            if (!solicitud.signal.aborted) {
-                productosFiltrados.value = [];
-                errorBusquedaProducto.value =
-                    "No se pudo buscar productos. Inténtalo de nuevo.";
-            }
-        } finally {
-            if (solicitudBusqueda === solicitud) {
-                solicitudBusqueda = null;
-                buscandoProducto.value = false;
-            }
+        if (!cursor) {
+            productosFiltrados.value = [];
         }
+        errorBusquedaProducto.value =
+            "No se pudo buscar productos. Inténtalo de nuevo.";
+    } finally {
+        if (solicitudBusqueda === solicitud) {
+            solicitudBusqueda = null;
+            buscandoProducto.value = false;
+        }
+    }
+};
+
+const buscarProducto = (event) => {
+    cancelarBusquedaProducto();
+    consultaProductos.value = String(event.query ?? "").trim();
+    siguienteCursorProductos.value = null;
+    temporizadorBusqueda = setTimeout(() => {
+        void cargarProductos(consultaProductos.value);
     }, 150);
+};
+
+const verMasProductos = () => {
+    if (!siguienteCursorProductos.value || buscandoProducto.value) return;
+
+    void cargarProductos(consultaProductos.value, siguienteCursorProductos.value);
 };
 
 const enfocarAutocompleteProducto = () => {
     productoAutocomplete.value?.$el?.querySelector("input")?.focus();
 };
 
-const escanearProducto = async (evento = null) => {
-    cancelarBusquedaProducto();
-    errorBusquedaProducto.value = "";
+const escanearProducto = async (evento = null, soloSiCoincide = false) => {
     clearTimeout(temporizadorEscaner);
     ultimaTeclaEscaner = 0;
     caracteresEscaner = 0;
@@ -561,8 +572,12 @@ const escanearProducto = async (evento = null) => {
         return;
     }
 
-    codigoBarrasLotePendiente.value = "";
-    escaneandoProducto.value = true;
+    if (!soloSiCoincide) {
+        cancelarBusquedaProducto();
+        errorBusquedaProducto.value = "";
+        codigoBarrasLotePendiente.value = "";
+        escaneandoProducto.value = true;
+    }
 
     try {
         const { data } = await axios.get(
@@ -574,7 +589,17 @@ const escanearProducto = async (evento = null) => {
             },
         );
 
+        if (
+            soloSiCoincide &&
+            (escaneandoProducto.value || String(productoBusqueda.value ?? "").trim() !== codigo)
+        ) {
+            return;
+        }
+
         if (data.producto) {
+            cancelarBusquedaProducto();
+            errorBusquedaProducto.value = "";
+            codigoBarrasLotePendiente.value = "";
             productoBusqueda.value = null;
             agregarProducto(data.producto);
             escaneandoProducto.value = false;
@@ -582,6 +607,8 @@ const escanearProducto = async (evento = null) => {
             enfocarAutocompleteProducto();
             return;
         }
+
+        if (soloSiCoincide) return;
 
         codigoBarrasLotePendiente.value = codigo;
         productoBusqueda.value = null;
@@ -611,6 +638,8 @@ const escanearProducto = async (evento = null) => {
             codigoBarrasLotePendiente.value = "";
         }
     } catch (error) {
+        if (soloSiCoincide) return;
+
         await Swal.fire({
             title: "No se pudo buscar el producto",
             text:
@@ -621,12 +650,21 @@ const escanearProducto = async (evento = null) => {
             confirmButtonText: "Aceptar",
         });
     } finally {
-        escaneandoProducto.value = false;
+        if (!soloSiCoincide) {
+            escaneandoProducto.value = false;
+        }
     }
 };
 
 const detectarEscaneo = (evento) => {
     if (evento.key === "Enter" || evento.key === "NumpadEnter") {
+        if (evento.target?.getAttribute("aria-activedescendant")) {
+            clearTimeout(temporizadorEscaner);
+            ultimaTeclaEscaner = 0;
+            caracteresEscaner = 0;
+            return;
+        }
+
         void escanearProducto(evento);
         return;
     }
@@ -656,7 +694,7 @@ const detectarEscaneo = (evento) => {
     const input = evento.target;
     temporizadorEscaner = setTimeout(() => {
         if (input instanceof HTMLInputElement) {
-            void escanearProducto(input.value);
+            void escanearProducto(input.value, true);
         }
     }, 200);
 };
@@ -1569,8 +1607,10 @@ const cerrar = () => {
                             optionLabel="nombre"
                             class="w-full"
                             inputClass="w-full"
+                            scrollHeight="min(20rem, 45vh)"
                             fluid
                             dropdown
+                            dropdownMode="current"
                             :loading="buscandoProducto || escaneandoProducto"
                             :disabled="escaneandoProducto"
                             :pt="{
@@ -1610,6 +1650,19 @@ const cerrar = () => {
                                     </div>
                                 </div>
                             </template>
+                            <template #footer>
+                                <div v-if="siguienteCursorProductos" class="border-t p-2">
+                                    <Button
+                                        type="button"
+                                        label="Ver más productos"
+                                        text
+                                        class="w-full"
+                                        :loading="buscandoProducto"
+                                        @mousedown.prevent
+                                        @click="verMasProductos"
+                                    />
+                                </div>
+                            </template>
                         </AutoComplete>
 
                         <label for="producto">
@@ -1634,9 +1687,9 @@ const cerrar = () => {
                     {{ errorBusquedaProducto }}
                 </small>
                 <small class="mt-1 block text-gray-500">
-                    El código se consulta automáticamente al escanear. Si no
-                    está registrado, podrás buscar el producto y asignarlo a un
-                    nuevo lote.
+                    Abre el desplegable para explorar el catálogo o busca por
+                    nombre o código. Usa «Ver más productos» para seguir
+                    recorriendo los resultados.
                 </small>
             </div>
 

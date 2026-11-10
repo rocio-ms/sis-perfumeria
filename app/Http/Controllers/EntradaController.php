@@ -35,23 +35,23 @@ class EntradaController extends Controller
     public function buscarProductos(Request $request)
     {
         $validated = $request->validate([
-            'q' => ['nullable', 'string', 'max:100'],
+            'q' => ['nullable', 'string', 'max:255'],
+            'cursor' => ['nullable', 'string', 'max:8192'],
         ]);
         $termino = trim($validated['q'] ?? '');
 
-        if ($termino === '') {
-            return response()->json(['productos' => []]);
-        }
-
         $productos = Producto::where('activo', true)
-            ->where(function ($query) use ($termino) {
-                $query->where('nombre', 'like', "{$termino}%")
-                    ->orWhere('codigo', 'like', "{$termino}%")
-                    ->orWhere('codigo_barras', 'like', "{$termino}%");
+            ->when($termino !== '', function ($query) use ($termino) {
+                $query->where(function ($query) use ($termino) {
+                    $query->where('nombre', 'like', "%{$termino}%")
+                        ->orWhere('codigo', 'like', "{$termino}%")
+                        ->orWhere('codigo_barras', 'like', "{$termino}%");
+                });
             })
             ->with('categoria:id,nombre')
-            ->limit(20)
-            ->get([
+            ->orderBy('nombre')
+            ->orderBy('id')
+            ->cursorPaginate(20, [
                 'id',
                 'nombre',
                 'codigo',
@@ -59,9 +59,12 @@ class EntradaController extends Controller
                 'categoria_id',
                 'unidad_medida',
                 'stock_actual',
-            ]);
+            ], 'cursor', $validated['cursor'] ?? null);
 
-        return response()->json(['productos' => $productos]);
+        return response()->json([
+            'productos' => $productos->items(),
+            'siguiente_cursor' => $productos->nextCursor()?->encode(),
+        ]);
     }
 
     public function buscarPorCodigoBarras(Request $request)

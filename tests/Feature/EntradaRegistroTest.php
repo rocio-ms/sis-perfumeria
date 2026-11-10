@@ -101,11 +101,52 @@ class EntradaRegistroTest extends TestCase
 
         $this->getJson(route('entradas.buscarProductos', ['q' => 'prueS']))
             ->assertOk()
-            ->assertExactJson(['productos' => []]);
+            ->assertExactJson(['productos' => [], 'siguiente_cursor' => null]);
 
         $this->getJson(route('entradas.buscarProductos', ['q' => ['prueba']]))
             ->assertUnprocessable()
             ->assertJsonValidationErrors('q');
+    }
+
+    public function test_se_puede_recorrer_el_catalogo_y_registrar_mas_de_veinte_productos(): void
+    {
+        $detalles = [];
+        for ($indice = 1; $indice <= 25; $indice++) {
+            $detalles[] = $this->crearDetalle("LIBRE-{$indice}");
+        }
+        $detalles[0]['cantidad'] = 125;
+
+        $primera = $this->getJson(route('entradas.buscarProductos'))
+            ->assertOk()
+            ->assertJsonCount(20, 'productos');
+        $cursor = $primera->json('siguiente_cursor');
+        $this->assertNotEmpty($cursor);
+
+        $segunda = $this->getJson(route('entradas.buscarProductos', ['cursor' => $cursor]))
+            ->assertOk()
+            ->assertJsonCount(5, 'productos')
+            ->assertJsonPath('siguiente_cursor', null);
+        $ids = array_column(
+            array_merge($primera->json('productos'), $segunda->json('productos')),
+            'id'
+        );
+        $this->assertEqualsCanonicalizing(array_column($detalles, 'producto_id'), $ids);
+
+        $this->getJson(route('entradas.buscarProductos', ['q' => 'IBRE-25']))
+            ->assertOk()
+            ->assertJsonPath('productos.0.id', $detalles[24]['producto_id']);
+
+        DB::table('tipo_movimientos')->insert(['nombre' => 'Entrada', 'tipo' => 'entrada']);
+        $this->post(route('entradas.store'), [
+            'fecha_ingreso' => '2026-11-09',
+            'detalles' => $detalles,
+        ])->assertRedirect(route('entradas.index'))->assertSessionHasNoErrors();
+
+        $this->assertDatabaseCount('detalle_entradas', 25);
+        $this->assertDatabaseHas('detalle_entradas', [
+            'producto_id' => $detalles[0]['producto_id'],
+            'cantidad' => 125,
+        ]);
     }
 
     public function test_las_fechas_invalidas_devuelven_errores_por_fila_sin_guardar(): void
