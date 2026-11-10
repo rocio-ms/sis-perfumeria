@@ -1130,6 +1130,8 @@ const nuevaVenta = () => {
         box-shadow: none !important;
         box-sizing: border-box;
         font-size: 11px;
+        font-weight: 700;
+        -webkit-text-stroke: 0.25px currentColor;
         position: relative;
         left: 0;
         top: 0;

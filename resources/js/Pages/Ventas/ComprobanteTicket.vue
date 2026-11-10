@@ -388,6 +388,8 @@ const vuelto = computed(() => Number(venta.value.vuelto ?? 0));
         margin: 0;
         padding: 4mm;
         box-shadow: none;
+        font-weight: 700;
+        -webkit-text-stroke: 0.25px currentColor;
 
         break-after: auto;
         page-break-after: auto;
