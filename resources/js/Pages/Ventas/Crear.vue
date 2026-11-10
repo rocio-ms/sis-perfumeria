@@ -748,6 +748,8 @@ onMounted(() => {
                                         v-for="categoria in categorias"
                                         :key="categoria.id"
                                         :label="categoria.nombre"
+                                        :badge="String(categoria.stock_total ?? 0)"
+                                        :aria-label="`${categoria.nombre}, stock disponible: ${categoria.stock_total ?? 0}`"
                                         size="small"
                                         :outlined="
                                             Number(categoriaSeleccionada) !==

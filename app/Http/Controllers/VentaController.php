@@ -138,8 +138,15 @@ class VentaController extends Controller
             'clientes' => $clientes,
             'productos' => $productos,
             'categorias' => Categoria::where('activo', true)
+                ->select(['id', 'nombre'])
+                ->withSum([
+                    'productos as stock_total' => fn ($query) => $query
+                        ->where('activo', true)
+                        ->where('stock_actual', '>', 0),
+                ], 'stock_actual')
+                ->withCasts(['stock_total' => 'integer'])
                 ->orderBy('nombre')
-                ->get(['id', 'nombre']),
+                ->get(),
             'tiposComprobante' => $tiposComprobante,
             'tiposPago' => $tiposPago,
             'sesionCaja' => $sesionCaja,
