@@ -2,6 +2,7 @@
 
 namespace App\Models;
 
+use Illuminate\Database\Eloquent\Casts\Attribute;
 use Illuminate\Database\Eloquent\Model;
 use App\Models\PrecioProducto;
 
@@ -59,6 +60,13 @@ class Producto extends Model
         'volumen_ml' => 'integer',
         'activo' => 'boolean',
     ];
+
+    protected function imagenUrl(): Attribute
+    {
+        return Attribute::get(fn (?string $ruta) => str_starts_with($ruta ?? '', 'productos/')
+            ? '/storage/'.$ruta
+            : $ruta);
+    }
 
     public function categoria()
     {

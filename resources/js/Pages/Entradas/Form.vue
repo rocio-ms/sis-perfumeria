@@ -1,6 +1,6 @@
 <script setup>
-import { computed, nextTick, onBeforeUnmount, ref, watch } from "vue";
-import { router, useForm } from "@inertiajs/vue3";
+import { computed, nextTick, onBeforeUnmount, ref, shallowRef, watch } from "vue";
+import { useForm } from "@inertiajs/vue3";
 import axios from "axios";
 
 import Swal from "sweetalert2";
@@ -75,6 +75,26 @@ const form = useForm({
     detalles: [],
 });
 
+const filasEnviadas = shallowRef([]);
+const esErrorDeFila = (campo) => /^detalles\.\d+(?:\.|$)/.test(campo);
+const erroresPorDetalle = computed(() => {
+    const porDetalle = new Map();
+
+    for (const [campo, mensaje] of Object.entries(form.errors)) {
+        if (!esErrorDeFila(campo)) continue;
+
+        const [, index, atributo] = campo.split(".");
+        const detalle = filasEnviadas.value[Number(index)];
+        if (!detalle) continue;
+
+        const errores = porDetalle.get(detalle) ?? {};
+        errores[atributo ?? "fila"] = mensaje;
+        porDetalle.set(detalle, errores);
+    }
+
+    return porDetalle;
+});
+
 /*
 |--------------------------------------------------------------------------
 | ESTADOS
@@ -89,6 +109,7 @@ const productoAutocomplete = ref(null);
 const productosFiltrados = ref([]);
 
 const buscandoProducto = ref(false);
+const errorBusquedaProducto = ref("");
 const escaneandoProducto = ref(false);
 const codigoBarrasProductoPendiente = ref("");
 const codigoBarrasLotePendiente = ref("");
@@ -96,9 +117,19 @@ const importandoExcel = ref(false);
 let temporizadorEscaner = null;
 let ultimaTeclaEscaner = 0;
 let caracteresEscaner = 0;
+let temporizadorBusqueda = null;
+let solicitudBusqueda = null;
+
+const cancelarBusquedaProducto = () => {
+    clearTimeout(temporizadorBusqueda);
+    solicitudBusqueda?.abort();
+    solicitudBusqueda = null;
+    buscandoProducto.value = false;
+};
 
 onBeforeUnmount(() => {
     clearTimeout(temporizadorEscaner);
+    cancelarBusquedaProducto();
 });
 
 /*
@@ -138,8 +169,11 @@ const tiposComprobante = [
 
 const fechaMinima = computed(() => {
     const hoy = new Date();
+    const anio = hoy.getFullYear();
+    const mes = hoy.getMonth();
+    const ultimoDia = new Date(anio, mes + 1, 0).getDate();
 
-    return new Date(hoy.getFullYear(), hoy.getMonth(), 1);
+    return new Date(anio, hoy.getDate() === ultimoDia ? mes + 1 : mes, 1);
 });
 
 /*
@@ -192,8 +226,11 @@ const fechaLocal = (fecha) => {
         return null;
     }
 
-    if (typeof fecha === "string" && /^\d{4}-\d{2}-\d{2}$/.test(fecha)) {
-        const [anio, mes, dia] = fecha.split("-").map(Number);
+    if (
+        typeof fecha === "string" &&
+        /^\d{4}-\d{2}-\d{2}(?:$|[T ])/.test(fecha)
+    ) {
+        const [anio, mes, dia] = fecha.slice(0, 10).split("-").map(Number);
 
         return new Date(anio, mes - 1, dia);
     }
@@ -206,12 +243,14 @@ const fechaParaServidor = (fecha) => {
         return null;
     }
 
-    const valor = fechaLocal(fecha);
+    if (!(fecha instanceof Date) || Number.isNaN(fecha.getTime())) {
+        return String(fecha);
+    }
 
     return [
-        valor.getFullYear(),
-        String(valor.getMonth() + 1).padStart(2, "0"),
-        String(valor.getDate()).padStart(2, "0"),
+        fecha.getFullYear(),
+        String(fecha.getMonth() + 1).padStart(2, "0"),
+        String(fecha.getDate()).padStart(2, "0"),
     ].join("-");
 };
 
@@ -343,10 +382,12 @@ const limpiarFormulario = () => {
     form.observacion = "";
     form.detalles = [];
     form.clearErrors();
+    filasEnviadas.value = [];
 
     tieneProveedor.value = false;
     productoBusqueda.value = null;
     productosFiltrados.value = [];
+    errorBusquedaProducto.value = "";
     codigoBarrasProductoPendiente.value = "";
     codigoBarrasLotePendiente.value = "";
     clearTimeout(temporizadorEscaner);
@@ -358,6 +399,7 @@ watch(
     [() => props.entrada, () => props.codigoIngreso, visible],
     ([entrada, codigoIngreso, estaVisible]) => {
         if (!estaVisible) {
+            cancelarBusquedaProducto();
             if (!entrada) {
                 limpiarFormulario();
             }
@@ -375,7 +417,7 @@ watch(
             form.numero_comprobante = entrada.numero_comprobante ?? "";
 
             form.fecha_ingreso = entrada.fecha_ingreso
-                ? new Date(entrada.fecha_ingreso)
+                ? fechaLocal(entrada.fecha_ingreso)
                 : new Date();
 
             form.proveedor_id = entrada.proveedor_id ?? null;
@@ -446,12 +488,11 @@ watch(
 |--------------------------------------------------------------------------
 */
 
-let temporizadorBusqueda = null;
-
 const buscarProducto = (event) => {
     const query = String(event.query ?? "").trim();
 
-    clearTimeout(temporizadorBusqueda);
+    cancelarBusquedaProducto();
+    errorBusquedaProducto.value = "";
 
     if (!query) {
         productosFiltrados.value = [];
@@ -459,28 +500,31 @@ const buscarProducto = (event) => {
         return;
     }
 
-    temporizadorBusqueda = setTimeout(() => {
+    temporizadorBusqueda = setTimeout(async () => {
+        const solicitud = new AbortController();
+        solicitudBusqueda = solicitud;
         buscandoProducto.value = true;
 
-        router.get(
-            route("entradas.index"),
-            {
-                buscar_producto: query,
-            },
-            {
-                preserveState: true,
-                preserveScroll: true,
-                replace: true,
-                only: ["productos"],
-
-                onSuccess: (page) => {
-                    productosFiltrados.value = page.props.productos ?? [];
-                },
-                onFinish: () => {
-                    buscandoProducto.value = false;
-                },
-            },
-        );
+        try {
+            const { data } = await axios.get(route("entradas.buscarProductos"), {
+                params: { q: query },
+                signal: solicitud.signal,
+            });
+            if (!solicitud.signal.aborted) {
+                productosFiltrados.value = data.productos ?? [];
+            }
+        } catch {
+            if (!solicitud.signal.aborted) {
+                productosFiltrados.value = [];
+                errorBusquedaProducto.value =
+                    "No se pudo buscar productos. Inténtalo de nuevo.";
+            }
+        } finally {
+            if (solicitudBusqueda === solicitud) {
+                solicitudBusqueda = null;
+                buscandoProducto.value = false;
+            }
+        }
     }, 150);
 };
 
@@ -489,6 +533,8 @@ const enfocarAutocompleteProducto = () => {
 };
 
 const escanearProducto = async (evento = null) => {
+    cancelarBusquedaProducto();
+    errorBusquedaProducto.value = "";
     clearTimeout(temporizadorEscaner);
     ultimaTeclaEscaner = 0;
     caracteresEscaner = 0;
@@ -728,9 +774,13 @@ const fechaExcel = (valor) => {
     }
 
     const partes = texto.match(/^(\d{1,2})[/-](\d{1,2})[/-](\d{4})$/);
-    if (partes) {
-        const fecha = new Date(Number(partes[3]), Number(partes[2]) - 1, Number(partes[1]));
-        return Number.isNaN(fecha.getTime()) ? null : fecha;
+    const fechaISO = partes
+        ? [partes[3], partes[2].padStart(2, "0"), partes[1].padStart(2, "0")].join("-")
+        : texto;
+
+    if (/^\d{4}-\d{2}-\d{2}$/.test(fechaISO)) {
+        const fecha = fechaLocal(fechaISO);
+        return fechaParaServidor(fecha) === fechaISO ? fecha : null;
     }
 
     const fecha = new Date(texto);
@@ -783,7 +833,7 @@ const importarDetallesExcel = async (filas) => {
 
             if (
                 fechaVencimiento &&
-                fechaVencimiento <= new Date(new Date().setHours(0, 0, 0, 0))
+                fechaVencimiento < fechaMinima.value
             ) {
                 errores.push(`Fila ${fila.numero_fila}: la fecha de vencimiento debe ser posterior a hoy.`);
                 return;
@@ -1114,13 +1164,15 @@ const guardar = () => {
         }
     });
 
-    form.fecha_ingreso = fechaLocal(form.fecha_ingreso);
-
-    form.detalles.forEach((detalle) => {
-        detalle.fecha_vencimiento = fechaParaServidor(
-            detalle.fecha_vencimiento,
-        );
-    });
+    filasEnviadas.value = [...form.detalles];
+    form.transform((datos) => ({
+        ...datos,
+        fecha_ingreso: fechaParaServidor(datos.fecha_ingreso),
+        detalles: datos.detalles.map((detalle) => ({
+            ...detalle,
+            fecha_vencimiento: fechaParaServidor(detalle.fecha_vencimiento),
+        })),
+    }));
 
     const opciones = {
         preserveScroll: true,
@@ -1142,9 +1194,10 @@ const guardar = () => {
         },
 
         onError: (errors) => {
-            const primerError = Object.values(errors)
-                .flat()
-                .find((error) => typeof error === "string");
+            const primerError = Object.entries(errors)
+                .filter(([campo]) => !esErrorDeFila(campo))
+                .flatMap(([, mensaje]) => mensaje)
+                .find((mensaje) => typeof mensaje === "string");
 
             Swal.fire({
                 title: esEdicion.value
@@ -1152,7 +1205,7 @@ const guardar = () => {
                     : "No se pudo guardar",
                 text:
                     primerError ??
-                    "Revisa los datos ingresados e inténtalo nuevamente.",
+                    "Revisa los mensajes debajo de los productos de la entrada.",
                 icon: "error",
                 confirmButtonText: "Aceptar",
             });
@@ -1419,8 +1472,9 @@ const cerrar = () => {
                     <div class="col-span-2 flex flex-col gap-1">
                         <FloatLabel variant="on" class="w-full">
                             <DatePicker
-                                id="fecha_ingreso"
+                                inputId="fecha_ingreso"
                                 v-model="form.fecha_ingreso"
+                                :invalid="!!form.errors.fecha_ingreso"
                                 class="w-full"
                                 showIcon
                                 dateFormat="dd/mm/yy"
@@ -1431,6 +1485,12 @@ const cerrar = () => {
                                 <span class="text-red-500"> * </span>
                             </label>
                         </FloatLabel>
+                        <small
+                            v-if="form.errors.fecha_ingreso"
+                            class="text-red-500"
+                        >
+                            {{ form.errors.fecha_ingreso }}
+                        </small>
                     </div>
 
                     <!-- ================================================= -->
@@ -1489,13 +1549,16 @@ const cerrar = () => {
                 <ImportacionExcel
                     v-if="!esEdicion"
                     tipo="entrada"
-                    class="mb-4"
                     :disabled="importandoExcel"
                     @imported="importarDetallesExcel"
                 />
+            </div>
 
-                <!-- BUSCADOR -->
-
+            <div
+                class="sticky top-0 z-10 border-b border-gray-200 bg-[var(--p-dialog-background)] py-2"
+                role="search"
+                aria-label="Buscar productos de la entrada"
+            >
                 <div class="flex items-end gap-3">
                     <FloatLabel variant="on" class="w-full">
                         <AutoComplete
@@ -1563,6 +1626,13 @@ const cerrar = () => {
                         @click="abrirNuevoProducto"
                     />
                 </div>
+                <small
+                    v-if="errorBusquedaProducto"
+                    class="mt-1 block text-red-600"
+                    role="alert"
+                >
+                    {{ errorBusquedaProducto }}
+                </small>
                 <small class="mt-1 block text-gray-500">
                     El código se consulta automáticamente al escanear. Si no
                     está registrado, podrás buscar el producto y asignarlo a un
@@ -1594,6 +1664,18 @@ const cerrar = () => {
                                 <small class="text-gray-500">
                                     Código: {{ detalle.producto?.codigo }}
                                 </small>
+                                <ul
+                                    v-if="erroresPorDetalle.has(detalle)"
+                                    class="mt-1 space-y-1 text-sm text-red-600"
+                                    aria-live="polite"
+                                >
+                                    <li
+                                        v-for="(mensaje, campo) in erroresPorDetalle.get(detalle)"
+                                        :key="campo"
+                                    >
+                                        {{ mensaje }}
+                                    </li>
+                                </ul>
                             </div>
 
                             <div class="flex flex-col gap-1">
@@ -1804,6 +1886,7 @@ const cerrar = () => {
                                     <DatePicker
                                         v-if="detalle.tiene_vencimiento"
                                         v-model="detalle.fecha_vencimiento"
+                                        :invalid="!!erroresPorDetalle.get(detalle)?.fecha_vencimiento"
                                         view="month"
                                         dateFormat="mm/yy"
                                         showIcon
@@ -1822,6 +1905,7 @@ const cerrar = () => {
                                     rounded
                                     type="button"
                                     aria-label="Eliminar producto"
+                                    :disabled="form.processing"
                                     @click="eliminarDetalle(index)"
                                 />
                             </div>

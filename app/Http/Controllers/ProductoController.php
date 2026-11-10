@@ -9,13 +9,16 @@ use App\Models\PrecioProducto;
 use App\Models\Empresa;
 use App\Models\Subcategoria;
 
+use Closure;
 use Illuminate\Http\Request;
+use Illuminate\Http\UploadedFile;
 use Inertia\Inertia;
 use Illuminate\Validation\Rule;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Str;
 use Illuminate\Validation\ValidationException;
+use Throwable;
 
 class ProductoController extends Controller
 {
@@ -334,18 +337,11 @@ class ProductoController extends Controller
 
         $validated['codigo'] = $this->generarCodigoInterno();
 
-        //Imagen
-
-        if ($request->hasFile('imagen_url')) {
-            $validated['imagen_url'] = $request
-                ->file('imagen_url')
-                ->store('productos', 'public');
-        }
-
-        DB::transaction(function () use (&$validated) {
+        $this->guardarProductoConImagen($validated['imagen_url'] ?? null, function (?string $urlImagen) use ($validated) {
             $marca = $this->resolverMarca($validated);
             $validated['marca_id'] = $marca->id;
             $validated['empresa_id'] = $marca->empresa_id;
+            $validated['imagen_url'] = $urlImagen;
             unset($validated['marca_nombre']);
 
             Producto::create($validated);
@@ -503,40 +499,15 @@ class ProductoController extends Controller
             ],
         ]);
 
-        DB::transaction(function () use (
-            $request,
-            $validated,
-            $producto
-        ) {
+        $this->guardarProductoConImagen($validated['imagen_url'] ?? null, function (?string $urlImagen) use ($validated, $producto) {
+            $producto = Producto::lockForUpdate()->findOrFail($producto->getKey());
+            $imagenAnterior = $producto->getRawOriginal('imagen_url');
 
             $marca = $this->resolverMarca($validated);
             $validated['marca_id'] = $marca->id;
             unset($validated['marca_nombre']);
 
             $empresaId = $marca->empresa_id ?? $producto->empresa_id;
-
-            /*
-            |--------------------------------------------------------------------------
-            | IMAGEN
-            |--------------------------------------------------------------------------
-            */
-
-            $imagen = $producto->imagen_url;
-
-            if ($request->hasFile('imagen_url')) {
-
-                if ($producto->imagen_url) {
-                    Storage::disk('public')->delete(
-                        $producto->imagen_url
-                    );
-                }
-
-                $imagen = $request->file('imagen_url')->store('productos', 'public');
-            } else {
-
-                $validated['imagen_url'] =
-                    $producto->imagen_url;
-            }
 
             /*
             |--------------------------------------------------------------------------
@@ -553,7 +524,7 @@ class ProductoController extends Controller
                 'stock_minimo' => $validated['stock_minimo'],
                 'stock_actual' => $validated['stock_actual'],
                 'volumen_ml' => $validated['volumen_ml'],
-                'imagen_url' => $validated['imagen_url'],
+                'imagen_url' => $urlImagen ?? $imagenAnterior,
                 'activo' => $validated['activo'] ?? true,
                 'marca_id' => $validated['marca_id'],
                 'categoria_id' => $validated['categoria_id'],
@@ -628,12 +599,46 @@ class ProductoController extends Controller
                     ]);
                 }
             }
+            return $imagenAnterior;
         });
 
         return back()->with(
             'success',
             'Producto actualizado correctamente.'
         );
+    }
+
+    private function guardarProductoConImagen(?UploadedFile $archivo, Closure $guardar): void
+    {
+        $ruta = $archivo?->store('productos', 'public');
+
+        if ($ruta === false) {
+            throw ValidationException::withMessages([
+                'imagen_url' => 'No se pudo guardar la imagen del producto.',
+            ]);
+        }
+
+        try {
+            $imagenAnterior = DB::transaction(
+                fn () => $guardar($ruta === null ? null : '/storage/'.$ruta)
+            );
+        } catch (Throwable $exception) {
+            if ($ruta !== null) {
+                Storage::disk('public')->delete($ruta);
+            }
+
+            throw $exception;
+        }
+
+        if ($ruta !== null && preg_match('#^(?:/storage/)?(productos/[a-zA-Z0-9._-]+\.[a-zA-Z0-9]+)$#D', $imagenAnterior ?? '', $coincidencias)) {
+            $rutaAnterior = $coincidencias[1];
+
+            DB::afterCommit(function () use ($rutaAnterior) {
+                if (!Producto::whereIn('imagen_url', [$rutaAnterior, '/storage/'.$rutaAnterior])->exists()) {
+                    Storage::disk('public')->delete($rutaAnterior);
+                }
+            });
+        }
     }
 
     private function resolverMarca(array $validated): Marca

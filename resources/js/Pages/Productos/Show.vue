@@ -100,7 +100,7 @@ const formatearMoneda = (valor) =>
         <div v-if="producto" class="space-y-5">
             <div class="rounded-xl border border-gray-200 bg-gray-50/50 p-5 flex flex-col sm:flex-row gap-5">
                 <img
-                    :src="producto.imagen_url ? `/storage/${producto.imagen_url}` : '/images/producto_default.svg'"
+                    :src="producto.imagen_url || '/images/producto_default.svg'"
                     alt="Imagen del producto"
                     class="w-32 h-32 rounded-xl object-contain border border-gray-200 bg-white p-2 shrink-0"
                 />

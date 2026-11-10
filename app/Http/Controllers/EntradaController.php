@@ -15,6 +15,7 @@ use App\Models\Notificacion;
 use App\Models\TipoMovimiento;
 use App\Models\Empresa;
 use App\Models\Subcategoria;
+use Closure;
 use Illuminate\Http\Request;
 use Illuminate\Validation\Rule;
 use Illuminate\Validation\ValidationException;
@@ -24,6 +25,45 @@ use Carbon\Carbon;
 
 class EntradaController extends Controller
 {
+    private const MENSAJES_FECHAS = [
+        'fecha_ingreso.required' => 'Ingresa la fecha de ingreso.',
+        'fecha_ingreso.date' => 'La fecha de ingreso no es válida.',
+        'detalles.*.fecha_vencimiento.required_if' => 'Selecciona el mes de vencimiento.',
+        'detalles.*.fecha_vencimiento.date' => 'La fecha de vencimiento no es válida.',
+    ];
+
+    public function buscarProductos(Request $request)
+    {
+        $validated = $request->validate([
+            'q' => ['nullable', 'string', 'max:100'],
+        ]);
+        $termino = trim($validated['q'] ?? '');
+
+        if ($termino === '') {
+            return response()->json(['productos' => []]);
+        }
+
+        $productos = Producto::where('activo', true)
+            ->where(function ($query) use ($termino) {
+                $query->where('nombre', 'like', "{$termino}%")
+                    ->orWhere('codigo', 'like', "{$termino}%")
+                    ->orWhere('codigo_barras', 'like', "{$termino}%");
+            })
+            ->with('categoria:id,nombre')
+            ->limit(20)
+            ->get([
+                'id',
+                'nombre',
+                'codigo',
+                'codigo_barras',
+                'categoria_id',
+                'unidad_medida',
+                'stock_actual',
+            ]);
+
+        return response()->json(['productos' => $productos]);
+    }
+
     public function buscarPorCodigoBarras(Request $request)
     {
         $validated = $request->validate([
@@ -76,41 +116,6 @@ class EntradaController extends Controller
             ],
             'direction' => ['nullable', Rule::in(['asc', 'desc'])],
         ]);
-
-        $buscarProducto = trim($request->input('buscar_producto', ''));
-
-        // Busqueda rápida de productos
-
-        if ($request->has('buscar_producto')) {
-
-            $productos = collect();
-
-            if ($buscarProducto !== '') {
-
-                $productos = Producto::where('activo', true)
-                    ->where(function ($query) use ($buscarProducto) {
-                        $query->where('nombre', 'like', "{$buscarProducto}%")
-                            ->orWhere('codigo', 'like', "{$buscarProducto}%")
-                            ->orWhere('codigo_barras', 'like', "{$buscarProducto}%");
-                    })
-                    ->select([
-                        'id',
-                        'nombre',
-                        'codigo',
-                        'codigo_barras',
-                        'categoria_id',
-                        'unidad_medida',
-                        'stock_actual',
-                    ])
-                    ->with('categoria:id,nombre')
-                    ->limit(20)
-                    ->get();
-            }
-
-            return Inertia::render('Entradas/Index', [
-                'productos' => $productos,
-            ]);
-        }
 
         $search = trim($validated['search'] ?? '');
         $sort = $validated['sort'] ?? 'id';
@@ -265,35 +270,6 @@ class EntradaController extends Controller
 
     public function store(Request $request)
     {
-
-        if ($request->filled('fecha_ingreso')) {
-            $request->merge([
-                'fecha_ingreso' => Carbon::parse(
-                    $request->fecha_ingreso
-                )->format('Y-m-d'),
-            ]);
-        }
-
-        if ($request->has('detalles')) {
-
-            $detalles = $request->input('detalles');
-
-            foreach ($detalles as $index => $detalle) {
-
-                if (!empty($detalle['fecha_vencimiento'])) {
-
-                    $detalles[$index]['fecha_vencimiento'] =
-                        Carbon::parse(
-                            $detalle['fecha_vencimiento']
-                        )->endOfMonth()->format('Y-m-d');
-                }
-            }
-
-            $request->merge([
-                'detalles' => $detalles,
-            ]);
-        }
-
         $validated = $request->validate([
 
             'tipo_comprobante' => [
@@ -327,6 +303,7 @@ class EntradaController extends Controller
                 'array',
                 'min:1',
             ],
+            'detalles.*' => ['required', 'array'],
 
             'detalles.*.producto_id' => [
                 'required',
@@ -368,12 +345,11 @@ class EntradaController extends Controller
                 'min:0',
             ],
 
-            'detalles.*.fecha_vencimiento' => [
-                'nullable',
-                'date',
-                'after:today',
-            ],
-        ]);
+            'detalles.*.tiene_vencimiento' => ['sometimes', 'boolean'],
+            'detalles.*.fecha_vencimiento' => $this->reglasFechaVencimiento(),
+        ], self::MENSAJES_FECHAS);
+
+        $validated = $this->normalizarFechas($validated);
 
 
         DB::transaction(function () use ($validated, $request) {
@@ -418,7 +394,7 @@ class EntradaController extends Controller
 
             $entrada = Entrada::create([
                 'codigo_ingreso' => $codigoIngreso,
-                'tipo_comprobante' => $validated['tipo_comprobante'],
+                'tipo_comprobante' => $validated['tipo_comprobante'] ?? null,
                 'numero_comprobante' => $validated['numero_comprobante'] ?? null,
                 'fecha_ingreso' => $validated['fecha_ingreso'],
                 'total_compra' => $totalCompra,
@@ -678,31 +654,6 @@ class EntradaController extends Controller
 
     public function update(Request $request, Entrada $entrada)
     {
-        if ($request->filled('fecha_ingreso')) {
-            $request->merge([
-                'fecha_ingreso' => Carbon::parse(
-                    $request->fecha_ingreso
-                )->format('Y-m-d'),
-            ]);
-        }
-
-        if ($request->has('detalles')) {
-            $detalles = $request->input('detalles');
-
-            foreach ($detalles as $index => $detalle) {
-                $detalles[$index]['fecha_vencimiento'] =
-                    !empty($detalle['fecha_vencimiento'])
-                    ? Carbon::parse(
-                        $detalle['fecha_vencimiento']
-                    )->endOfMonth()->format('Y-m-d')
-                    : null;
-            }
-
-            $request->merge([
-                'detalles' => $detalles,
-            ]);
-        }
-
         $validated = $request->validate([
 
             'tipo_comprobante' => [
@@ -736,6 +687,7 @@ class EntradaController extends Controller
                 'array',
                 'min:1',
             ],
+            'detalles.*' => ['required', 'array'],
 
             'detalles.*.producto_id' => [
                 'required',
@@ -777,12 +729,11 @@ class EntradaController extends Controller
                 'min:0',
             ],
 
-            'detalles.*.fecha_vencimiento' => [
-                'nullable',
-                'date',
-                'after:today',
-            ],
-        ]);
+            'detalles.*.tiene_vencimiento' => ['sometimes', 'boolean'],
+            'detalles.*.fecha_vencimiento' => $this->reglasFechaVencimiento(),
+        ], self::MENSAJES_FECHAS);
+
+        $validated = $this->normalizarFechas($validated);
 
 
         DB::transaction(function () use ($validated, $entrada) {
@@ -1070,5 +1021,38 @@ class EntradaController extends Controller
                 'success',
                 'Entrada actualizada correctamente.'
             );
+    }
+
+    private function reglasFechaVencimiento(): array
+    {
+        return [
+            'bail',
+            'required_if:detalles.*.tiene_vencimiento,true',
+            'nullable',
+            'date',
+            function (string $attribute, mixed $value, Closure $fail): void {
+                if ($this->finDeMes($value) <= Carbon::today()->toDateString()) {
+                    $fail('La fecha de vencimiento debe ser posterior a hoy.');
+                }
+            },
+        ];
+    }
+
+    private function normalizarFechas(array $validated): array
+    {
+        $validated['fecha_ingreso'] = Carbon::parse($validated['fecha_ingreso'])->toDateString();
+
+        foreach ($validated['detalles'] as $index => $detalle) {
+            if (isset($detalle['fecha_vencimiento'])) {
+                $validated['detalles'][$index]['fecha_vencimiento'] = $this->finDeMes($detalle['fecha_vencimiento']);
+            }
+        }
+
+        return $validated;
+    }
+
+    private function finDeMes(string $fecha): string
+    {
+        return Carbon::parse($fecha)->endOfMonth()->toDateString();
     }
 }

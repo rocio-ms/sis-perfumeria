@@ -338,8 +338,8 @@ const escanearCodigoBarras = (event) => {
 
                 if (esCodigoNumerico) {
                     Swal.fire({
-                        title: "Producto no encontrado",
-                        text: `No existe un producto con el código de barras ${codigo}.`,
+                        title: "Sin coincidencias disponibles",
+                        text: `No se encontró un producto o lote con stock disponible para el código ${codigo}.`,
                         icon: "warning",
                         confirmButtonText: "Aceptar",
                     });

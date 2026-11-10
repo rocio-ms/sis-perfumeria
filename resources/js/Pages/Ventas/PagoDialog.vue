@@ -407,9 +407,8 @@ const montoCalculadora = ref("");
 const calculadoraActiva = ref(false);
 
 /**
- * Modo compacto: al usar la calculadora se colapsan Comprobante y
- * Método de pago para dar espacio. El bloque de CLIENTE nunca se
- * colapsa, así siempre se ve qué falta para habilitar el botón.
+ * El modo compacto colapsa Comprobante mientras se usa la calculadora.
+ * El cliente y las tarjetas de pago siguen visibles.
  */
 const modoPagoActivo = computed(() => {
     return calculadoraActiva.value && metodoPago.value === "efectivo";
@@ -906,31 +905,18 @@ watch(
 
             <!-- MÉTODO DE PAGO -->
             <div class="transition-all duration-300">
-                <div
-                    class="flex items-center justify-between"
-                    :class="modoPagoActivo ? 'cursor-pointer' : ''"
-                    @click="modoPagoActivo && expandirSecciones()"
+                <p
+                    class="text-xs font-semibold text-gray-500 uppercase tracking-wide"
                 >
-                    <label
-                        class="text-xs font-semibold text-gray-500 uppercase tracking-wide"
-                    >
-                        Método de pago
-                    </label>
-
-                    <span
-                        v-if="modoPagoActivo"
-                        class="text-[11px] font-medium text-rose-700 flex items-center gap-1"
-                    >
-                        {{
-                            metodosPago.find((m) => m.value === metodoPago)
-                                ?.label
-                        }}
-                        <i class="pi pi-chevron-down text-[9px]"></i>
-                    </span>
-                </div>
+                    Método de pago
+                </p>
 
                 <!-- MÉTODOS -->
-                <div v-if="!modoPagoActivo" class="grid grid-cols-3 gap-2 mt-2">
+                <div
+                    class="grid grid-cols-3 gap-2 mt-2"
+                    role="group"
+                    aria-label="Método de pago"
+                >
                     <button
                         v-for="metodo in metodosPago"
                         :key="metodo.value"
@@ -941,6 +927,7 @@ watch(
                                 ? 'border-rose-700 bg-rose-50 text-rose-800'
                                 : 'border-gray-200 text-gray-500 hover:border-rose-300 hover:text-rose-700'
                         "
+                        :aria-pressed="metodoPago === metodo.value"
                         @click="metodoPago = metodo.value"
                     >
                         <i :class="metodo.icon" class="text-lg"></i>

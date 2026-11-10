@@ -881,7 +881,7 @@ const estadoTag = (valor, columna) => {
             :sortOrder="ordenamiento.sortOrder"
             responsiveLayout="scroll"
             dataKey="id"
-            class="text-sm"
+            class="tabla-registros text-sm"
             @page="cambiarPagina"
             @sort="cambiarOrden"
         >
@@ -916,12 +916,8 @@ const estadoTag = (valor, columna) => {
                     <template v-if="columna.type === 'image'">
                         <img
                             :src="
-                                obtenerValor(data, columna.field)
-                                    ? `/storage/${obtenerValor(
-                                          data,
-                                          columna.field,
-                                      )}`
-                                    : '/images/producto_default.svg'
+                                obtenerValor(data, columna.field) ||
+                                '/images/producto_default.svg'
                             "
                             :alt="columna.header"
                             class="w-14 h-14 object-contain rounded-lg border border-gray-200 bg-white p-1"
@@ -1066,3 +1062,27 @@ const estadoTag = (valor, columna) => {
         </DataTable>
     </div>
 </template>
+
+<style scoped>
+.tabla-registros :deep(.p-datatable-thead) {
+    position: sticky;
+    top: 0;
+    z-index: 2;
+    background: var(--p-datatable-header-cell-background, #fff);
+}
+
+.tabla-registros :deep(.p-datatable-thead > tr > th) {
+    position: static;
+}
+
+.tabla-registros :deep(.p-datatable-tbody) {
+    position: relative;
+    z-index: 0;
+}
+
+@media print {
+    .tabla-registros :deep(.p-datatable-thead) {
+        position: static;
+    }
+}
+</style>

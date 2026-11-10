@@ -454,6 +454,9 @@ Route::middleware([
         [EntradaController::class, 'buscarPorCodigoBarras']
     )->name('entradas.buscarPorCodigoBarras');
 
+    Route::get('/entradas/buscar-productos', [EntradaController::class, 'buscarProductos'])
+        ->name('entradas.buscarProductos');
+
     Route::resource('/entradas', EntradaController::class);
 
     Route::get(

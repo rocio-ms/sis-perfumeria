@@ -273,9 +273,7 @@ const cargarProducto = (producto) => {
     // Al editar no reemplazamos la imagen hasta que el usuario seleccione otra
     form.imagen_url = null;
 
-    imagenPreview.value = producto.imagen_url
-        ? `/storage/${producto.imagen_url}`
-        : "/images/producto_default.svg";
+    imagenPreview.value = producto.imagen_url || "/images/producto_default.svg";
 
     form.activo = Boolean(producto.activo);
 
@@ -331,34 +329,20 @@ watch(visible, (nuevoValor) => {
 //Guardar
 
 const guardar = () => {
-    if (esEdicion.value) {
-        form.transform((data) => ({
-            ...data,
-            _method: "PUT",
-        })).post(route("productos.update", props.producto.id), {
-            forceFormData: true,
+    const editando = esEdicion.value;
+    const destino = editando
+        ? route("productos.update", props.producto.id)
+        : route("productos.store");
 
+    form.transform((datos) => editando ? { ...datos, _method: "PUT" } : datos)
+        .post(destino, {
+            forceFormData: true,
             onSuccess: () => {
                 limpiarFormulario();
-
                 visible.value = false;
-
-                emit("saved", "actualizado");
+                emit("saved", editando ? "actualizado" : "guardado");
             },
         });
-    } else {
-        form.post(route("productos.store"), {
-            forceFormData: true,
-
-            onSuccess: () => {
-                limpiarFormulario();
-
-                visible.value = false;
-
-                emit("saved", "guardado");
-            },
-        });
-    }
 };
 
 watch(

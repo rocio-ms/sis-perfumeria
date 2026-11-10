@@ -277,7 +277,7 @@ const limpiarBusqueda = () => {
     busqueda.value = "";
 
     nextTick(() => {
-        inputBusqueda.value?.$el?.focus();
+        inputBusqueda.value?.$el?.focus({ preventScroll: true });
     });
 };
 
@@ -806,10 +806,10 @@ onMounted(() => {
                 >
                     <!-- CATÁLOGO -->
                     <div
-                        class="border border-[#F5DCE4] rounded-2xl bg-white overflow-hidden"
+                        class="border border-[#F5DCE4] rounded-2xl bg-white overflow-clip"
                     >
                         <!-- HEADER CATÁLOGO -->
-                        <div class="px-4 pt-3 pb-3 border-b border-[#F9E8ED]">
+                        <div class="px-4 pt-3">
                             <div
                                 class="flex flex-col md:flex-row md:items-center md:justify-between gap-4"
                             >
@@ -842,8 +842,15 @@ onMounted(() => {
 
                             </div>
 
-                            <!-- BUSCADOR -->
-                            <div class="flex gap-2 mt-3">
+                        </div>
+
+                        <!-- BUSCADOR -->
+                        <div
+                            class="venta-buscador border-b border-[#F9E8ED] bg-white px-4 py-3"
+                            role="search"
+                            aria-label="Buscar productos para la venta"
+                        >
+                            <div class="flex gap-2">
                                 <IconField class="w-full">
                                     <InputIcon
                                         :class="
@@ -857,6 +864,7 @@ onMounted(() => {
                                         ref="inputBusqueda"
                                         v-model="busqueda"
                                         class="w-full"
+                                        aria-label="Escanea o busca un producto"
                                         placeholder="Escanea el código o busca un producto..."
                                         autofocus
                                         @keydown.enter.prevent="
@@ -912,9 +920,8 @@ onMounted(() => {
                                     >
                                         <img
                                             :src="
-                                                producto.imagen_url
-                                                    ? `/storage/${producto.imagen_url}`
-                                                    : '/images/producto_default.svg'
+                                                producto.imagen_url ||
+                                                '/images/producto_default.svg'
                                             "
                                             :alt="producto.nombre"
                                             class="w-full h-full object-contain transition-transform duration-200 group-hover:scale-105"
@@ -1065,9 +1072,9 @@ onMounted(() => {
                     </div>
 
                     <!-- DETALLE DE VENTA -->
-                    <div v-if="carrito.length > 0">
+                    <div v-if="carrito.length > 0" class="venta-carrito">
                         <div
-                            class="border border-[#F5DCE4] rounded-2xl bg-white h-full overflow-hidden lg:sticky lg:top-4 flex flex-col"
+                            class="venta-carrito-panel border border-[#F5DCE4] rounded-2xl bg-white flex flex-col"
                         >
                             <!-- HEADER -->
                             <div
@@ -1110,11 +1117,11 @@ onMounted(() => {
                             </div>
 
                             <!-- PRODUCTOS DEL CARRITO -->
-                            <div class="p-3 pb-0">
+                            <div class="venta-carrito-productos p-3 pb-0">
                                 <transition-group
                                     name="cart-row"
                                     tag="div"
-                                    class="flex flex-col gap-3 max-h-[360px] overflow-y-auto pr-1"
+                                    class="relative flex flex-col gap-3 pr-1"
                                 >
                                     <div
                                         v-for="(item, index) in carrito"
@@ -1130,10 +1137,8 @@ onMounted(() => {
                                                 >
                                                     <img
                                                         :src="
-                                                            item.producto
-                                                                ?.imagen_url
-                                                                ? `/storage/${item.producto.imagen_url}`
-                                                                : '/images/producto_default.svg'
+                                                            item.producto?.imagen_url ||
+                                                            '/images/producto_default.svg'
                                                         "
                                                         :alt="
                                                             item.producto
@@ -1285,11 +1290,11 @@ onMounted(() => {
 
                             <!-- RESUMEN -->
                             <div
-                                class="p-3 pt-3 mt-2 border-t border-[#F5DCE4] shrink-0"
+                                class="venta-cobro border-t border-[#F5DCE4] bg-white shrink-0"
                             >
                                 <!-- SUBTOTAL -->
                                 <div
-                                    class="flex justify-between text-sm text-gray-500 mb-2"
+                                    class="venta-subtotal justify-between text-sm text-gray-500 mb-2"
                                 >
                                     <span>Subtotal</span>
                                     <span>
@@ -1299,10 +1304,10 @@ onMounted(() => {
 
                                 <!-- TOTAL -->
                                 <div
-                                    class="rounded-xl bg-[#FDF2F5] border border-[#F5DCE4] px-4 py-4"
+                                    class="venta-total"
                                 >
                                     <div
-                                        class="flex justify-between items-center"
+                                        class="venta-total-linea"
                                     >
                                         <span
                                             class="font-semibold text-gray-700"
@@ -1311,7 +1316,8 @@ onMounted(() => {
                                         </span>
 
                                         <span
-                                            class="text-2xl font-bold text-[#7F1D3F]"
+                                            class="venta-total-monto font-bold text-[#7F1D3F]"
+                                            aria-live="polite"
                                         >
                                             {{ formatearMoneda(totalVenta) }}
                                         </span>
@@ -1322,7 +1328,7 @@ onMounted(() => {
                                     label="Continuar con el pago"
                                     icon="pi pi-credit-card"
                                     size="large"
-                                    class="w-full mt-4 !bg-[#7F1D3F] !border-[#7F1D3F] hover:!bg-[#64152F] hover:!border-[#64152F]"
+                                    class="venta-cobro-boton !bg-[#7F1D3F] !border-[#7F1D3F] hover:!bg-[#64152F] hover:!border-[#64152F] max-sm:!px-3 max-sm:!text-sm"
                                     @click="mostrarPago = true"
                                 />
                             </div>
@@ -1397,6 +1403,103 @@ onMounted(() => {
 </template>
 
 <style scoped>
+.ventas-page {
+    --venta-sticky-top: 73px;
+}
+
+.venta-buscador {
+    position: sticky;
+    top: var(--venta-sticky-top);
+    z-index: 5;
+}
+
+.venta-carrito {
+    margin-bottom: calc(5.5rem + env(safe-area-inset-bottom, 0px));
+}
+
+.venta-carrito-productos {
+    min-height: 0;
+    max-height: 360px;
+    overflow-y: auto;
+}
+
+.venta-cobro {
+    position: fixed;
+    inset-inline-start: var(--v-layout-left, 0px);
+    inset-inline-end: var(--v-layout-right, 0px);
+    bottom: 0;
+    z-index: 6;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 0.75rem;
+    padding: 0.75rem 1rem calc(0.75rem + env(safe-area-inset-bottom, 0px));
+}
+
+.venta-subtotal {
+    display: none;
+}
+
+.venta-total-linea {
+    display: flex;
+    flex-direction: column;
+}
+
+.venta-total-monto {
+    font-size: 1.125rem;
+}
+
+.venta-cobro-boton {
+    flex-shrink: 0;
+    white-space: nowrap;
+}
+
+@media (min-width: 1024px) and (min-height: 420px) {
+    .venta-carrito {
+        position: sticky;
+        top: var(--venta-sticky-top);
+        align-self: start;
+        margin-bottom: 0;
+    }
+
+    .venta-carrito-panel {
+        max-height: calc(100dvh - var(--venta-sticky-top) - 0.5rem);
+    }
+
+    .venta-cobro {
+        position: static;
+        display: block;
+        margin-top: 0.5rem;
+        padding: 0.75rem;
+    }
+
+    .venta-subtotal {
+        display: flex;
+    }
+
+    .venta-total {
+        border: 1px solid #f5dce4;
+        border-radius: 0.75rem;
+        background: #fdf2f5;
+        padding: 1rem;
+    }
+
+    .venta-total-linea {
+        flex-direction: row;
+        align-items: center;
+        justify-content: space-between;
+    }
+
+    .venta-total-monto {
+        font-size: 1.5rem;
+    }
+
+    .venta-cobro-boton {
+        width: 100%;
+        margin-top: 1rem;
+    }
+}
+
 .category-filter {
     display: flex;
     align-items: center;

@@ -63,6 +63,7 @@ class SalidaController extends Controller
                     },
                 ])
                     ->where('activo', true)
+                    ->where('stock_actual', '>=', 1)
                     ->where(function ($query) use ($buscarProducto) {
 
                         $query->where('codigo_barras', 'like', "{$buscarProducto}%")
