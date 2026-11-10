@@ -119,7 +119,7 @@ Route::middleware([
         '/clientes/buscar-documento',
         [ClienteController::class, 'buscarDocumento']
     )
-        ->middleware('permission:clientes.index')
+        ->middleware('permission:clientes.index|ventas.crear')
         ->name('clientes.buscar-documento');
 
     Route::post(

@@ -238,19 +238,14 @@ class ClienteController extends Controller
 
     public function buscarDocumento(Request $request)
     {
-        $request->validate([
+        $largoDocumento = $request->input('tipo_documento') === 'RUC' ? 11 : 8;
+        $validated = $request->validate([
             'tipo_documento' => 'required|in:DNI,RUC',
-            'numero_documento' => 'required|string',
+            'numero_documento' => ['required', 'string', "digits:{$largoDocumento}"],
         ]);
 
-        $cliente = Cliente::where(
-            'tipo_documento',
-            $request->tipo_documento
-        )
-            ->where(
-                'numero_documento',
-                $request->numero_documento
-            )
+        $cliente = Cliente::where('tipo_documento', $validated['tipo_documento'])
+            ->where('numero_documento', $validated['numero_documento'])
             ->first();
 
         if (!$cliente) {
@@ -266,11 +261,7 @@ class ClienteController extends Controller
                 'id' => $cliente->id,
                 'tipo_documento' => $cliente->tipo_documento,
                 'numero_documento' => $cliente->numero_documento,
-                'nombre' => trim(
-                    $cliente->nombres . ' ' .
-                        $cliente->ap_paterno . ' ' .
-                        $cliente->ap_materno
-                ),
+                'nombre' => trim($cliente->nombre_completo) ?: trim($cliente->razon_social_nombre ?? ''),
             ],
         ]);
     }

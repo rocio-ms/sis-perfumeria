@@ -1,5 +1,5 @@
 <script setup>
-import { ref, computed, watch } from "vue";
+import { ref, computed, onBeforeUnmount, watch } from "vue";
 
 const props = defineProps({
     visible: {
@@ -59,7 +59,7 @@ const buscandoCliente = ref(false);
 const mensajeCliente = ref("");
 const clienteEncontrado = ref(false);
 const clienteEncontradoEnAPI = ref(false);
-const consultaClienteRealizada = ref(false);
+let solicitudCliente = null;
 
 // Último documento que se consultó (BD/API). Sirve para invalidar
 // el id y los mensajes si el usuario modifica el número después.
@@ -82,12 +82,16 @@ const largoDocumentoEsperado = computed(() => {
 });
 
 const limpiarEstadoBusqueda = () => {
+    solicitudCliente?.abort();
+    solicitudCliente = null;
+    buscandoCliente.value = false;
     clienteEncontrado.value = false;
     clienteEncontradoEnAPI.value = false;
-    consultaClienteRealizada.value = false;
     mensajeCliente.value = "";
     documentoConsultado.value = "";
 };
+
+onBeforeUnmount(limpiarEstadoBusqueda);
 
 /**
  * Opción 1: cliente anónimo (checkbox marcado)
@@ -172,10 +176,15 @@ watch(
 
         if (soloDigitos !== documentoConsultado.value) {
             cliente.value.id = null;
-            clienteEncontrado.value = false;
-            clienteEncontradoEnAPI.value = false;
-            consultaClienteRealizada.value = false;
-            mensajeCliente.value = "";
+            if (clienteEncontrado.value || clienteEncontradoEnAPI.value) {
+                cliente.value.nombre = "";
+                cliente.value.razon_social_nombre = "";
+                cliente.value.ap_paterno = "";
+                cliente.value.ap_materno = "";
+                cliente.value.nombres = "";
+                cliente.value.direccion = "";
+            }
+            limpiarEstadoBusqueda();
         }
     },
 );
@@ -185,20 +194,20 @@ watch(
  * Si falla, el usuario puede escribir el nombre manualmente (opción 3).
  */
 const buscarCliente = async () => {
+    if (buscandoCliente.value || esClienteVarios.value) return;
+
     const documento = texto(cliente.value.numero_documento);
 
     // Validar longitud
-    if (documento.length !== largoDocumentoEsperado.value) {
+    if (!/^\d+$/.test(documento) || documento.length !== largoDocumentoEsperado.value) {
         mensajeCliente.value = `El ${cliente.value.tipo_documento} debe tener ${largoDocumentoEsperado.value} dígitos.`;
-        consultaClienteRealizada.value = true;
         return;
     }
 
+    const solicitud = new AbortController();
+    solicitudCliente = solicitud;
     buscandoCliente.value = true;
     mensajeCliente.value = "";
-    consultaClienteRealizada.value = false;
-    clienteEncontrado.value = false;
-    clienteEncontradoEnAPI.value = false;
     documentoConsultado.value = documento;
 
     const tipoDocumento = cliente.value.tipo_documento;
@@ -212,57 +221,46 @@ const buscarCliente = async () => {
 
         const responseBD = await fetch(urlBD, {
             method: "GET",
+            signal: solicitud.signal,
             headers: {
                 Accept: "application/json",
                 "X-Requested-With": "XMLHttpRequest",
             },
         });
 
-        if (responseBD.ok) {
-            const dataBD = await responseBD.json();
-
-            if (dataBD.success && dataBD.cliente) {
-                // Normalizamos tipos: la BD puede devolver número o null
-                cliente.value = {
-                    id: dataBD.cliente.id ?? null,
-                    tipo_documento:
-                        texto(dataBD.cliente.tipo_documento).toUpperCase() ||
-                        tipoDocumento,
-                    numero_documento:
-                        texto(dataBD.cliente.numero_documento) || documento,
-                    nombre: texto(dataBD.cliente.nombre),
-
-                    razon_social_nombre: texto(
-                        dataBD.cliente.razon_social_nombre ??
-                            dataBD.cliente.razon_social,
-                    ),
-
-                    ap_paterno: texto(
-                        dataBD.cliente.ap_paterno ??
-                            dataBD.cliente.apellido_paterno,
-                    ),
-
-                    ap_materno: texto(
-                        dataBD.cliente.ap_materno ??
-                            dataBD.cliente.apellido_materno,
-                    ),
-                    nombres: texto(dataBD.cliente.nombres),
-
-                    direccion: texto(dataBD.cliente.direccion),
-                };
-
-                clienteEncontrado.value = true;
-                consultaClienteRealizada.value = true;
-                mensajeCliente.value =
-                    "Cliente encontrado en tu base de datos.";
-
-                return;
-            }
+        if (!responseBD.ok) {
+            throw new Error(`La búsqueda local devolvió HTTP ${responseBD.status}.`);
         }
 
-        // 2. NO EXISTE EN BD → CONSULTAR API
+        const dataBD = await responseBD.json();
+        if (solicitud.signal.aborted) return;
+
+        if (dataBD.success && dataBD.cliente) {
+            const nombre = texto(dataBD.cliente.nombre);
+            cliente.value.id = dataBD.cliente.id;
+            cliente.value.nombre = nombre;
+            if (tipoDocumento === "RUC") {
+                cliente.value.razon_social_nombre = nombre;
+            }
+
+            clienteEncontrado.value = true;
+            clienteEncontradoEnAPI.value = false;
+            mensajeCliente.value = "Cliente encontrado en tu base de datos.";
+            return;
+        }
+
+        if (tipoDocumento !== "DNI") {
+            cliente.value.id = null;
+            clienteEncontrado.value = false;
+            mensajeCliente.value =
+                "Cliente no encontrado. Puedes ingresar la razón social manualmente.";
+            return;
+        }
+
+        // La consulta externa se usa solo si el DNI no está registrado localmente.
         const responseAPI = await fetch(route("clientes.consultar-dni"), {
             method: "POST",
+            signal: solicitud.signal,
             headers: {
                 "Content-Type": "application/json",
                 Accept: "application/json",
@@ -285,6 +283,7 @@ const buscarCliente = async () => {
         } catch (error) {
             dataAPI = null;
         }
+        if (solicitud.signal.aborted) return;
 
         // 3. API RESPONDIÓ CORRECTAMENTE
         if (responseAPI.ok && dataAPI?.success && dataAPI?.data) {
@@ -320,7 +319,7 @@ const buscarCliente = async () => {
                 };
 
                 clienteEncontradoEnAPI.value = true;
-                consultaClienteRealizada.value = true;
+                clienteEncontrado.value = false;
                 mensajeCliente.value =
                     "Datos obtenidos correctamente. Puedes continuar con la venta.";
 
@@ -331,18 +330,22 @@ const buscarCliente = async () => {
         // 4. LA API NO DEVOLVIÓ DATOS → ENTRADA MANUAL
         // No borramos el documento: el usuario escribe el nombre a mano.
         cliente.value.id = null;
-        consultaClienteRealizada.value = true;
+        clienteEncontrado.value = false;
+        clienteEncontradoEnAPI.value = false;
         mensajeCliente.value =
             "No se pudieron obtener los datos automáticamente. Puedes ingresar el nombre manualmente.";
     } catch (error) {
+        if (solicitud.signal.aborted) return;
+
         console.error("Error buscando cliente:", error);
 
-        cliente.value.id = null;
-        consultaClienteRealizada.value = true;
         mensajeCliente.value =
             "No se pudo consultar el documento. Puedes ingresar los datos manualmente.";
     } finally {
-        buscandoCliente.value = false;
+        if (solicitudCliente === solicitud) {
+            solicitudCliente = null;
+            buscandoCliente.value = false;
+        }
     }
 };
 
@@ -703,7 +706,10 @@ const cerrar = () => {
 watch(
     () => props.visible,
     (abierto) => {
-        if (!abierto) return;
+        if (!abierto) {
+            limpiarEstadoBusqueda();
+            return;
+        }
 
         comprobante.value = "Boleta";
 
@@ -831,7 +837,7 @@ watch(
                             @change="cambiarTipoDocumento"
                         />
 
-                        <IconField class="w-full">
+                        <div class="relative min-w-0 flex-1">
                             <InputText
                                 v-model="cliente.numero_documento"
                                 :maxlength="largoDocumentoEsperado"
@@ -841,19 +847,24 @@ watch(
                                         ? 'RUC (11 dígitos)'
                                         : 'DNI (8 dígitos)'
                                 "
-                                class="w-full"
+                                class="w-full !pr-11"
+                                aria-label="Número de documento del cliente"
                                 @keydown.enter.prevent="buscarCliente"
                             />
 
-                            <InputIcon
-                                :class="
-                                    buscandoCliente
-                                        ? 'pi pi-spin pi-spinner'
-                                        : 'pi pi-search cursor-pointer hover:text-rose-700'
-                                "
-                                @click="!buscandoCliente && buscarCliente()"
-                            />
-                        </IconField>
+                            <button
+                                type="button"
+                                class="absolute inset-y-0 right-0 flex w-10 items-center justify-center rounded-r-md text-gray-500 hover:text-rose-700 disabled:opacity-60"
+                                aria-label="Buscar cliente por documento"
+                                :disabled="buscandoCliente"
+                                @click="buscarCliente"
+                            >
+                                <i
+                                    :class="buscandoCliente ? 'pi pi-spin pi-spinner' : 'pi pi-search'"
+                                    aria-hidden="true"
+                                ></i>
+                            </button>
+                        </div>
                     </div>
 
                     <InputText
@@ -868,6 +879,7 @@ watch(
 
                     <p
                         v-if="mensajeCliente"
+                        role="status"
                         class="text-[11px] m-0"
                         :class="
                             clienteEncontrado || clienteEncontradoEnAPI
