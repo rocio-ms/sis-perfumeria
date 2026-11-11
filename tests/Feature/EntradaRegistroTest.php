@@ -8,6 +8,7 @@ use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Hash;
+use Spatie\Permission\Models\Permission;
 use Tests\TestCase;
 
 class EntradaRegistroTest extends TestCase
@@ -30,7 +31,9 @@ class EntradaRegistroTest extends TestCase
             'email_verified_at' => now(),
             'password' => Hash::make('password'),
         ]);
-        $this->actingAs(User::findOrFail($usuarioId));
+        $usuario = User::findOrFail($usuarioId);
+        $usuario->givePermissionTo(Permission::findOrCreate('entradas.editar', 'web'));
+        $this->actingAs($usuario);
 
         $tiendaId = DB::table('tiendas')->insertGetId(['nombre_comercial' => 'Tienda de prueba']);
         $this->empresaId = DB::table('empresas')->insertGetId([
@@ -198,6 +201,31 @@ class EntradaRegistroTest extends TestCase
 
         $this->assertNull($entrada->refresh()->tipo_comprobante);
         $this->assertDatabaseEmpty('detalle_entradas');
+    }
+
+    public function test_corrige_cabecera_sin_alterar_stock_lotes_o_kardex(): void
+    {
+        DB::table('tipo_movimientos')->insert(['nombre' => 'Entrada', 'tipo' => 'entrada']);
+        $detalle = $this->crearDetalle('P-CABECERA');
+        $this->post(route('entradas.store'), [
+            'fecha_ingreso' => '2026-11-09',
+            'detalles' => [$detalle],
+        ])->assertSessionHasNoErrors();
+
+        $entrada = Entrada::with('detalles.lotes', 'kardexs')->sole();
+        $lote = $entrada->detalles->sole()->lotes->sole();
+        $kardex = $entrada->kardexs->sole();
+
+        $this->put(route('entradas.update', $entrada), [
+            'tipo_comprobante' => null,
+            'observacion' => 'Cabecera corregida',
+        ])->assertRedirect(route('entradas.index'))->assertSessionHasNoErrors();
+
+        $this->assertDatabaseHas('entradas', ['id' => $entrada->id, 'observacion' => 'Cabecera corregida']);
+        $this->assertDatabaseHas('lotes', ['id' => $lote->id, 'cantidad_actual' => $detalle['cantidad']]);
+        $this->assertDatabaseHas('productos', ['id' => $detalle['producto_id'], 'stock_actual' => $detalle['cantidad']]);
+        $this->assertDatabaseHas('kardexs', ['id' => $kardex->id, 'cantidad' => $detalle['cantidad']]);
+        $this->assertDatabaseCount('kardexs', 1);
     }
 
     private function crearDetalle(string $codigo): array

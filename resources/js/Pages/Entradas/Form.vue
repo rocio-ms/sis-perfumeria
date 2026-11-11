@@ -1122,7 +1122,7 @@ const eliminarDetalle = (index) => {
 */
 
 const guardar = () => {
-    if (form.detalles.length === 0) {
+    if (!esEdicion.value && form.detalles.length === 0) {
         Swal.fire({
             title: "Sin productos",
             text: "Debes agregar al menos un producto a la entrada.",
@@ -1186,7 +1186,8 @@ const guardar = () => {
     |--------------------------------------------------------------------------
     */
 
-    form.detalles.forEach((detalle) => {
+    const editando = esEdicion.value;
+    if (!editando) form.detalles.forEach((detalle) => {
         if (detalle.precio_venta === null || detalle.precio_venta === undefined) {
             calcularPrecioVenta(detalle);
         } else {
@@ -1203,7 +1204,12 @@ const guardar = () => {
     });
 
     filasEnviadas.value = [...form.detalles];
-    form.transform((datos) => ({
+    form.transform((datos) => editando ? {
+        tipo_comprobante: datos.tipo_comprobante,
+        numero_comprobante: datos.numero_comprobante,
+        proveedor_id: datos.proveedor_id,
+        observacion: datos.observacion,
+    } : ({
         ...datos,
         fecha_ingreso: fechaParaServidor(datos.fecha_ingreso),
         detalles: datos.detalles.map((detalle) => ({
@@ -1216,19 +1222,7 @@ const guardar = () => {
         preserveScroll: true,
 
         onSuccess: async () => {
-            emit("saved");
-
-            await Swal.fire({
-                title: esEdicion.value ? "¡Actualizada!" : "¡Guardada!",
-
-                text: esEdicion.value
-                    ? "La entrada fue actualizada correctamente."
-                    : "La entrada fue registrada correctamente.",
-
-                icon: "success",
-
-                confirmButtonText: "Aceptar",
-            });
+            emit("saved", editando ? "actualizado" : "guardado");
         },
 
         onError: (errors) => {
@@ -1513,6 +1507,7 @@ const cerrar = () => {
                                 inputId="fecha_ingreso"
                                 v-model="form.fecha_ingreso"
                                 :invalid="!!form.errors.fecha_ingreso"
+                                :disabled="esEdicion"
                                 class="w-full"
                                 showIcon
                                 dateFormat="dd/mm/yy"
@@ -1551,13 +1546,16 @@ const cerrar = () => {
                 </div>
             </div>
 
-            <Divider />
+            <p v-if="esEdicion" class="mt-4 text-sm text-gray-500">
+                Puedes corregir el comprobante, el proveedor y la observación.
+            </p>
+            <Divider v-else />
 
             <!-- ========================================================= -->
             <!-- PRODUCTOS -->
             <!-- ========================================================= -->
 
-            <div>
+            <div v-if="!esEdicion">
                 <div class="flex items-center justify-between mb-4">
                     <div>
                         <h3 class="text-base font-semibold mb-1">

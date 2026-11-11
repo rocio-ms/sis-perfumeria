@@ -33,6 +33,7 @@ class ProductoImagenTest extends TestCase
         ]);
         $usuario = User::findOrFail($usuarioId);
         $usuario->givePermissionTo(Permission::findOrCreate('productos.crear', 'web'));
+        $usuario->givePermissionTo(Permission::findOrCreate('productos.editar', 'web'));
         $this->actingAs($usuario);
 
         $tiendaId = DB::table('tiendas')->insertGetId(['nombre_comercial' => 'Tienda de prueba']);

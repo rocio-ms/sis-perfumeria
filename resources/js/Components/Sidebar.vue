@@ -76,6 +76,7 @@ const items = [
         title: "Dashboard",
         icon: "mdi-home",
         route: "dashboard",
+        permiso: "dashboard.index",
     },
 
     {

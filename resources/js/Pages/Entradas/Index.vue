@@ -157,6 +157,11 @@ const verEntrada = (entrada) => {
     mostrarShow.value = true;
 };
 
+const editarEntrada = (entrada) => {
+    entradaSeleccionada.value = entrada;
+    mostrarForm.value = true;
+};
+
 const formularioGuardado = async (accion) => {
     // Primero cerrar el formulario
     mostrarForm.value = false;
@@ -229,12 +234,14 @@ const cerrarForm = () => {
                     :loading="cargandoEntradas"
                     titleButton="Nueva entrada"
                     :show-view="true"
-                    :show-edit="false"
+                    :show-edit="true"
+                    edit-permission="entradas.editar"
                     :show-delete="false"
                     :show-filters="true"
                     :mostrarCrear="true"
                     @nuevo="abrirForm"
                     @ver="verEntrada"
+                    @editar="editarEntrada"
                     @server-query="buscarEntradas"
                 />
             </template>

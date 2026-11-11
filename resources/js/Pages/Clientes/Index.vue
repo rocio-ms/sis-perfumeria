@@ -1,5 +1,5 @@
 <script setup>
-import { ref } from "vue";
+import { computed, ref } from "vue";
 
 import { router } from "@inertiajs/vue3";
 
@@ -10,6 +10,7 @@ import Breadcrumb from "primevue/breadcrumb";
 import DataTableBase from "@/Components/DataTableBase.vue";
 import Card from "@/Components/Card.vue";
 import AppLayout from "@/Layouts/AppLayout.vue";
+import DetalleCliente from "./Partials/DetalleCliente.vue";
 
 // SweetAlert
 import Swal from "sweetalert2";
@@ -32,16 +33,12 @@ const props = defineProps({
 const mostrarForm = ref(false);
 const clienteSeleccionado = ref(null);
 
-// ============================================================
-// SHOW
-// ============================================================
-
-const mostrarShow = ref(false);
+const mostrarDetalle = ref(false);
+const clienteDetalle = ref(null);
 
 // ============================================================
 // COLUMNAS
 // ============================================================
-console.log("DATOS DE LOS CLIENTES: ", props.clientes);
 const columns = [
     {
         field: "tipo_documento",
@@ -56,11 +53,24 @@ const columns = [
         header: "Cliente",
     },
     {
+        field: "contacto",
+        header: "Contacto",
+    },
+    {
         field: "activo",
         header: "Estado",
         type: "status",
     },
 ];
+
+const clientesConContacto = computed(() =>
+    props.clientes.map((cliente) => ({
+        ...cliente,
+        contacto: [cliente.telefono?.trim(), cliente.email?.trim()]
+            .filter(Boolean)
+            .join(" · ") || null,
+    })),
+);
 
 // ============================================================
 // BREADCRUMB
@@ -99,17 +109,8 @@ const editarCliente = (cliente) => {
 // ============================================================
 
 const verCliente = (cliente) => {
-    clienteSeleccionado.value = cliente;
-    mostrarShow.value = true;
-};
-
-// ============================================================
-// CERRAR SHOW
-// ============================================================
-
-const cerrarShow = () => {
-    mostrarShow.value = false;
-    clienteSeleccionado.value = null;
+    clienteDetalle.value = cliente;
+    mostrarDetalle.value = true;
 };
 
 // ============================================================
@@ -148,47 +149,6 @@ const formularioGuardado = async (tipo) => {
 // ELIMINAR CLIENTE
 // ============================================================
 
-const eliminarCliente = async (cliente) => {
-    const nombre =
-        cliente.nombre_completo ??
-        cliente.nombre ??
-        cliente.razon_social ??
-        "este cliente";
-
-    const result = await Swal.fire({
-        title: "¿Eliminar cliente?",
-        text: `El cliente "${nombre}" será eliminado.`,
-        icon: "warning",
-        showCancelButton: true,
-        confirmButtonText: "Sí, eliminar",
-        cancelButtonText: "Cancelar",
-        reverseButtons: true,
-    });
-
-    if (!result.isConfirmed) {
-        return;
-    }
-
-    router.delete(route("clientes.destroy", cliente.id), {
-        onSuccess: async () => {
-            await Swal.fire({
-                title: "Eliminado",
-                text: "El cliente fue eliminado correctamente.",
-                icon: "success",
-                confirmButtonText: "Aceptar",
-            });
-        },
-
-        onError: () => {
-            Swal.fire({
-                title: "Error",
-                text: "No se pudo eliminar el cliente.",
-                icon: "error",
-                confirmButtonText: "Aceptar",
-            });
-        },
-    });
-};
 </script>
 
 <template>
@@ -225,11 +185,11 @@ const eliminarCliente = async (cliente) => {
             <template #content>
                 <DataTableBase
                     title="Clientes"
-                    :data="props.clientes"
+                    :data="clientesConContacto"
                     :columns="columns"
                     :loading="false"
                     title-button="Nuevo cliente"
-                    :show-view="false"
+                    :show-view="true"
                     :show-delete="false"
                     :mostrarCrear="false"
                     :show-edit="false"
@@ -237,11 +197,23 @@ const eliminarCliente = async (cliente) => {
                     @editar="editarCliente"
                     @ver="verCliente"
                     createPermission="productos.crear"
-                    viewPermission="productos.ver"
+                    viewPermission="clientes.ver"
                     editPermission="productos.editar"
                     deletePermission="productos.eliminar"
                 />
             </template>
         </Card>
+
+        <Dialog
+            v-model:visible="mostrarDetalle"
+            header="Detalle del cliente"
+            modal
+            :style="{ width: '36rem', maxWidth: '92vw' }"
+        >
+            <DetalleCliente v-if="clienteDetalle" :cliente="clienteDetalle" />
+            <template #footer>
+                <Button type="button" label="Cerrar" severity="secondary" outlined @click="mostrarDetalle = false" />
+            </template>
+        </Dialog>
     </v-container>
 </template>

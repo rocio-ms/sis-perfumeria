@@ -6,12 +6,14 @@ use App\Actions\Fortify\CreateNewUser;
 use App\Actions\Fortify\ResetUserPassword;
 use App\Actions\Fortify\UpdateUserPassword;
 use App\Actions\Fortify\UpdateUserProfileInformation;
+use App\Http\Responses\LoginResponse;
 use Illuminate\Cache\RateLimiting\Limit;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\RateLimiter;
 use Illuminate\Support\ServiceProvider;
 use Illuminate\Support\Str;
 use Laravel\Fortify\Actions\RedirectIfTwoFactorAuthenticatable;
+use Laravel\Fortify\Contracts\LoginResponse as LoginResponseContract;
 use Laravel\Fortify\Fortify;
 use App\Models\User;
 use Illuminate\Support\Facades\Hash;
@@ -24,7 +26,7 @@ class FortifyServiceProvider extends ServiceProvider
      */
     public function register(): void
     {
-        //
+        $this->app->singleton(LoginResponseContract::class, LoginResponse::class);
     }
 
     /**
@@ -36,6 +38,14 @@ class FortifyServiceProvider extends ServiceProvider
         Fortify::loginView(function () {
             return Inertia::render('Auth/Login');
         });
+        Fortify::requestPasswordResetLinkView(fn (Request $request) => Inertia::render('Auth/ForgotPassword', [
+            'status' => $request->session()->get('status'),
+        ]));
+        Fortify::resetPasswordView(fn (Request $request) => Inertia::render('Auth/ResetPassword', [
+            'email' => $request->input('email'),
+            'token' => $request->route('token'),
+        ]));
+        Fortify::confirmPasswordView(fn () => Inertia::render('Auth/ConfirmPassword'));
         
         Fortify::authenticateUsing(function (Request $request) {
 
@@ -44,7 +54,7 @@ class FortifyServiceProvider extends ServiceProvider
 
 
             if (
-                $user &&
+                $user?->activo &&
                 Hash::check($request->password, $user->password)
             ) {
                 return $user;

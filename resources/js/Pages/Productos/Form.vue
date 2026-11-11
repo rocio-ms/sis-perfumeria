@@ -31,10 +31,6 @@ const props = defineProps({
         type: Array,
         default: () => [],
     },
-    codigoInicial: {
-        type: String,
-        default: "000001",
-    },
     codigoBarrasInicial: {
         type: String,
         default: "",
@@ -212,7 +208,6 @@ const limpiarFormulario = () => {
     form.reset();
     form.clearErrors();
 
-    form.codigo = props.codigoInicial;
     form.codigo_barras = props.codigoBarrasInicial;
     form.nombre = "";
     form.descripcion = "";
@@ -295,36 +290,39 @@ const cargarProducto = (producto) => {
     marcaOtroNombre.value = marcaEstandar ? "" : marcaNombre;
 };
 
-// Cuando cambia el producto seleccionado
 watch(
-    () => props.producto,
-    (producto) => {
+    [visible, () => props.producto],
+    async ([estaVisible, producto], _, onCleanup) => {
         if (producto) {
             cargarProducto(producto);
-        } else {
-            limpiarFormulario();
+            return;
         }
-    },
-    {
-        immediate: true,
-    },
-);
 
-// Cuando se abre el Dialog
-watch(visible, (nuevoValor) => {
-    if (!nuevoValor) {
-        if (!props.producto) {
-            limpiarFormulario();
-        }
-        return;
-    }
-
-    if (props.producto) {
-        cargarProducto(props.producto);
-    } else {
         limpiarFormulario();
-    }
-});
+        if (!estaVisible) return;
+
+        const controlador = new AbortController();
+        onCleanup(() => controlador.abort());
+
+        try {
+            const respuesta = await fetch(route("productos.siguiente-codigo"), {
+                headers: { Accept: "application/json" },
+                cache: "no-store",
+                signal: controlador.signal,
+            });
+
+            if (!respuesta.ok) return;
+
+            const { codigo } = await respuesta.json();
+            if (!controlador.signal.aborted && typeof codigo === "string") {
+                form.codigo = codigo;
+            }
+        } catch {
+            // El servidor asigna el código al guardar.
+        }
+    },
+    { immediate: true },
+);
 
 //Guardar
 
@@ -447,7 +445,9 @@ const cerrar = () => {
                     <label for="codigo"> Código </label>
                 </FloatLabel>
 
-                <small class="text-gray-500"> Generado automáticamente </small>
+                <small class="text-gray-500">
+                    {{ form.codigo ? "Generado automáticamente" : "Se asignará al guardar" }}
+                </small>
             </div>
 
             <!-- Código de barras -->

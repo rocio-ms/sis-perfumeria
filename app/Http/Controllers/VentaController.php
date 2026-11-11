@@ -7,6 +7,7 @@ use App\Models\DetalleVenta;
 use App\Models\Cliente;
 use App\Models\Categoria;
 use App\Models\Producto;
+use App\Models\PrecioProducto;
 use App\Models\Lote;
 use App\Models\TipoComprobante;
 use App\Models\SerieComprobante;
@@ -19,6 +20,8 @@ use App\Models\Salida;
 use App\Models\DetalleSalida;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Validator;
+use Illuminate\Validation\Rule;
 use Illuminate\Validation\ValidationException;
 use Inertia\Inertia;
 use Illuminate\Support\Facades\Auth;
@@ -140,9 +143,7 @@ class VentaController extends Controller
             'categorias' => Categoria::where('activo', true)
                 ->select(['id', 'nombre'])
                 ->withSum([
-                    'productos as stock_total' => fn ($query) => $query
-                        ->where('activo', true)
-                        ->where('stock_actual', '>', 0),
+                    'productos as stock_total' => fn ($query) => $query->disponibleParaVenta(),
                 ], 'stock_actual')
                 ->withCasts(['stock_total' => 'integer'])
                 ->orderBy('nombre')
@@ -188,8 +189,7 @@ class VentaController extends Controller
                 'empresa_id',
                 'marca_id',
             ])
-            ->where('activo', true)
-            ->where('stock_actual', '>', 0)
+            ->disponibleParaVenta()
             ->when(
                 $categoriaId,
                 fn($query) => $query->where('categoria_id', $categoriaId),
@@ -197,9 +197,10 @@ class VentaController extends Controller
             ->with([
                 'precioActual',
                 'lotes' => function ($query) {
-                    $query
-                        ->where('cantidad_actual', '>', 0)
-                        ->orderBy('fecha_vencimiento');
+                    $query->disponibleParaVenta()
+                        ->orderByRaw('CASE WHEN fecha_vencimiento IS NULL THEN 1 ELSE 0 END')
+                        ->orderBy('fecha_vencimiento')
+                        ->orderBy('lotes.id');
                 },
             ]);
 
@@ -350,6 +351,13 @@ class VentaController extends Controller
                 'max:255',
             ],
 
+            'cliente.contacto' => [
+                'bail',
+                'nullable',
+                'string',
+                'max:255',
+            ],
+
             'sesion_caja_id' => [
                 'required',
                 'exists:sesion_cajas,id',
@@ -357,12 +365,7 @@ class VentaController extends Controller
 
             'tipo_comprobante_id' => [
                 'required',
-                'exists:tipo_comprobantes,id',
-            ],
-
-            'fecha_emision' => [
-                'required',
-                'date',
+                Rule::exists('tipo_comprobantes', 'id')->where('activo', true),
             ],
 
             'moneda' => [
@@ -378,7 +381,7 @@ class VentaController extends Controller
 
             'tipo_pago_id' => [
                 'required',
-                'exists:tipo_pagos,id',
+                Rule::exists('tipo_pagos', 'id')->where('activo', true),
             ],
 
             'detalles' => [
@@ -428,6 +431,31 @@ class VentaController extends Controller
             ],
         ]);
 
+        $contacto = trim($validated['cliente']['contacto'] ?? '');
+        $datosContacto = [];
+
+        if ($contacto !== '') {
+            $campoContacto = str_contains($contacto, '@') ? 'email' : 'telefono';
+            $valorContacto = $campoContacto === 'telefono'
+                ? str_replace([' ', '-'], '', $contacto)
+                : $contacto;
+            $reglaContacto = $campoContacto === 'telefono'
+                ? 'regex:/^\+?[0-9]{7,15}$/D'
+                : 'email';
+
+            $validator = Validator::make(['contacto' => $valorContacto], [
+                'contacto' => ['required', $reglaContacto],
+            ]);
+
+            if ($validator->fails()) {
+                throw ValidationException::withMessages([
+                    'cliente.contacto' => 'Ingresa un número de celular o un correo electrónico válido.',
+                ]);
+            }
+
+            $datosContacto[$campoContacto] = $valorContacto;
+        }
+
         /*
         |--------------------------------------------------------------------------
         | CLIENTE
@@ -440,7 +468,19 @@ class VentaController extends Controller
         |--------------------------------------------------------------------------
         */
 
-        $venta = DB::transaction(function () use ($validated) {
+        $venta = DB::transaction(function () use ($validated, $datosContacto) {
+            $sesion = SesionCaja::whereKey($validated['sesion_caja_id'])
+                ->where('user_id', Auth::id())
+                ->where('estado', 'abierta')
+                ->lockForUpdate()
+                ->first();
+
+            if (!$sesion) {
+                throw ValidationException::withMessages([
+                    'sesion_caja_id' => 'Tu sesión de caja ya no está abierta. Abre una caja para continuar.',
+                ]);
+            }
+
             /*
             |--------------------------------------------------------------------------
             | TIENDA
@@ -548,6 +588,11 @@ class VentaController extends Controller
 
                 $clienteId = $cliente->id;
             }
+
+            if ($datosContacto && $cliente->numero_documento !== '00000000') {
+                $cliente->update($datosContacto);
+            }
+
             /*
             |--------------------------------------------------------------------------
             | TIPO DE COMPROBANTE
@@ -567,6 +612,7 @@ class VentaController extends Controller
             $productoIds = collect($validated['detalles'])
                 ->pluck('producto_id')
                 ->unique()
+                ->sort()
                 ->values();
 
             $productosVenta = Producto::whereIn(
@@ -575,13 +621,33 @@ class VentaController extends Controller
             )
                 ->with('marca:id,empresa_id')
                 ->with('marca.empresa:id,razon_social')
+                ->orderBy('id')
+                ->lockForUpdate()
                 ->get([
                     'id',
                     'empresa_id',
                     'marca_id',
                     'nombre',
                     'stock_actual',
-                ]);
+                    'activo',
+                ])
+                ->keyBy('id');
+
+            $preciosVigentes = PrecioProducto::whereIn('producto_id', $productoIds)
+                ->where('activo', true)
+                ->orderByDesc('id')
+                ->lockForUpdate()
+                ->get()
+                ->unique('producto_id')
+                ->keyBy('producto_id');
+
+            $loteIds = collect($validated['detalles'])->pluck('lote_id')->unique()->sort()->values();
+            $lotesVenta = Lote::with('detalleEntrada')
+                ->whereIn('id', $loteIds)
+                ->orderBy('id')
+                ->lockForUpdate()
+                ->get()
+                ->keyBy('id');
 
             /*
             |--------------------------------------------------------------------------
@@ -589,10 +655,10 @@ class VentaController extends Controller
             |--------------------------------------------------------------------------
             */
 
-            if ($productosVenta->count() !== $productoIds->count()) {
-                throw new \Exception(
-                    'Uno o más productos de la venta no existen.'
-                );
+            if ($productosVenta->count() !== $productoIds->count() || $lotesVenta->count() !== $loteIds->count()) {
+                throw ValidationException::withMessages([
+                    'detalles.stock' => 'Uno o más productos o lotes ya no están disponibles.',
+                ]);
             }
 
             /*
@@ -668,6 +734,7 @@ class VentaController extends Controller
 
             $ventas = collect();
             $grupoVenta = (string) Str::uuid();
+            $fechaEmision = now();
 
 
             foreach ($detallesPorEmpresa as $detallesEmpresa) {
@@ -821,7 +888,7 @@ class VentaController extends Controller
                     $validated['tipo_comprobante_id'],
 
                     'fecha_emision' =>
-                    $validated['fecha_emision'],
+                    $fechaEmision,
 
                     /*
                 |--------------------------------------------------------------------------
@@ -950,16 +1017,7 @@ class VentaController extends Controller
                 |--------------------------------------------------------------------------
                 */
 
-                    $producto = $productosVenta->firstWhere(
-                        'id',
-                        $detalle['producto_id']
-                    );
-
-                    if (!$producto) {
-                        throw new \Exception(
-                            'No se encontró el producto seleccionado.'
-                        );
-                    }
+                    $producto = $productosVenta->get($detalle['producto_id']);
 
                     /*
                 |--------------------------------------------------------------------------
@@ -979,10 +1037,7 @@ class VentaController extends Controller
                 |--------------------------------------------------------------------------
                 */
 
-                    $lote = Lote::with('detalleEntrada')
-                        ->findOrFail(
-                            $detalle['lote_id']
-                        );
+                    $lote = $lotesVenta->get($detalle['lote_id']);
 
                     /*
                 |--------------------------------------------------------------------------
@@ -995,9 +1050,9 @@ class VentaController extends Controller
                         $lote->detalleEntrada->producto_id !=
                         $producto->id
                     ) {
-                        throw new \Exception(
-                            'El lote seleccionado no pertenece al producto.'
-                        );
+                        throw ValidationException::withMessages([
+                            'detalles.stock' => 'El lote seleccionado no pertenece al producto.',
+                        ]);
                     }
 
                     /*
@@ -1014,13 +1069,24 @@ class VentaController extends Controller
                 |--------------------------------------------------------------------------
                 */
 
-                    if ($lote->cantidad_actual < $cantidad) {
-                        throw new \Exception(
-                            "Stock insuficiente para {$producto->nombre}. "
-                                . "Disponible en el lote: "
-                                . $lote->cantidad_actual
-                                . "."
-                        );
+                    if (!$producto->activo) {
+                        throw ValidationException::withMessages([
+                            'detalles.stock' => "El producto {$producto->nombre} ya no está activo.",
+                        ]);
+                    }
+
+                    if ($lote->fecha_vencimiento && $lote->fecha_vencimiento->toDateString() < now('America/Lima')->toDateString()) {
+                        throw ValidationException::withMessages([
+                            'detalles.stock' => "El lote de {$producto->nombre} está vencido.",
+                        ]);
+                    }
+
+                    $disponible = min($producto->stock_actual, $lote->cantidad_actual);
+
+                    if ($disponible < $cantidad) {
+                        throw ValidationException::withMessages([
+                            'detalles.stock' => "Stock insuficiente para {$producto->nombre}. Disponible en el lote seleccionado: {$disponible}.",
+                        ]);
                     }
 
                     /*
@@ -1045,8 +1111,14 @@ class VentaController extends Controller
                 |--------------------------------------------------------------------------
                 */
 
-                    $precioUnitario =
-                        (float) $detalle['precio_unitario'];
+                    $precioVigente = $preciosVigentes->get($producto->id);
+                    $precioUnitario = (float) ($precioVigente?->precio_venta ?? 0);
+
+                    if ($precioUnitario <= 0 || $precioUnitario !== (float) $detalle['precio_unitario']) {
+                        throw ValidationException::withMessages([
+                            'detalles.precio' => "El precio de {$producto->nombre} no está disponible o cambió. Vuelve a agregar el producto.",
+                        ]);
+                    }
 
                     /*
                 |--------------------------------------------------------------------------
@@ -1074,10 +1146,11 @@ class VentaController extends Controller
                 |--------------------------------------------------------------------------
                 */
 
-                    if ($descuento > $bruto) {
-                        throw new \Exception(
-                            'El descuento no puede ser mayor al importe bruto.'
-                        );
+                    $descuentoPermitido = $precioVigente->tiene_descuento ? (float) $precioVigente->descuento : 0;
+                    if ($descuento > min($bruto, $descuentoPermitido)) {
+                        throw ValidationException::withMessages([
+                            'detalles.precio' => "El descuento de {$producto->nombre} supera el importe permitido.",
+                        ]);
                     }
 
                     /*
@@ -1303,8 +1376,12 @@ class VentaController extends Controller
                 $ventas->push($venta);
             }
 
+            if ($ventas->sum('importe_total') <= 0) {
+                throw ValidationException::withMessages(['detalles.precio' => 'El total de la venta debe ser mayor a cero.']);
+            }
+
             return $ventas;
-        });
+        }, 3);
 
         /*
         |--------------------------------------------------------------------------
@@ -1322,19 +1399,7 @@ class VentaController extends Controller
      */
     public function show(Venta $venta)
     {
-        $venta->load([
-            'detalles.producto',
-            'cliente',
-            'usuario',
-            'tipoComprobante',
-            'tipoPago',
-            'tienda',
-        ]);
-
-        return Inertia::render('Ventas/Show', [
-            'venta' => $venta,
-            'tienda' => $venta->tienda,
-        ]);
+        return redirect()->route('ventas.comprobante', $venta);
     }
 
     /**

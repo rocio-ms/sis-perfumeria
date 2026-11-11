@@ -9,6 +9,7 @@ use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Inertia\Inertia;
 use Carbon\Carbon;
+use App\Support\CalendarioComercial;
 
 class DashboardController extends Controller
 {
@@ -20,8 +21,8 @@ class DashboardController extends Controller
             $dias = 7;
         }
 
-        $fechaInicio = Carbon::today()->subDays($dias - 1);
-        $fechaFin = Carbon::today();
+        $fechaInicio = Carbon::today(CalendarioComercial::ZONA)->subDays($dias - 1);
+        $fechaFin = Carbon::today(CalendarioComercial::ZONA);
 
         /*
         |--------------------------------------------------------------------------
@@ -31,8 +32,8 @@ class DashboardController extends Controller
 
         $ventas = Venta::where('activo', true)
             ->whereBetween('fecha_emision', [
-                $fechaInicio->startOfDay(),
-                $fechaFin->endOfDay()
+                $fechaInicio->copy()->startOfDay()->utc(),
+                $fechaFin->copy()->endOfDay()->utc()
             ]);
 
         $estadisticas = [
@@ -53,10 +54,10 @@ class DashboardController extends Controller
 
         $ventasPorDia = (clone $ventas)
             ->select(
-                DB::raw('DATE(fecha_emision) as fecha'),
+                DB::raw(CalendarioComercial::fechaLocalDeVentaSql() . ' as fecha'),
                 DB::raw('COUNT(*) as cantidad')
             )
-            ->groupBy(DB::raw('DATE(fecha_emision)'))
+            ->groupBy(DB::raw(CalendarioComercial::fechaLocalDeVentaSql()))
             ->orderBy('fecha')
             ->get();
 
@@ -73,7 +74,7 @@ class DashboardController extends Controller
             $fecha = $fechaInicio->copy()->addDays($i);
 
             $registro = $ventasPorDia->first(function ($venta) use ($fecha) {
-                return Carbon::parse($venta->fecha)->isSameDay($fecha);
+                return Carbon::parse($venta->fecha, CalendarioComercial::ZONA)->isSameDay($fecha);
             });
 
             $graficoVentas->push([
@@ -95,8 +96,8 @@ class DashboardController extends Controller
             ->join('productos', 'productos.id', '=', 'detalle_ventas.producto_id')
             ->where('ventas.activo', true)
             ->whereBetween('ventas.fecha_emision', [
-                $fechaInicio->startOfDay(),
-                $fechaFin->endOfDay()
+                $fechaInicio->copy()->startOfDay()->utc(),
+                $fechaFin->copy()->endOfDay()->utc()
             ])
             ->select(
                 'productos.id',

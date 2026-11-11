@@ -128,7 +128,9 @@
                                         Recordar sesión
                                     </label>
                                 </div>
-                                
+                                <Link :href="route('password.request')" class="text-sm text-rose-800">
+                                    ¿Olvidaste tu contraseña?
+                                </Link>
                             </div>
 
                             <div
@@ -167,7 +169,7 @@
 </template>
 
 <script setup>
-import { useForm } from "@inertiajs/vue3";
+import { Link, useForm } from "@inertiajs/vue3";
 import Card from "primevue/card";
 
 

@@ -1,6 +1,7 @@
 <script setup>
 import { ref, onMounted, computed } from "vue";
-import { router } from "@inertiajs/vue3";
+import { router, usePage } from "@inertiajs/vue3";
+import axios from "axios";
 
 import AppLayout from "@/Layouts/AppLayout.vue";
 import Card from "@/Components/Card.vue";
@@ -32,14 +33,56 @@ const props = defineProps({
     },
 });
 
-console.log("SESIONES RECIBIDAS:", props.sesiones);
-console.log("PRIMERA SESIÓN:", props.sesiones?.[0]);
-console.log("VENTAS PRIMERA SESIÓN:", props.sesiones?.[0]?.ventas);
-
-console.log("CAJAS DISPONIBLES:", props.cajasDisponibles);
-
 const mostrarApertura = ref(false);
 const mostrarCierre = ref(false);
+const mostrarMovimiento = ref(false);
+const guardandoMovimiento = ref(false);
+const errorMovimiento = ref("");
+const movimiento = ref({ tipo: "ingreso", concepto: "", monto: null });
+const tiposMovimiento = [
+    { label: "Ingreso", value: "ingreso", icon: "pi pi-arrow-down-left" },
+    { label: "Egreso", value: "egreso", icon: "pi pi-arrow-up-right" },
+];
+const page = usePage();
+const sesionPropia = computed(() => props.sesiones.find(
+    (sesion) => sesion.estado === "abierta" && sesion.user_id === page.props.auth?.user?.id,
+));
+
+const abrirMovimiento = () => {
+    movimiento.value = { tipo: "ingreso", concepto: "", monto: null };
+    errorMovimiento.value = "";
+    mostrarMovimiento.value = true;
+};
+
+const registrarMovimiento = async () => {
+    if (!sesionPropia.value || guardandoMovimiento.value) return;
+
+    const { tipo, monto } = movimiento.value;
+    const concepto = movimiento.value.concepto.trim();
+    if (!concepto || !Number.isFinite(monto) || monto < 0.01) {
+        errorMovimiento.value = "Ingresa un concepto y un monto de al menos S/ 0.01.";
+        return;
+    }
+
+    errorMovimiento.value = "";
+    guardandoMovimiento.value = true;
+    try {
+        await axios.post(route("movimientos-caja.store"), {
+            sesion_caja_id: sesionPropia.value.id,
+            tipo,
+            concepto,
+            monto,
+        });
+        mostrarMovimiento.value = false;
+        router.reload({ only: ["sesiones"] });
+    } catch (error) {
+        errorMovimiento.value = Object.values(error.response?.data?.errors ?? {}).flat()[0]
+            ?? error.response?.data?.message
+            ?? "No se pudo registrar el movimiento.";
+    } finally {
+        guardandoMovimiento.value = false;
+    }
+};
 
 const sesionSeleccionada = ref(null);
 
@@ -184,12 +227,22 @@ const cerrarForm = () => {
                             los movimientos y consulta el estado de cada sesión
                         </p>
                     </div>
-                    <Button
-                        label="Abrir caja"
-                        icon="pi pi-lock-open"
-                        severity="success"
-                        @click="abrirApertura"
-                    />
+                    <div class="flex flex-wrap gap-2">
+                        <Button
+                            v-if="sesionPropia"
+                            label="Registrar movimiento"
+                            icon="pi pi-wallet"
+                            severity="secondary"
+                            outlined
+                            @click="abrirMovimiento"
+                        />
+                        <Button
+                            label="Abrir caja"
+                            icon="pi pi-lock-open"
+                            severity="success"
+                            @click="abrirApertura"
+                        />
+                    </div>
                 </div>
             </template>
 
@@ -221,10 +274,109 @@ const cerrarForm = () => {
         <Cierre
             v-model:visible="mostrarCierre"
             :sesion="sesionSeleccionada"
+            :ingresos-varios="Number(sesionSeleccionada?.ingresos_varios ?? 0)"
+            :egresos-varios="Number(sesionSeleccionada?.egresos_varios ?? 0)"
             @confirmar-cierre="formularioGuardado"
             @cancel="cerrarForm"
         />
 
         <Show v-model:visible="mostrarShow" :sesion="sesionSeleccionada" />
+
+        <Dialog
+            v-model:visible="mostrarMovimiento"
+            header="Registrar movimiento de caja"
+            modal
+            :style="{ width: '29rem', maxWidth: '92vw' }"
+            :closable="!guardandoMovimiento"
+            :close-on-escape="!guardandoMovimiento"
+        >
+            <form id="movimiento-caja-form" class="grid gap-5 pt-1" @submit.prevent="registrarMovimiento">
+                <div v-if="sesionPropia" class="flex items-center gap-3 rounded-xl bg-rose-50 p-3">
+                    <span class="flex h-9 w-9 items-center justify-center rounded-lg bg-white text-rose-800">
+                        <i class="pi pi-wallet" aria-hidden="true"></i>
+                    </span>
+                    <div class="min-w-0">
+                        <p class="text-xs text-rose-700">Caja abierta</p>
+                        <p class="break-words font-semibold text-slate-900">{{ sesionPropia.caja?.nombre }}</p>
+                    </div>
+                </div>
+
+                <div class="grid gap-2">
+                    <span id="movimiento-tipo" class="text-sm font-medium text-slate-700">Tipo de movimiento</span>
+                    <SelectButton
+                        v-model="movimiento.tipo"
+                        :options="tiposMovimiento"
+                        option-label="label"
+                        option-value="value"
+                        aria-labelledby="movimiento-tipo"
+                        :allow-empty="false"
+                        :disabled="guardandoMovimiento"
+                        class="w-full [&>button]:flex-1"
+                    >
+                        <template #option="{ option }">
+                            <i :class="option.icon" aria-hidden="true"></i>
+                            <span>{{ option.label }}</span>
+                        </template>
+                    </SelectButton>
+                </div>
+
+                <div class="grid gap-2">
+                    <label for="movimiento-concepto" class="text-sm font-medium text-slate-700">Concepto</label>
+                    <IconField>
+                        <InputIcon class="pi pi-file-edit" />
+                        <InputText
+                            id="movimiento-concepto"
+                            v-model="movimiento.concepto"
+                            placeholder="Ej. Pago a proveedor"
+                            required
+                            maxlength="255"
+                            :disabled="guardandoMovimiento"
+                            class="w-full"
+                        />
+                    </IconField>
+                </div>
+
+                <div class="grid gap-2">
+                    <label for="movimiento-monto" class="text-sm font-medium text-slate-700">Monto</label>
+                    <InputNumber
+                        v-model="movimiento.monto"
+                        input-id="movimiento-monto"
+                        mode="currency"
+                        currency="PEN"
+                        locale="es-PE"
+                        placeholder="S/ 0.00"
+                        :min="0"
+                        :min-fraction-digits="2"
+                        :max-fraction-digits="2"
+                        :disabled="guardandoMovimiento"
+                        input-class="w-full font-semibold"
+                        fluid
+                    />
+                </div>
+
+                <Message v-if="errorMovimiento" severity="error" :closable="false">
+                    {{ errorMovimiento }}
+                </Message>
+            </form>
+
+            <template #footer>
+                <Button
+                    type="button"
+                    label="Cancelar"
+                    severity="secondary"
+                    outlined
+                    :disabled="guardandoMovimiento"
+                    @click="mostrarMovimiento = false"
+                />
+                <Button
+                    type="submit"
+                    form="movimiento-caja-form"
+                    label="Guardar movimiento"
+                    icon="pi pi-check"
+                    :loading="guardandoMovimiento"
+                    :disabled="!sesionPropia"
+                />
+            </template>
+        </Dialog>
     </v-container>
 </template>

@@ -33,7 +33,7 @@ const usuarioAutenticado = computed(() => {
 
 const textBoton = computed(() => {
     return usuarioAutenticado.value
-        ? "Ir al dashboard"
+        ? "Volver al inicio"
         : "Ir a la página de inicio";
 });
 
@@ -42,7 +42,7 @@ const iconoBoton = computed(() => {
 });
 
 const rutaInicio = computed(() => {
-    return usuarioAutenticado.value ? route("dashboard") : route("login");
+    return usuarioAutenticado.value ? "/" : route("login");
 });
 
 const volverInicio = () => {

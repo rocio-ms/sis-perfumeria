@@ -6,6 +6,8 @@ use App\Models\Caja;
 use App\Models\SesionCaja;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
+use Illuminate\Support\Facades\DB;
+use Illuminate\Validation\ValidationException;
 use Inertia\Inertia;
 
 class SesionCajaController extends Controller
@@ -28,6 +30,8 @@ class SesionCajaController extends Controller
                     ->orderByDesc('fecha_emision');
             },
         ])
+            ->withSum(['movimientos as ingresos_varios' => fn ($query) => $query->where('tipo', 'ingreso')], 'monto')
+            ->withSum(['movimientos as egresos_varios' => fn ($query) => $query->where('tipo', 'egreso')], 'monto')
             ->when($search, function ($query, $search) {
                 $query->whereHas('caja', function ($q) use ($search) {
                     $q->where('nombre', 'like', "%{$search}%");
@@ -73,14 +77,16 @@ class SesionCajaController extends Controller
                 })
                 ->sum('importe_total');
 
-            $sesion->ventas_total =
-                $sesion->ventas_efectivo +
-                $sesion->ventas_yape +
-                $sesion->ventas_tarjeta;
+            $sesion->ventas_total = $ventasActivas->sum('importe_total');
+            $sesion->ventas_transferencia = $ventasActivas
+                ->filter(fn ($venta) => strtolower(trim($venta->tipoPago?->nombre ?? '')) === 'transferencia')
+                ->sum('importe_total');
 
             $sesion->efectivo_esperado =
                 (float) $sesion->monto_apertura +
-                (float) $sesion->ventas_efectivo;
+                (float) $sesion->ventas_efectivo +
+                (float) $sesion->ingresos_varios -
+                (float) $sesion->egresos_varios;
 
             // NO eliminar $sesion->ventas
 
@@ -111,41 +117,29 @@ class SesionCajaController extends Controller
             'monto_apertura' => 'required|numeric|min:0',
         ]);
 
-        $sesionExistente = SesionCaja::where('user_id', Auth::id())
-            ->where('estado', 'abierta')
-            ->exists();
+        DB::transaction(function () use ($request, $validated) {
+            $request->user()->newQuery()->whereKey(Auth::id())->lockForUpdate()->firstOrFail();
+            $caja = Caja::whereKey($validated['caja_id'])->lockForUpdate()->firstOrFail();
 
-        if ($sesionExistente) {
-            return back()->withErrors([
-                'caja_id' => 'Ya tienes una caja abierta. Por favor, cierra la sesión actual antes de abrir una nueva.',
+            if (!$caja->activo || $caja->sesiones()->where('estado', 'abierta')->exists()) {
+                throw ValidationException::withMessages(['caja_id' => 'La caja seleccionada ya no está disponible.']);
+            }
+
+            if (SesionCaja::where('user_id', Auth::id())->where('estado', 'abierta')->exists()) {
+                throw ValidationException::withMessages(['caja_id' => 'Cierra tu sesión de caja actual antes de abrir otra.']);
+            }
+
+            SesionCaja::create([
+                'fecha_apertura' => now(),
+                'monto_apertura' => $validated['monto_apertura'],
+                'monto_cierre_teorico' => 0,
+                'monto_cierre_real' => 0,
+                'diferencia' => 0,
+                'estado' => 'abierta',
+                'caja_id' => $caja->id,
+                'user_id' => Auth::id(),
             ]);
-        }
-
-        $cajaOcupada = SesionCaja::where('caja_id', $validated['caja_id'])
-            ->where('estado', 'abierta')
-            ->exists();
-
-        if ($cajaOcupada) {
-            return back()->withErrors([
-                'caja_id' => 'Esta caja ya tiene una sesión abierta. Por favor, selecciona otra caja.',
-            ]);
-        }
-
-        $sesion = SesionCaja::create([
-            'fecha_apertura' => now(),
-            'fecha_cierre' => null,
-
-            'monto_apertura' => $validated['monto_apertura'],
-
-            'monto_cierre_teorico' => 0,
-            'monto_cierre_real' => 0,
-            'diferencia' => 0,
-
-            'estado' => 'abierta',
-
-            'caja_id' => $validated['caja_id'],
-            'user_id' => Auth::id(),
-        ]);
+        }, 3);
 
         return redirect()
             ->route('sesiones-caja.index')
@@ -157,109 +151,40 @@ class SesionCajaController extends Controller
 
     public function cerrar(Request $request, SesionCaja $sesionCaja)
     {
-
-        // $puedeCerrarSesionAjena = Auth::user()?->hasRole('Administrador');
-
-        // if (
-        //     $sesionCaja->user_id !== Auth::id() &&
-        //     !$puedeCerrarSesionAjena
-        // ) {
-        //     abort(403);
-        // }
-
-        // if ($sesionCaja->estado !== 'abierta') {
-        //     return back()->withErrors([
-        //         'caja' => 'Esta sesión ya está cerrada.',
-        //     ]);
-        // }
-
         $validated = $request->validate([
-            'monto_cierre_real' => [
-                'required',
-                'numeric',
-                'min:0',
-            ],
-
-            'observaciones' => [
-                'nullable',
-                'string',
-                'max:255',
-            ],
+            'monto_cierre_real' => 'required|numeric|min:0',
+            'observaciones' => 'nullable|string|max:255',
         ]);
 
-        //Ventas de la sesión
-        $ventas = $sesionCaja->ventas()
-            ->where('activo', true)
-            ->with('tipoPago')
-            ->get();
+        abort_unless($sesionCaja->user_id === Auth::id() || $request->user()->hasRole('Administrador'), 403);
 
-        //Totales por método de pago 
+        DB::transaction(function () use ($sesionCaja, $validated) {
+            $sesion = SesionCaja::whereKey($sesionCaja->id)->lockForUpdate()->firstOrFail();
 
-        $ventasEfectivo = $ventas
-            ->filter(
-                fn($venta) =>
-                strtolower($venta->tipoPago?->nombre ?? '') === 'efectivo'
-            )
-            ->sum('importe_total');
+            if ($sesion->estado !== 'abierta') {
+                throw ValidationException::withMessages(['caja' => 'Esta sesión ya está cerrada.']);
+            }
 
-        $ventasYape = $ventas
-            ->filter(
-                function ($venta) {
-                    $nombre = strtolower(trim($venta->tipoPago?->nombre ?? ''));
+            $ventasEfectivo = $sesion->ventas()
+                ->where('activo', true)
+                ->whereHas('tipoPago', fn ($query) => $query->whereRaw("LOWER(TRIM(nombre)) = 'efectivo'"))
+                ->sum('importe_total');
 
-                    return in_array($nombre, [
-                        'yape',
-                        'plin',
-                        'yape/plin',
-                        'yape - plin',
-                        'yape / plin',
-                    ]);
-                }
-            )
-            ->sum('importe_total');
+            $ingresos = $sesion->movimientos()->where('tipo', 'ingreso')->sum('monto');
+            $egresos = $sesion->movimientos()->where('tipo', 'egreso')->sum('monto');
+            $efectivoEsperado = round($sesion->monto_apertura + $ventasEfectivo + $ingresos - $egresos, 2);
 
-        $ventasTarjeta = $ventas
-            ->filter(
-                fn($venta) =>
-                strtolower($venta->tipoPago?->nombre ?? '') === 'tarjeta'
-            )
-            ->sum('importe_total');
+            $sesion->update([
+                'fecha_cierre' => now(),
+                'monto_cierre_teorico' => $efectivoEsperado,
+                'monto_cierre_real' => round($validated['monto_cierre_real'], 2),
+                'diferencia' => round($validated['monto_cierre_real'] - $efectivoEsperado, 2),
+                'estado' => 'cerrada',
+                'observaciones' => $validated['observaciones'] ?? null,
+            ]);
+        }, 3);
 
-
-        //Total de ventas
-        $totalVentas =
-            $ventasEfectivo +
-            $ventasYape +
-            $ventasTarjeta;
-
-        //Efectivo esperado
-        $efectivoEsperado =
-            (float) $sesionCaja->monto_apertura +
-            (float) $ventasEfectivo;
-
-        $diferencia =
-            (float) $validated['monto_cierre_real'] -
-            $efectivoEsperado;
-
-
-        $sesionCaja->update([
-            'fecha_cierre' => now(),
-            'monto_cierre_teorico' => round($efectivoEsperado, 2),
-            'monto_cierre_real' => round(
-                $validated['monto_cierre_real'],
-                2
-            ),
-            'diferencia' => round($diferencia, 2),
-            'estado' => 'cerrada',
-            'observaciones' => $validated['observaciones'] ?? null,
-        ]);
-
-        return redirect()
-            ->route('sesiones-caja.index')
-            ->with(
-                'success',
-                'Caja cerrada correctamente.'
-            );
+        return redirect()->route('sesiones-caja.index')->with('success', 'Caja cerrada correctamente.');
     }
 
     public function actual()
@@ -269,8 +194,15 @@ class SesionCajaController extends Controller
             ->where('estado', 'abierta')
             ->first();
 
-        return Inertia::render('Cajas/Actual', [
+        return response()->json([
             'sesionCaja' => $sesionCaja,
         ]);
+    }
+
+    public function movimientos(Request $request, SesionCaja $sesionCaja)
+    {
+        abort_unless($sesionCaja->user_id === Auth::id() || $request->user()->hasRole('Administrador'), 403);
+
+        return response()->json(['movimientos' => $sesionCaja->movimientos()->latest('id')->get()]);
     }
 }

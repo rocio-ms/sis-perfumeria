@@ -4,6 +4,7 @@ import { router } from "@inertiajs/vue3";
 
 import AppLayout from "@/Layouts/AppLayout.vue";
 import Card from "@/Components/Card.vue";
+import ExportarTablaExcel from "@/Components/ExportarTablaExcel.vue";
 
 import Select from "primevue/select";
 import DatePicker from "primevue/datepicker";
@@ -44,6 +45,11 @@ const props = defineProps({
     },
 
     productosMasVendidos: {
+        type: Array,
+        default: () => [],
+    },
+
+    productosMenosVendidos: {
         type: Array,
         default: () => [],
     },
@@ -109,6 +115,14 @@ const items = ref([
 const empresaId = ref(props.filtros?.empresa_id ?? 0);
 
 const tipoPagoId = ref(props.filtros?.tipo_pago_id ?? null);
+const periodoProductos = ref(props.filtros?.periodo_productos ?? "mes");
+const fechaReferenciaProductos = ref(
+    parseFechaReferencia(props.filtros?.fecha_referencia),
+);
+const periodoMasVendidos = ref(props.filtros?.periodo_mas_vendidos ?? "mes");
+const fechaReferenciaMasVendidos = ref(
+    parseFechaReferencia(props.filtros?.fecha_referencia_mas_vendidos),
+);
 const periodoVentasEmpresa = ref(
     props.filtros?.periodo_ventas_empresa ?? "mes",
 );
@@ -118,7 +132,7 @@ const fechaReferenciaVentasEmpresa = ref(
     ),
 );
 
-const periodosVentasEmpresa = [
+const periodos = [
     { label: "Día", value: "dia" },
     { label: "Semana", value: "semana" },
     { label: "Mes", value: "mes" },
@@ -185,6 +199,14 @@ function aplicarFiltros() {
         {
             empresa_id: empresaId.value || null,
             tipo_pago_id: tipoPagoId.value || null,
+            periodo_productos: periodoProductos.value,
+            fecha_referencia: fechaReferenciaComoTexto(
+                fechaReferenciaProductos.value,
+            ),
+            periodo_mas_vendidos: periodoMasVendidos.value,
+            fecha_referencia_mas_vendidos: fechaReferenciaComoTexto(
+                fechaReferenciaMasVendidos.value,
+            ),
             periodo_ventas_empresa: periodoVentasEmpresa.value,
             fecha_referencia_ventas_empresa: fechaReferenciaComoTexto(
                 fechaReferenciaVentasEmpresa.value,
@@ -202,6 +224,10 @@ watch(
     [
         empresaId,
         tipoPagoId,
+        periodoProductos,
+        fechaReferenciaProductos,
+        periodoMasVendidos,
+        fechaReferenciaMasVendidos,
         periodoVentasEmpresa,
         fechaReferenciaVentasEmpresa,
     ],
@@ -223,30 +249,60 @@ function moneda(valor) {
     }).format(Number(valor || 0));
 }
 
+const columnasProductos = [
+    { titulo: "Código", campo: "codigo" },
+    {
+        titulo: "Producto",
+        campo: (fila) => fila.producto ?? fila.nombre,
+        ancho: 42,
+    },
+    { titulo: "Unidades vendidas", campo: "cantidad" },
+    { titulo: "Stock actual", campo: "stock_actual" },
+];
+
+const columnasMasVendidos = [
+    ...columnasProductos,
+    { titulo: "Importe vendido", campo: "total", formato: '"S/ "#,##0.00' },
+];
+
+const columnasVentasPorEmpresa = [
+    { titulo: "Empresa", campo: "empresa", ancho: 42 },
+    { titulo: "Ventas", campo: "cantidad" },
+    { titulo: "Total", campo: "total", formato: '"S/ "#,##0.00' },
+];
+
+const columnasStockBajo = [
+    { titulo: "Código", campo: "codigo" },
+    { titulo: "Producto", campo: "producto", ancho: 42 },
+    { titulo: "Stock actual", campo: "stock_actual" },
+    { titulo: "Stock mínimo", campo: "stock_minimo" },
+    { titulo: "Estado", campo: () => "Stock bajo" },
+];
+
+const estadosVencimiento = {
+    danger: "Crítico",
+    warn: "Próximo a vencer",
+    info: "Por vencer",
+};
+
+const columnasProximosVencer = [
+    { titulo: "Código", campo: "codigo" },
+    { titulo: "Producto", campo: "producto", ancho: 42 },
+    { titulo: "Lote", campo: "lote" },
+    { titulo: "Stock disponible", campo: "stock_actual" },
+    { titulo: "Vencimiento", campo: "fecha_vencimiento" },
+    { titulo: "Tiempo restante", campo: "dias_restantes", formato: '0" días"' },
+    {
+        titulo: "Estado",
+        campo: (fila) => estadosVencimiento[severidadVencimiento(fila.dias_restantes)],
+    },
+];
+
 /*
 |--------------------------------------------------------------------------
 | EXPORTAR VENTAS PDF
 |--------------------------------------------------------------------------
 */
-
-function exportarVentasPdf() {
-    const params = new URLSearchParams();
-
-    if (empresaId.value) {
-        params.append("empresa_id", empresaId.value);
-    }
-
-    if (tipoPagoId.value) {
-        params.append("tipo_pago_id", tipoPagoId.value);
-    }
-
-    const query = params.toString();
-
-    window.open(
-        route("reportes.ventas.pdf") + (query ? `?${query}` : ""),
-        "_blank",
-    );
-}
 
 /*
 |--------------------------------------------------------------------------
@@ -254,63 +310,17 @@ function exportarVentasPdf() {
 |--------------------------------------------------------------------------
 */
 
-function exportarProductosMasVendidosPdf() {
-    const params = new URLSearchParams();
-
-    if (empresaId.value) {
-        params.append("empresa_id", empresaId.value);
-    }
-
-    if (tipoPagoId.value) {
-        params.append("tipo_pago_id", tipoPagoId.value);
-    }
-
-    window.open(
-        route("reportes.productos-mas-vendidos.pdf") +
-            (params.toString() ? `?${params.toString()}` : ""),
-        "_blank",
-    );
-}
-
 /*
 |--------------------------------------------------------------------------
 | EXPORTAR STOCK BAJO
 |--------------------------------------------------------------------------
 */
 
-function exportarStockBajoPdf() {
-    const params = new URLSearchParams();
-
-    if (empresaId.value) {
-        params.append("empresa_id", empresaId.value);
-    }
-
-    window.open(
-        route("reportes.stock-bajo.pdf") +
-            (params.toString() ? `?${params.toString()}` : ""),
-        "_blank",
-    );
-}
-
 /*
 |--------------------------------------------------------------------------
 | EXPORTAR PRÓXIMOS A VENCER
 |--------------------------------------------------------------------------
 */
-
-function exportarProximosVencerPdf() {
-    const params = new URLSearchParams();
-
-    if (empresaId.value) {
-        params.append("empresa_id", empresaId.value);
-    }
-
-    window.open(
-        route("reportes.proximos-vencer.pdf") +
-            (params.toString() ? `?${params.toString()}` : ""),
-        "_blank",
-    );
-}
 
 /*
 |--------------------------------------------------------------------------
@@ -336,19 +346,6 @@ function exportarVentasEmpresaPdf(empresaId) {
 
     window.open(
         `${route("reportes.empresa.ventas.pdf", { empresa: empresaId })}?${params.toString()}`,
-        "_blank",
-    );
-}
-
-function exportarReporteEmpresaPdf() {
-    if (!empresaId.value) {
-        return;
-    }
-
-    window.open(
-        route("reportes.empresa.pdf", {
-            empresa_id: empresaId.value,
-        }),
         "_blank",
     );
 }
@@ -937,12 +934,14 @@ const totalVentasCaja = computed(() => {
                             </p>
                         </div>
 
-                        <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                        <div
+                            class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-[1fr_1fr_auto] gap-3"
+                        >
                             <FloatLabel variant="on">
                                 <Select
                                     v-model="periodoVentasEmpresa"
                                     inputId="periodo-ventas-empresa"
-                                    :options="periodosVentasEmpresa"
+                                    :options="periodos"
                                     optionLabel="label"
                                     optionValue="value"
                                     class="w-full"
@@ -965,7 +964,12 @@ const totalVentasCaja = computed(() => {
                                     Fecha de referencia
                                 </label>
                             </FloatLabel>
-
+                            <ExportarTablaExcel
+                                :filas="ventasPorEmpresa"
+                                :columnas="columnasVentasPorEmpresa"
+                                hoja="Ventas por empresa"
+                                archivo="ventas-por-empresa"
+                            />
                         </div>
                     </div>
 
@@ -1016,7 +1020,7 @@ const totalVentasCaja = computed(() => {
 
                 <div class="mb-8">
                     <div
-                        class="flex flex-col md:flex-row md:items-center justify-between gap-4 mb-4"
+                        class="flex flex-col md:flex-row md:items-end justify-between gap-4 mb-4"
                     >
                         <div>
                             <h2 class="text-lg font-semibold text-slate-800">
@@ -1025,8 +1029,45 @@ const totalVentasCaja = computed(() => {
 
                             <p class="text-sm text-slate-500">
                                 Los 10 productos con mayor cantidad de unidades
-                                vendidas.
+                                vendidas en el período seleccionado.
                             </p>
+                        </div>
+                        <div
+                            class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-[1fr_1fr_auto] gap-3"
+                        >
+                            <FloatLabel variant="on">
+                                <Select
+                                    v-model="periodoMasVendidos"
+                                    inputId="periodo-productos-mas-vendidos"
+                                    :options="periodos"
+                                    optionLabel="label"
+                                    optionValue="value"
+                                    class="w-full"
+                                />
+                                <label for="periodo-productos-mas-vendidos">
+                                    Período
+                                </label>
+                            </FloatLabel>
+                            <FloatLabel variant="on">
+                                <DatePicker
+                                    v-model="fechaReferenciaMasVendidos"
+                                    inputId="fecha-productos-mas-vendidos"
+                                    dateFormat="dd/mm/yy"
+                                    :manualInput="false"
+                                    showIcon
+                                    class="w-full"
+                                    inputClass="w-full"
+                                />
+                                <label for="fecha-productos-mas-vendidos">
+                                    Fecha de referencia
+                                </label>
+                            </FloatLabel>
+                            <ExportarTablaExcel
+                                :filas="productosMasVendidos"
+                                :columnas="columnasMasVendidos"
+                                hoja="Productos más vendidos"
+                                archivo="productos-mas-vendidos"
+                            />
                         </div>
                     </div>
 
@@ -1044,7 +1085,101 @@ const totalVentasCaja = computed(() => {
                         </div>
                     </div>
 
+                    <DataTable
+                        :value="productosMasVendidos"
+                        stripedRows
+                        responsiveLayout="scroll"
+                    >
+                        <template #empty>
+                            No hay ventas de productos en el período seleccionado.
+                        </template>
+                        <Column field="codigo" header="Código" />
+                        <Column field="producto" header="Producto" />
+                        <Column field="cantidad" header="Unidades vendidas" />
+                        <Column field="stock_actual" header="Stock actual" />
+                        <Column field="total" header="Importe vendido">
+                            <template #body="{ data }">
+                                {{ moneda(data.total) }}
+                            </template>
+                        </Column>
+                    </DataTable>
                 </div>
+
+                <Divider />
+
+                <!-- ================================================= -->
+                <!-- PRODUCTOS MENOS VENDIDOS -->
+                <!-- ================================================= -->
+
+                <section class="mb-8" aria-labelledby="productos-menos-vendidos">
+                    <div
+                        class="flex flex-col md:flex-row md:items-end justify-between gap-4 mb-4"
+                    >
+                        <div>
+                            <h2
+                                id="productos-menos-vendidos"
+                                class="text-lg font-semibold text-slate-800"
+                            >
+                                Productos menos vendidos
+                            </h2>
+                            <p class="text-sm text-slate-500">
+                                Hasta 10 productos activos con menos unidades vendidas,
+                                incluidos los que tienen 0 ventas.
+                            </p>
+                        </div>
+                        <div
+                            class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-[1fr_1fr_auto] gap-3"
+                        >
+                            <FloatLabel variant="on">
+                                <Select
+                                    v-model="periodoProductos"
+                                    inputId="periodo-productos-menos-vendidos"
+                                    :options="periodos"
+                                    optionLabel="label"
+                                    optionValue="value"
+                                    class="w-full"
+                                />
+                                <label for="periodo-productos-menos-vendidos">
+                                    Período
+                                </label>
+                            </FloatLabel>
+                            <FloatLabel variant="on">
+                                <DatePicker
+                                    v-model="fechaReferenciaProductos"
+                                    inputId="fecha-productos-menos-vendidos"
+                                    dateFormat="dd/mm/yy"
+                                    :manualInput="false"
+                                    showIcon
+                                    class="w-full"
+                                    inputClass="w-full"
+                                />
+                                <label for="fecha-productos-menos-vendidos">
+                                    Fecha de referencia
+                                </label>
+                            </FloatLabel>
+                            <ExportarTablaExcel
+                                :filas="productosMenosVendidos"
+                                :columnas="columnasProductos"
+                                hoja="Productos menos vendidos"
+                                archivo="productos-menos-vendidos"
+                            />
+                        </div>
+                    </div>
+
+                    <DataTable
+                        :value="productosMenosVendidos"
+                        stripedRows
+                        responsiveLayout="scroll"
+                    >
+                        <template #empty>
+                            No hay productos activos para mostrar.
+                        </template>
+                        <Column field="codigo" header="Código" />
+                        <Column field="nombre" header="Producto" />
+                        <Column field="cantidad" header="Unidades vendidas" />
+                        <Column field="stock_actual" header="Stock actual" />
+                    </DataTable>
+                </section>
 
                 <Divider />
 
@@ -1065,7 +1200,12 @@ const totalVentasCaja = computed(() => {
                                 Productos que necesitan reposición.
                             </p>
                         </div>
-
+                        <ExportarTablaExcel
+                            :filas="stockBajo"
+                            :columnas="columnasStockBajo"
+                            hoja="Productos con stock bajo"
+                            archivo="productos-stock-bajo"
+                        />
                     </div>
 
                     <DataTable
@@ -1113,8 +1253,12 @@ const totalVentasCaja = computed(() => {
                                 próximos 30 días.
                             </p>
                         </div>
-
-           
+                        <ExportarTablaExcel
+                            :filas="proximosVencer"
+                            :columnas="columnasProximosVencer"
+                            hoja="Productos próximos a vencer"
+                            archivo="productos-proximos-a-vencer"
+                        />
                     </div>
 
                     <!-- RESUMEN VENCIMIENTO -->
@@ -1157,23 +1301,8 @@ const totalVentasCaja = computed(() => {
                         <Column header="Estado">
                             <template #body="{ data }">
                                 <Tag
-                                    v-if="Number(data.dias_restantes) <= 7"
-                                    value="Crítico"
-                                    severity="danger"
-                                />
-
-                                <Tag
-                                    v-else-if="
-                                        Number(data.dias_restantes) <= 15
-                                    "
-                                    value="Próximo a vencer"
-                                    severity="warn"
-                                />
-
-                                <Tag
-                                    v-else
-                                    value="Por vencer"
-                                    severity="info"
+                                    :value="estadosVencimiento[severidadVencimiento(data.dias_restantes)]"
+                                    :severity="severidadVencimiento(data.dias_restantes)"
                                 />
                             </template>
                         </Column>

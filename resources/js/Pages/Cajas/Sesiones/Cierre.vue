@@ -93,6 +93,13 @@ const metodosPago = computed(() => [
         color: "blue",
         monto: Number(props.sesion?.ventas_tarjeta ?? 0),
     },
+    {
+        key: "transferencia",
+        label: "Transferencia",
+        icon: "pi-building-columns",
+        color: "blue",
+        monto: Number(props.sesion?.ventas_transferencia ?? 0),
+    },
 ]);
 
 /*
@@ -121,10 +128,7 @@ const efectivoEsperado = computed(() => {
 */
 
 const totalVentasTurno = computed(() => {
-    return metodosPago.value.reduce(
-        (acc, metodo) => acc + metodo.monto,
-        0
-    );
+    return Number(props.sesion?.ventas_total ?? 0);
 });
 
 /*
@@ -384,10 +388,7 @@ const procesarCierre = () => {
         },
 
         onError: (errors) => {
-            console.error(
-                "ERROR DE VALIDACIÓN:",
-                errors
-            );
+            if (errors.caja) form.setError("monto_cierre_real", errors.caja);
         },
 
         onFinish: () => {

@@ -61,13 +61,6 @@ class ClienteController extends Controller
         );
     }
 
-    public function create()
-    {
-        return Inertia::render('Clientes/Form', [
-            'cliente' => null,
-        ]);
-    }
-
     public function store(Request $request)
     {
         $validated = $request->validate([
@@ -144,13 +137,6 @@ class ClienteController extends Controller
         ]);
     }
 
-
-    public function edit(Cliente $cliente)
-    {
-        return Inertia::render('Clientes/Form', [
-            'cliente' => $cliente,
-        ]);
-    }
 
     public function update(Request $request, Cliente $cliente)
     {

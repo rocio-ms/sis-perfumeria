@@ -265,42 +265,6 @@ const nuevaVenta = () => {
 |--------------------------------------------------------------------------
 */
 
-const eliminarVenta = async (venta) => {
-    const result = await Swal.fire({
-        title: "¿Anular venta?",
-        text: `La venta ${venta.serie}-${venta.correlativo} será anulada.`,
-        icon: "warning",
-        showCancelButton: true,
-        confirmButtonText: "Sí, anular",
-        cancelButtonText: "Cancelar",
-        reverseButtons: true,
-    });
-
-    if (!result.isConfirmed) {
-        return;
-    }
-
-    router.delete(route("ventas.destroy", venta.id), {
-        onSuccess: async () => {
-            await Swal.fire({
-                title: "Venta anulada",
-                text: "La venta fue anulada correctamente.",
-                icon: "success",
-                confirmButtonText: "Aceptar",
-            });
-        },
-
-        onError: () => {
-            Swal.fire({
-                title: "Error",
-                text: "No se pudo anular la venta.",
-                icon: "error",
-                confirmButtonText: "Aceptar",
-            });
-        },
-    });
-};
-
 //Computed
 const detallesVenta = computed(() => {
     return boletasVenta.value.flatMap((boleta) => boleta.detalles ?? []);
@@ -381,7 +345,6 @@ const totalVenta = computed(() => {
                     :show-filters="true"
                     @nuevo="nuevaVenta"
                     @ver="verVenta"
-                    @eliminar="eliminarVenta"
                 />
             </template>
         </Card>

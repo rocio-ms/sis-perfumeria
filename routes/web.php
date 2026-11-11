@@ -30,7 +30,6 @@ use App\Http\Controllers\RolesPermisosController;
 use App\Models\Categoria;
 use Illuminate\Support\Facades\Route;
 use Illuminate\Support\Facades\Auth;
-use Inertia\Inertia;
 
 
 /*
@@ -42,7 +41,9 @@ use Inertia\Inertia;
 Route::get('/', function () {
 
     if (Auth::check()) {
-        return redirect()->route('dashboard');
+        return redirect()->route(Auth::user()->hasRole('Vendedor') && !Auth::user()->can('dashboard.index')
+            ? 'ventas.create'
+            : 'dashboard');
     }
 
     return redirect()->route('login');
@@ -55,11 +56,6 @@ Route::get('/', function () {
 |--------------------------------------------------------------------------
 */
 
-Route::get('/login', function () {
-    return Inertia::render('Auth/Login');
-})
-    ->middleware('guest')
-    ->name('login');
 
 
 /*
@@ -84,7 +80,7 @@ Route::middleware([
     Route::get('/dashboard', [
         DashboardController::class,
         'index'
-    ])->name('dashboard');
+    ])->middleware('permission:dashboard.index')->name('dashboard');
 
 
     /*
@@ -168,6 +164,10 @@ Route::middleware([
         ->name('productos.index');
 
 
+    Route::get('/productos/siguiente-codigo', [ProductoController::class, 'siguienteCodigo'])
+        ->middleware('permission:productos.crear')
+        ->name('productos.siguiente-codigo');
+
     // Ver producto
     Route::get(
         '/productos/{producto}',
@@ -181,7 +181,7 @@ Route::middleware([
         ->name('productos.store');
 
     Route::put('/productos/{producto}', [ProductoController::class, 'update'])
-        // ->middleware('permission:productos.update')
+        ->middleware('permission:productos.editar')
         ->name('productos.update');
 
 
@@ -192,7 +192,7 @@ Route::middleware([
     |--------------------------------------------------------------------------
     */
 
-    Route::resource('/categorias', CategoriaController::class);
+    Route::resource('/categorias', CategoriaController::class)->except(['show', 'destroy']);
 
     Route::resource('/subcategorias', SubcategoriaController::class)
         ->except(['show', 'destroy']);
@@ -203,7 +203,7 @@ Route::middleware([
     |--------------------------------------------------------------------------
     */
 
-    Route::resource('/marcas', MarcaController::class);
+    Route::resource('/marcas', MarcaController::class)->except(['show', 'destroy']);
 
 
     /*
@@ -212,7 +212,7 @@ Route::middleware([
     |--------------------------------------------------------------------------
     */
 
-    Route::resource('/proveedores', ProveedorController::class);
+    Route::resource('/proveedores', ProveedorController::class)->except('destroy');
 
 
     /*
@@ -234,7 +234,7 @@ Route::middleware([
     */
 
     Route::resource('/cajas', CajaController::class)
-        ->except(['show', 'edit']);
+        ->except(['show', 'edit', 'destroy']);
 
 
     /*
@@ -293,11 +293,6 @@ Route::middleware([
     | MOVIMIENTOS DE CAJA
     |--------------------------------------------------------------------------
     */
-
-    Route::get(
-        '/movimientos-caja',
-        [MovimientoCajaController::class, 'index']
-    )->name('movimientos-caja.index');
 
     Route::post(
         '/movimientos-caja',
@@ -423,7 +418,7 @@ Route::middleware([
     |--------------------------------------------------------------------------
     */
 
-    Route::resource('/usuarios', UsuarioController::class);
+    Route::resource('/usuarios', UsuarioController::class)->except(['create', 'edit', 'destroy']);
 
     /*
     |--------------------------------------------------------------------------
@@ -457,12 +452,12 @@ Route::middleware([
     Route::get('/entradas/buscar-productos', [EntradaController::class, 'buscarProductos'])
         ->name('entradas.buscarProductos');
 
-    Route::resource('/entradas', EntradaController::class);
-
-    Route::get(
-        '/entradas/{entrada}/edit-data',
-        [EntradaController::class, 'editData']
-    )->name('entradas.editData');
+    Route::resource('/entradas', EntradaController::class)->except('destroy')
+        ->middlewareFor(['edit', 'update'], 'permission:entradas.editar');
+    Route::middleware('permission:entradas.editar')->group(function () {
+        Route::get('/entradas/{entrada}/edit-data', [EntradaController::class, 'editData'])
+            ->name('entradas.editData');
+    });
 
 
     /*
@@ -478,7 +473,7 @@ Route::middleware([
 
     // Empresas
 
-    Route::resource('/empresas', EmpresaController::class);
+    Route::resource('/empresas', EmpresaController::class)->except('destroy');
     Route::get(
         '/sesiones-caja/verificar-abierta',
         function () {

@@ -42,10 +42,6 @@ const props = defineProps({
         type: Array,
         default: () => [],
     },
-    siguienteCodigo: {
-        type: String,
-        default: "000001",
-    },
     filtros: {
         type: Object,
         default: () => ({}),
@@ -170,47 +166,11 @@ const formularioGuardado = async (tipo) => {
         confirmButtonText: "Aceptar",
     });
 
-    // Recargar productos y siguiente código
     router.reload({
-        only: ["productos", "siguienteCodigo"],
+        only: ["productos"],
     });
 };
 
-const eliminarProducto = async (producto) => {
-    const result = await Swal.fire({
-        title: "¿Eliminar producto?",
-        text: `El producto "${producto.nombre}" será eliminado.`,
-        icon: "warning",
-        showCancelButton: true,
-        confirmButtonText: "Sí, eliminar",
-        cancelButtonText: "Cancelar",
-        reverseButtons: true,
-    });
-
-    if (!result.isConfirmed) {
-        return;
-    }
-
-    router.delete(route("productos.destroy", producto.id), {
-        onSuccess: async () => {
-            await Swal.fire({
-                title: "Eliminado",
-                text: "El producto fue eliminado correctamente.",
-                icon: "success",
-                confirmButtonText: "Aceptar",
-            });
-        },
-
-        onError: () => {
-            Swal.fire({
-                title: "Error",
-                text: "No se pudo eliminar el producto.",
-                icon: "error",
-                confirmButtonText: "Aceptar",
-            });
-        },
-    });
-};
 </script>
 
 <template>
@@ -274,7 +234,6 @@ const eliminarProducto = async (producto) => {
             :ubicaciones="props.ubicaciones"
             :marcas="props.marcas"
             :empresas="props.empresas"
-            :codigo-inicial="siguienteCodigo"
             @saved="formularioGuardado"
             @cancel="cerrarForm"
         />

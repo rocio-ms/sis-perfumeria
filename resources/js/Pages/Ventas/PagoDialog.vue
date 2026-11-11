@@ -18,6 +18,8 @@ const props = defineProps({
         type: Boolean,
         default: false,
     },
+    tiposPago: { type: Array, default: () => [] },
+    tiposComprobante: { type: Object, default: () => ({}) },
 });
 
 const emit = defineEmits(["update:visible", "confirmar"]);
@@ -75,6 +77,7 @@ const cliente = ref({
     ap_materno: "",
     nombres: "",
     direccion: "",
+    contacto: "",
 });
 
 const largoDocumentoEsperado = computed(() => {
@@ -109,6 +112,7 @@ const establecerClienteVarios = () => {
         ap_materno: "",
         nombres: "CLIENTES VARIOS",
         direccion: "",
+        contacto: "",
     };
 
     limpiarEstadoBusqueda();
@@ -130,6 +134,7 @@ const activarClienteIdentificado = () => {
         ap_materno: "",
         nombres: "",
         direccion: "",
+        contacto: "",
     };
 
     limpiarEstadoBusqueda();
@@ -157,6 +162,7 @@ const cambiarTipoDocumento = () => {
     cliente.value.ap_materno = "";
     cliente.value.nombres = "";
     cliente.value.direccion = "";
+    cliente.value.contacto = "";
 
     limpiarEstadoBusqueda();
 };
@@ -176,6 +182,7 @@ watch(
 
         if (soloDigitos !== documentoConsultado.value) {
             cliente.value.id = null;
+            cliente.value.contacto = "";
             if (clienteEncontrado.value || clienteEncontradoEnAPI.value) {
                 cliente.value.nombre = "";
                 cliente.value.razon_social_nombre = "";
@@ -316,6 +323,8 @@ const buscarCliente = async () => {
                     nombres: datos.nombres || "",
 
                     direccion: datos.direccion || "",
+
+                    contacto: cliente.value.contacto,
                 };
 
                 clienteEncontradoEnAPI.value = true;
@@ -385,25 +394,28 @@ const clienteValido = computed(() => {
 | MÉTODO DE PAGO
 |--------------------------------------------------------------------------
 */
-const metodosPago = [
-    {
-        value: "efectivo",
-        label: "Efectivo",
-        icon: "pi pi-wallet",
-    },
-    {
-        value: "tarjeta",
-        label: "Tarjeta",
-        icon: "pi pi-credit-card",
-    },
-    {
-        value: "yape_plin",
-        label: "Yape / Plin",
-        icon: "pi pi-mobile",
-    },
-];
+const iconosPago = {
+    efectivo: "pi pi-wallet",
+    tarjeta: "pi pi-credit-card",
+    yape: "pi pi-mobile",
+    plin: "pi pi-mobile",
+    yapeplin: "pi pi-mobile",
+    transferencia: "pi pi-building-columns",
+};
 
-const metodoPago = ref("efectivo");
+const metodosPago = computed(() => props.tiposPago.map(({ id, nombre }) => {
+    const clave = nombre.toLowerCase().replace(/[^a-z]/g, "");
+    return {
+        value: id,
+        label: nombre,
+        icon: iconosPago[clave] ?? "pi pi-credit-card",
+        efectivo: clave === "efectivo",
+    };
+}));
+
+const metodoPago = ref(null);
+const metodoSeleccionado = computed(() => metodosPago.value.find(({ value }) => value === metodoPago.value));
+const pagoEsEfectivo = computed(() => metodoSeleccionado.value?.efectivo === true);
 
 const montoRecibido = ref(null);
 const montoCalculadora = ref("");
@@ -414,7 +426,7 @@ const calculadoraActiva = ref(false);
  * El cliente y las tarjetas de pago siguen visibles.
  */
 const modoPagoActivo = computed(() => {
-    return calculadoraActiva.value && metodoPago.value === "efectivo";
+    return calculadoraActiva.value && pagoEsEfectivo.value;
 });
 
 const expandirSecciones = () => {
@@ -542,7 +554,7 @@ const montosRapidos = computed(() => {
 });
 
 const vuelto = computed(() => {
-    if (metodoPago.value !== "efectivo") return 0;
+    if (!pagoEsEfectivo.value) return 0;
 
     return redondear(
         Math.max(redondear(montoRecibido.value) - totalRedondeado.value, 0),
@@ -550,7 +562,7 @@ const vuelto = computed(() => {
 });
 
 const faltante = computed(() => {
-    if (metodoPago.value !== "efectivo") return 0;
+    if (!pagoEsEfectivo.value) return 0;
 
     return redondear(
         Math.max(totalRedondeado.value - redondear(montoRecibido.value), 0),
@@ -558,7 +570,7 @@ const faltante = computed(() => {
 });
 
 const pagoEfectivoValido = computed(() => {
-    if (metodoPago.value !== "efectivo") return true;
+    if (!pagoEsEfectivo.value) return true;
 
     if (montoRecibido.value === null) return false;
 
@@ -598,6 +610,7 @@ const formularioValido = computed(() => {
     if (props.procesando) return false;
     if (totalRedondeado.value <= 0) return false;
     if (!props.carrito || props.carrito.length === 0) return false;
+    if (!metodoSeleccionado.value || !props.tiposComprobante[comprobante.value.toLowerCase()]) return false;
     if (!clienteValido.value) return false;
     if (!pagoEfectivoValido.value) return false;
 
@@ -613,6 +626,9 @@ const motivoBloqueo = computed(() => {
     if (!props.carrito || props.carrito.length === 0) {
         return "El carrito está vacío.";
     }
+
+    if (!metodosPago.value.length) return "No hay medios de pago activos.";
+    if (!props.tiposComprobante[comprobante.value.toLowerCase()]) return "No hay un comprobante activo seleccionado.";
 
     if (!clienteValido.value) {
         if (
@@ -665,6 +681,7 @@ const confirmar = () => {
               nombres: texto(cliente.value.nombres),
 
               direccion: texto(cliente.value.direccion),
+              contacto: texto(cliente.value.contacto),
           };
 
     emit("confirmar", {
@@ -672,14 +689,14 @@ const confirmar = () => {
 
         cliente: datosCliente,
 
-        metodo_pago: metodoPago.value,
+        tipo_pago_id: metodoPago.value,
 
         monto_recibido:
-            metodoPago.value === "efectivo"
+            pagoEsEfectivo.value
                 ? redondear(montoRecibido.value)
                 : totalRedondeado.value,
 
-        vuelto: metodoPago.value === "efectivo" ? vuelto.value : 0,
+        vuelto: pagoEsEfectivo.value ? vuelto.value : 0,
 
         total: totalRedondeado.value,
 
@@ -711,11 +728,13 @@ watch(
             return;
         }
 
-        comprobante.value = "Boleta";
+        comprobante.value = props.tiposComprobante.boleta ? "Boleta" : "Factura";
 
-        establecerClienteVarios();
+        if (comprobante.value === "Factura") activarClienteIdentificado();
+        else establecerClienteVarios();
 
-        metodoPago.value = "efectivo";
+        const metodoInicial = metodosPago.value.find(({ efectivo }) => efectivo) ?? metodosPago.value[0];
+        metodoPago.value = metodoInicial?.value ?? null;
 
         montoRecibido.value = null;
         montoCalculadora.value = "";
@@ -786,9 +805,8 @@ watch(
                         type="button"
                         class="border rounded-lg py-2 text-sm font-medium w-full
                                 border-rose-700 bg-rose-50 text-rose-800"
-                        @click="comprobante = 'Boleta'"
                     >
-                        Boleta
+                        {{ comprobante }}
                     </button>
                 </div>
             </div>
@@ -908,6 +926,22 @@ watch(
                         Presiona Enter o la lupa para buscar, o escribe el
                         nombre manualmente.
                     </p>
+
+                    <div>
+                        <label
+                            for="venta-cliente-contacto"
+                            class="block text-xs text-slate-600 mb-1"
+                        >
+                            Celular o correo electrónico (opcional)
+                        </label>
+                        <InputText
+                            id="venta-cliente-contacto"
+                            v-model="cliente.contacto"
+                            placeholder="Ej. 987654321 o nombre@correo.com"
+                            maxlength="255"
+                            class="w-full"
+                        />
+                    </div>
                 </div>
 
                 <p v-else class="text-xs text-gray-400 m-0">
@@ -954,7 +988,7 @@ watch(
 
                 <!-- CALCULADORA -->
                 <div
-                    v-if="metodoPago === 'efectivo'"
+                    v-if="pagoEsEfectivo"
                     class="mt-3 border rounded-xl overflow-hidden transition-all duration-300"
                     :class="
                         modoPagoActivo

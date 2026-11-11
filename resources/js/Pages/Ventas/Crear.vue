@@ -33,6 +33,8 @@ const props = defineProps({
         type: Array,
         default: () => [],
     },
+    tiposPago: { type: Array, default: () => [] },
+    tiposComprobante: { type: Array, default: () => [] },
     cajaAbierta: {
         type: Boolean,
         default: false,
@@ -89,7 +91,9 @@ const comprobanteSeleccionadoParaImprimir = ref(null);
 
 const productosDisponibles = computed(() => {
     return productosBuscados.value.filter(
-        (producto) => Number(producto.stock_actual ?? 0) > 0,
+        (producto) =>
+            Number(producto.stock_actual ?? 0) >= 1 &&
+            producto.lotes?.some((lote) => Number(lote.cantidad_actual) >= 1),
     );
 });
 
@@ -156,6 +160,7 @@ const solicitarProductos = async (texto = "", categoriaId = null) => {
             {
                 headers: { Accept: "application/json" },
                 signal: controlador.signal,
+                cache: "no-store",
             },
         );
 
@@ -281,16 +286,24 @@ const limpiarBusqueda = () => {
     });
 };
 
-const recargarCatalogo = async () => {
+const recargarCatalogo = async (productosActualizados = null) => {
     clearTimeout(temporizadorBusqueda);
     controladorBusqueda?.abort();
     busquedaPendiente++;
+    if (productosActualizados) {
+        productosBuscados.value = productosActualizados;
+    }
     busqueda.value = "";
 
     await nextTick();
 
     clearTimeout(temporizadorBusqueda);
-    await solicitarProductos("", categoriaSeleccionada.value);
+    if (!productosActualizados || categoriaSeleccionada.value !== null) {
+        await solicitarProductos("", categoriaSeleccionada.value);
+    } else {
+        buscandoProductos.value = false;
+        errorBusqueda.value = "";
+    }
 
     inputBusqueda.value?.$el?.focus();
 };
@@ -300,6 +313,14 @@ const recargarCatalogo = async () => {
 | AGREGAR AL CARRITO
 |--------------------------------------------------------------------------
 */
+
+const stockParaLote = (producto, loteId) => {
+    const lote = producto.lotes?.find(({ id }) => id === loteId);
+    return Math.min(
+        Number(producto.stock_actual ?? 0),
+        Number(lote?.cantidad_actual ?? 0),
+    );
+};
 
 const agregarAlCarrito = (producto) => {
     const stock = Number(producto.stock_actual ?? 0);
@@ -320,17 +341,19 @@ const agregarAlCarrito = (producto) => {
     );
 
     if (existente) {
-        if (existente.cantidad >= stock) {
+        const disponible = stockParaLote(producto, existente.lote_id);
+        if (existente.cantidad >= disponible) {
             Swal.fire({
                 icon: "warning",
                 title: "Stock insuficiente",
-                text: `Solo hay ${stock} unidades disponibles de "${producto.nombre}".`,
+                text: `Hay ${disponible} unidades de "${producto.nombre}" disponibles en el lote seleccionado.`,
                 confirmButtonText: "Aceptar",
             });
 
             return;
         }
 
+        existente.producto = producto;
         existente.cantidad++;
 
         calcularSubtotal(existente);
@@ -339,6 +362,10 @@ const agregarAlCarrito = (producto) => {
     }
 
     const precio = Number(producto.precio_venta ?? producto.precio ?? 0);
+    if (precio <= 0) {
+        Swal.fire("Precio no disponible", `Configura un precio para "${producto.nombre}" antes de venderlo.`, "warning");
+        return;
+    }
 
     const loteDisponible = producto.lotes?.find(
         (lote) => Number(lote.cantidad_actual ?? 0) > 0,
@@ -387,13 +414,13 @@ const agregarAlCarrito = (producto) => {
 const incrementarCantidad = (index) => {
     const item = carrito.value[index];
 
-    const stock = Number(item.producto?.stock_actual ?? 0);
+    const stock = stockParaLote(item.producto, item.lote_id);
 
     if (item.cantidad >= stock) {
         Swal.fire({
             icon: "warning",
             title: "Stock máximo alcanzado",
-            text: `Solo hay ${stock} unidades disponibles.`,
+            text: `Hay ${stock} unidades disponibles en el lote seleccionado.`,
             confirmButtonText: "Aceptar",
         });
 
@@ -562,12 +589,10 @@ const imprimirComprobantesEmitidos = async (comprobanteId = null) => {
 |--------------------------------------------------------------------------
 */
 
-const tiposPago = {
-    efectivo: 1,
-    tarjeta: 2,
-    yape_plin: 3,
-    transferencia: 4,
-};
+const normalizarTipo = (nombre) => nombre.toLowerCase().replace(/[^a-z]/g, "");
+const tiposComprobante = computed(() =>
+    Object.fromEntries(props.tiposComprobante.map(({ id, nombre }) => [normalizarTipo(nombre), id])),
+);
 
 const procesarVenta = (datosPago) => {
     if (!props.sesionCaja?.id) {
@@ -577,6 +602,14 @@ const procesarVenta = (datosPago) => {
             text: "No tienes una sesión de caja abierta.",
         });
 
+        return;
+    }
+
+    const tipoPagoId = props.tiposPago.find(({ id }) => id === datosPago.tipo_pago_id)?.id;
+    const tipoComprobanteId = tiposComprobante.value[normalizarTipo(datosPago.comprobante)];
+
+    if (!tipoPagoId || !tipoComprobanteId) {
+        Swal.fire("Configuración de venta", "Selecciona un medio de pago y un comprobante activos.", "warning");
         return;
     }
 
@@ -593,18 +626,13 @@ const procesarVenta = (datosPago) => {
 
             sesion_caja_id: props.sesionCaja.id,
 
-            tipo_comprobante_id: datosPago.comprobante === "Factura" ? 2 : 1,
-
-            fecha_emision: new Date()
-                .toISOString()
-                .slice(0, 19)
-                .replace("T", " "),
+            tipo_comprobante_id: tipoComprobanteId,
 
             moneda: "soles",
 
             forma_pago: "contado",
 
-            tipo_pago_id: tiposPago[datosPago.metodo_pago],
+            tipo_pago_id: tipoPagoId,
 
             detalles: carrito.value.map((item) => ({
                 producto_id: item.producto_id,
@@ -641,11 +669,20 @@ const procesarVenta = (datosPago) => {
                 mostrarComprobantesEmitidos.value =
                     comprobantesEmitidos.value.length > 0;
 
-                await recargarCatalogo();
+                await recargarCatalogo(page.props.productos);
             },
 
             onError: (errors) => {
                 console.error("Errores al registrar venta:", errors);
+
+                if (errors["detalles.stock"] || errors["detalles.precio"]) {
+                    clearTimeout(temporizadorBusqueda);
+                    productosBuscados.value = [];
+                    solicitarProductos(
+                        busqueda.value.trim(),
+                        categoriaSeleccionada.value,
+                    );
+                }
 
                 Swal.fire({
                     icon: "error",
@@ -1024,9 +1061,17 @@ onMounted(() => {
                                     severity="secondary"
                                     outlined
                                     class="mt-3"
-                                    @click="recargarCatalogo"
+                                    @click="recargarCatalogo()"
                                 />
                             </div>
+
+                            <p
+                                v-else-if="buscandoProductos"
+                                class="py-16 text-center text-gray-500"
+                                role="status"
+                            >
+                                Consultando stock…
+                            </p>
 
                             <div
                                 v-else-if="busqueda"
@@ -1344,6 +1389,8 @@ onMounted(() => {
             v-model:visible="mostrarPago"
             :total="totalVenta"
             :carrito="carrito"
+            :tipos-pago="tiposPago"
+            :tipos-comprobante="tiposComprobante"
             :procesando="procesandoVenta"
             @confirmar="procesarVenta"
         />

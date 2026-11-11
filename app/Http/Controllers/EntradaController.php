@@ -20,6 +20,7 @@ use Illuminate\Http\Request;
 use Illuminate\Validation\Rule;
 use Illuminate\Validation\ValidationException;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Str;
 use Inertia\Inertia;
 use Carbon\Carbon;
 
@@ -363,16 +364,6 @@ class EntradaController extends Controller
             |--------------------------------------------------------------------------
             */
 
-            $ultimoId = Entrada::max('id') ?? 0;
-
-            $codigoIngreso = 'ING-' . str_pad(
-                $ultimoId + 1,
-                6,
-                '0',
-                STR_PAD_LEFT
-            );
-
-
             /*
             |--------------------------------------------------------------------------
             | TOTAL DE COMPRA
@@ -396,7 +387,7 @@ class EntradaController extends Controller
             */
 
             $entrada = Entrada::create([
-                'codigo_ingreso' => $codigoIngreso,
+                'codigo_ingreso' => 'TMP-' . Str::random(16),
                 'tipo_comprobante' => $validated['tipo_comprobante'] ?? null,
                 'numero_comprobante' => $validated['numero_comprobante'] ?? null,
                 'fecha_ingreso' => $validated['fecha_ingreso'],
@@ -405,6 +396,10 @@ class EntradaController extends Controller
                 'proveedor_id' => $validated['proveedor_id'] ?? null,
                 'user_id' => $request->user()->id,
             ]);
+            $entrada->update(['codigo_ingreso' => 'ING-' . str_pad((string) $entrada->id, 6, '0', STR_PAD_LEFT)]);
+
+            $productos = Producto::whereIn('id', array_column($validated['detalles'], 'producto_id'))
+                ->orderBy('id')->lockForUpdate()->get()->keyBy('id');
 
 
             /*
@@ -490,9 +485,10 @@ class EntradaController extends Controller
                 |--------------------------------------------------------------------------
                 */
 
-                $producto = Producto::findOrFail(
-                    $detalle['producto_id']
-                );
+                $producto = $productos->get($detalle['producto_id']);
+                if (!$producto?->activo) {
+                    throw ValidationException::withMessages(['detalles' => 'Uno de los productos de la entrada ya no está disponible.']);
+                }
 
                 /*
                 |--------------------------------------------------------------------------
@@ -500,18 +496,7 @@ class EntradaController extends Controller
                 |--------------------------------------------------------------------------
                 */
 
-                $ultimoLoteId = Lote::max('id') ?? 0;
-
-                $numeroLote = 'LOT-' . str_pad(
-                    $ultimoLoteId + 1,
-                    6,
-                    '0',
-                    STR_PAD_LEFT
-                );
-
-                $lote = Lote::create([
-                    'numero_lote' => $numeroLote,
-
+                $lote = $this->crearLote([
                     'fecha_ingreso' =>
                     $validated['fecha_ingreso'],
 
@@ -583,7 +568,7 @@ class EntradaController extends Controller
                     'saldo_costo_unitario' => $precioCompra,
                 ]);
             }
-        });
+        }, 3);
 
 
         return redirect()
@@ -657,10 +642,22 @@ class EntradaController extends Controller
 
     public function update(Request $request, Entrada $entrada)
     {
-        $validated = $request->validate([
+        if (!$request->has('detalles')) {
+            $cabecera = $request->validate([
+                'tipo_comprobante' => 'nullable|in:factura,boleta,guia_remision,nota_compra,orden_compra',
+                'numero_comprobante' => 'nullable|string|max:100',
+                'proveedor_id' => 'nullable|exists:proveedors,id',
+                'observacion' => 'nullable|string',
+            ]);
+            $entrada->update($cabecera);
+
+            return redirect()->route('entradas.index')->with('success', 'Datos de la entrada actualizados.');
+        }
+
+        $request->validate([
 
             'tipo_comprobante' => [
-                'required',
+                'nullable',
                 'in:factura,boleta,guia_remision,nota_compra,orden_compra',
             ],
 
@@ -736,294 +733,9 @@ class EntradaController extends Controller
             'detalles.*.fecha_vencimiento' => $this->reglasFechaVencimiento(),
         ], self::MENSAJES_FECHAS);
 
-        $validated = $this->normalizarFechas($validated);
-
-
-        DB::transaction(function () use ($validated, $entrada) {
-
-            if ($entrada->detalles()->whereHas('lotes.kardexs')->exists()) {
-                throw ValidationException::withMessages([
-                    'detalles' => 'No se puede editar esta entrada porque sus lotes ya tienen movimientos en el Kardex. El historial de inventario debe conservarse.',
-                ]);
-            }
-
-            /*
-            |--------------------------------------------------------------------------
-            | GUARDAR DETALLES ANTERIORES
-            |--------------------------------------------------------------------------
-            */
-
-            $detallesAnteriores = $entrada->detalles;
-
-
-            /*
-            |--------------------------------------------------------------------------
-            | REVERTIR STOCK
-            |--------------------------------------------------------------------------
-            */
-
-            foreach ($detallesAnteriores as $detalle) {
-
-                Producto::where(
-                    'id',
-                    $detalle->producto_id
-                )->decrement(
-                    'stock_actual',
-                    $detalle->cantidad
-                );
-            }
-
-
-            /*
-            |--------------------------------------------------------------------------
-            | ELIMINAR DETALLES
-            |--------------------------------------------------------------------------
-            |
-            | Si detalle_entrada -> lote tiene onDelete('cascade'),
-            | también se eliminarán sus lotes.
-            |
-            */
-
-            $entrada->detalles()->delete();
-
-
-            /*
-            |--------------------------------------------------------------------------
-            | TOTAL DE COMPRA
-            |--------------------------------------------------------------------------
-            */
-
-            $totalCompra = 0;
-
-            foreach ($validated['detalles'] as $detalle) {
-
-                $totalCompra +=
-                    $detalle['cantidad'] *
-                    $detalle['precio_compra'];
-            }
-
-
-            /*
-            |--------------------------------------------------------------------------
-            | ACTUALIZAR CABECERA
-            |--------------------------------------------------------------------------
-            */
-
-            $entrada->update([
-                'tipo_comprobante' =>
-                $validated['tipo_comprobante'],
-
-                'numero_comprobante' =>
-                $validated['numero_comprobante'] ?? null,
-
-                'fecha_ingreso' =>
-                $validated['fecha_ingreso'],
-
-                'total_compra' =>
-                $totalCompra,
-
-                'observacion' =>
-                $validated['observacion'] ?? null,
-
-                'proveedor_id' =>
-                $validated['proveedor_id'] ?? null,
-            ]);
-
-
-            /*
-            |--------------------------------------------------------------------------
-            | CREAR NUEVOS DETALLES
-            |--------------------------------------------------------------------------
-            */
-
-            foreach ($validated['detalles'] as $detalle) {
-
-                $cantidad = (int) $detalle['cantidad'];
-
-                $precioCompra =
-                    (float) $detalle['precio_compra'];
-
-                $precioVenta =
-                    (float) $detalle['precio_venta'];
-
-                $tieneDescuento =
-                    $detalle['tiene_descuento'] ?? false;
-
-                $descuento = $tieneDescuento
-                    ? (float) ($detalle['descuento'] ?? 0)
-                    : 0;
-
-
-                /*
-                |--------------------------------------------------------------------------
-                | VALIDAR DESCUENTO
-                |--------------------------------------------------------------------------
-                */
-
-                if ($descuento > $precioVenta) {
-                    abort(
-                        422,
-                        'El descuento no puede ser mayor al precio de venta.'
-                    );
-                }
-
-
-                /*
-                |--------------------------------------------------------------------------
-                | SUBTOTAL
-                |--------------------------------------------------------------------------
-                */
-
-                $subtotal =
-                    $cantidad *
-                    $precioCompra;
-
-
-                /*
-                |--------------------------------------------------------------------------
-                | DETALLE
-                |--------------------------------------------------------------------------
-                */
-
-                $detalleEntrada = DetalleEntrada::create([
-                    'entrada_id' => $entrada->id,
-
-                    'producto_id' =>
-                    $detalle['producto_id'],
-
-                    'cantidad' =>
-                    $cantidad,
-
-                    'precio_compra' =>
-                    $precioCompra,
-
-                    'subtotal' =>
-                    $subtotal,
-
-                    'precio_venta' =>
-                    $precioVenta,
-
-                    'tiene_descuento' =>
-                    $tieneDescuento,
-
-                    'descuento' =>
-                    $descuento,
-                ]);
-
-
-                /*
-                |--------------------------------------------------------------------------
-                | PRODUCTO
-                |--------------------------------------------------------------------------
-                */
-
-                $producto = Producto::findOrFail(
-                    $detalle['producto_id']
-                );
-
-
-                /*
-                |--------------------------------------------------------------------------
-                | ACTUALIZAR PRECIO VIGENTE
-                |--------------------------------------------------------------------------
-                */
-
-                PrecioProducto::where(
-                    'producto_id',
-                    $producto->id
-                )
-                    ->where('activo', true)
-                    ->update([
-                        'activo' => false,
-                    ]);
-
-
-                /*
-                |--------------------------------------------------------------------------
-                | NUEVO PRECIO
-                |--------------------------------------------------------------------------
-                */
-
-                PrecioProducto::create([
-                    'producto_id' =>
-                    $producto->id,
-
-                    'precio_venta' =>
-                    $precioVenta,
-
-                    'tiene_descuento' =>
-                    $tieneDescuento,
-
-                    'descuento' =>
-                    $descuento,
-
-                    'activo' =>
-                    true,
-                ]);
-
-
-                /*
-                |--------------------------------------------------------------------------
-                | CREAR LOTE
-                |--------------------------------------------------------------------------
-                */
-
-                $ultimoLoteId =
-                    Lote::max('id') ?? 0;
-
-                $numeroLote =
-                    'LOT-' . str_pad(
-                        $ultimoLoteId + 1,
-                        6,
-                        '0',
-                        STR_PAD_LEFT
-                    );
-
-
-                Lote::create([
-                    'numero_lote' =>
-                    $numeroLote,
-
-                    'fecha_ingreso' =>
-                    $validated['fecha_ingreso'],
-
-                    'fecha_vencimiento' =>
-                    $detalle['fecha_vencimiento'] ?? null,
-
-                    'cantidad_inicial' =>
-                    $cantidad,
-
-                    'cantidad_actual' =>
-                    $cantidad,
-
-                    'codigo_barras' =>
-                    $detalle['codigo_barras_lote'] ?? null,
-
-                    'detalle_entrada_id' =>
-                    $detalleEntrada->id,
-                ]);
-
-
-                /*
-                |--------------------------------------------------------------------------
-                | ACTUALIZAR STOCK
-                |--------------------------------------------------------------------------
-                */
-
-                $producto->increment(
-                    'stock_actual',
-                    $cantidad
-                );
-            }
-        });
-
-
-        return redirect()
-            ->route('entradas.index')
-            ->with(
-                'success',
-                'Entrada actualizada correctamente.'
-            );
+        throw ValidationException::withMessages([
+            'detalles' => 'Los productos de una entrada registrada se corrigen con un movimiento de inventario.',
+        ]);
     }
 
     private function reglasFechaVencimiento(): array
@@ -1039,6 +751,14 @@ class EntradaController extends Controller
                 }
             },
         ];
+    }
+
+    private function crearLote(array $datos): Lote
+    {
+        $lote = Lote::create(['numero_lote' => 'TMP-' . Str::random(16), ...$datos]);
+        $lote->update(['numero_lote' => 'LOT-' . str_pad((string) $lote->id, 6, '0', STR_PAD_LEFT)]);
+
+        return $lote;
     }
 
     private function normalizarFechas(array $validated): array

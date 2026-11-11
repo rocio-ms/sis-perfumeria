@@ -13,7 +13,7 @@ class VentaComprobantesPorEmpresaTest extends TestCase
 {
     use RefreshDatabase;
 
-    public function test_sale_creates_one_printable_receipt_per_brand_company(): void
+    public function test_sale_creates_receipts_per_company_and_reconciles_cash_and_inventory(): void
     {
         $now = now();
         $userId = DB::table('users')->insertGetId([
@@ -73,7 +73,7 @@ class VentaComprobantesPorEmpresaTest extends TestCase
         ]);
         $sesionCajaId = DB::table('sesion_cajas')->insertGetId([
             'fecha_apertura' => $now,
-            'monto_apertura' => 0,
+            'monto_apertura' => 100,
             'estado' => 'abierta',
             'caja_id' => $cajaId,
             'user_id' => $userId,
@@ -136,6 +136,11 @@ class VentaComprobantesPorEmpresaTest extends TestCase
                 'created_at' => $now,
                 'updated_at' => $now,
             ]);
+            DB::table('precios_productos')->insert([
+                'producto_id' => $productoId,
+                'precio_venta' => 15,
+                'activo' => true,
+            ]);
             $loteId = DB::table('lotes')->insertGetId([
                 'numero_lote' => 'LOTE-'.($index + 1),
                 'cantidad_inicial' => 1,
@@ -182,6 +187,34 @@ class VentaComprobantesPorEmpresaTest extends TestCase
             ),
         ];
 
+        $this->actingAs($user);
+        $this->withoutVite()->get(route('ventas.create'))->assertOk()
+            ->assertInertia(fn ($page) => $page->has('productos', 2)
+                ->where('categorias.0.stock_total', 2));
+
+        $precioId = DB::table('precios_productos')->where('producto_id', $productos[0]['producto_id'])->value('id');
+        DB::table('precios_productos')->where('id', $precioId)->update(['activo' => false]);
+        $this->getJson(route('ventas.productos.buscar', ['search' => 'P-1']))
+            ->assertOk()->assertJsonCount(0, 'productos');
+        $this->postJson(route('ventas.store'), $datosVenta)
+            ->assertUnprocessable()->assertJsonValidationErrors('detalles.precio');
+        DB::table('precios_productos')->where('id', $precioId)->update(['activo' => true]);
+
+        $ventaSinPrecio = $datosVenta;
+        $ventaSinPrecio['detalles'][0]['precio_unitario'] = 0;
+        $this->postJson(route('ventas.store'), $ventaSinPrecio)
+            ->assertUnprocessable()->assertJsonValidationErrors('detalles.precio');
+
+        $loteVencido = $productos[0]['lote_id'];
+        DB::table('lotes')->where('id', $loteVencido)->update(['fecha_vencimiento' => $now->copy()->subDays(2)->toDateString()]);
+        $this->getJson(route('ventas.productos.buscar', ['search' => 'P-1']))
+            ->assertOk()->assertJsonCount(0, 'productos');
+        $this->postJson(route('ventas.store'), $datosVenta)
+            ->assertUnprocessable()->assertJsonValidationErrors('detalles.stock');
+        DB::table('lotes')->where('id', $loteVencido)->update(['fecha_vencimiento' => null]);
+        $this->assertDatabaseCount('ventas', 0);
+        $this->assertDatabaseCount('kardexs', 0);
+
         $response = $this->actingAs($user)->post(
             route('ventas.store'),
             $datosVenta
@@ -221,5 +254,43 @@ class VentaComprobantesPorEmpresaTest extends TestCase
                     ->value('empresa_id')
             );
         }
+
+        foreach (['ingreso' => 20, 'egreso' => 10] as $tipo => $monto) {
+            $this->postJson(route('movimientos-caja.store'), [
+                'sesion_caja_id' => $sesionCajaId, 'tipo' => $tipo,
+                'concepto' => 'Movimiento de prueba', 'monto' => $monto,
+            ])->assertOk()->assertJsonPath('success', true);
+        }
+
+        $user->givePermissionTo(Permission::findOrCreate('sesiones-caja.cerrar', 'web'));
+        $rutaCierre = route('sesiones-caja.cerrar', $sesionCajaId);
+        $this->put($rutaCierre, ['monto_cierre_real' => 140])
+            ->assertRedirect(route('sesiones-caja.index'))->assertSessionHasNoErrors();
+        $this->putJson($rutaCierre, ['monto_cierre_real' => 145])
+            ->assertUnprocessable()->assertJsonValidationErrors('caja');
+        $this->assertDatabaseHas('sesion_cajas', [
+            'id' => $sesionCajaId, 'estado' => 'cerrada',
+            'monto_cierre_teorico' => 140, 'monto_cierre_real' => 140, 'diferencia' => 0,
+        ]);
+        $this->postJson(route('ventas.store'), $datosVenta)
+            ->assertUnprocessable()->assertJsonValidationErrors('sesion_caja_id');
+        $this->assertDatabaseCount('ventas', 2);
+        $this->assertDatabaseCount('kardexs', 2);
+
+        $producto = DB::table('productos')->find($productos[0]['producto_id']);
+        $user->givePermissionTo(Permission::findOrCreate('productos.editar', 'web'));
+        $this->put(route('productos.update', $producto->id), [
+            'nombre' => 'Nombre corregido', 'unidad_medida' => 'unidad', 'stock_minimo' => 0,
+            'stock_actual' => 1, 'volumen_ml' => 0, 'marca_id' => $producto->marca_id,
+            'categoria_id' => $categoriaId,
+        ])->assertSessionHasNoErrors();
+        $this->assertDatabaseHas('productos', ['id' => $producto->id, 'stock_actual' => 0]);
+
+        DB::table('ventas')->update(['fecha_emision' => '2026-11-10 06:00:00']);
+        DB::table('ventas')->where('id', $ventas->first()->id)->update(['fecha_emision' => '2026-11-10 02:00:00']);
+        $this->withoutVite()->get(route('reportes.index', [
+            'periodo_mas_vendidos' => 'dia', 'fecha_referencia_mas_vendidos' => '2026-11-09',
+        ]))->assertOk()->assertInertia(fn ($page) => $page->has('productosMasVendidos', 1)
+            ->where('productosMasVendidos.0.id', $producto->id));
     }
 }

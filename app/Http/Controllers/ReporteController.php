@@ -7,6 +7,7 @@ use App\Models\Empresa;
 use App\Models\Producto;
 use App\Models\TipoPago;
 use Carbon\Carbon;
+use App\Support\CalendarioComercial;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Inertia\Inertia;
@@ -20,33 +21,39 @@ class ReporteController extends Controller
 
         $empresaId = $request->input('empresa_id');
         $tipoPagoId = $request->input('tipo_pago_id');
-        $periodoProductos = $request->input('periodo_productos', 'mes');
-        $fechaReferencia = $request->input('fecha_referencia', Carbon::today()->toDateString());
+        $periodoProductos = $request->input('periodo_productos') ?: 'mes';
+        $fechaReferencia = $request->input('fecha_referencia') ?: Carbon::today(CalendarioComercial::ZONA)->toDateString();
+        $periodoMasVendidos = $request->input('periodo_mas_vendidos') ?: 'mes';
+        $fechaReferenciaMasVendidos = $request->input(
+            'fecha_referencia_mas_vendidos'
+        ) ?: Carbon::today(CalendarioComercial::ZONA)->toDateString();
         $periodoVentasEmpresa = $request->input('periodo_ventas_empresa') ?: 'mes';
         $fechaReferenciaVentasEmpresa = $request->input(
             'fecha_referencia_ventas_empresa'
-        ) ?: Carbon::today()->toDateString();
+        ) ?: Carbon::today(CalendarioComercial::ZONA)->toDateString();
 
         $request->validate([
             'periodo_productos' => 'nullable|in:dia,semana,mes',
             'fecha_referencia' => 'nullable|date',
+            'periodo_mas_vendidos' => 'nullable|in:dia,semana,mes',
+            'fecha_referencia_mas_vendidos' => 'nullable|date',
             'periodo_ventas_empresa' => 'nullable|in:dia,semana,mes',
             'fecha_referencia_ventas_empresa' => 'nullable|date',
         ]);
 
         [$inicioVentasEmpresa, $finVentasEmpresa] = $this->rangoProductos(
             $periodoVentasEmpresa,
-            Carbon::parse($fechaReferenciaVentasEmpresa)
+            Carbon::parse($fechaReferenciaVentasEmpresa, CalendarioComercial::ZONA)
         );
 
-        $hoyInicio = Carbon::today();
-        $hoyFin = Carbon::today()->endOfDay();
+        $hoyInicio = Carbon::today(CalendarioComercial::ZONA);
+        $hoyFin = Carbon::today(CalendarioComercial::ZONA)->endOfDay();
 
-        $semanaInicio = Carbon::now()->startOfWeek();
-        $semanaFin = Carbon::now()->endOfWeek();
+        $semanaInicio = Carbon::now(CalendarioComercial::ZONA)->startOfWeek();
+        $semanaFin = Carbon::now(CalendarioComercial::ZONA)->endOfWeek();
 
-        $mesInicio = Carbon::now()->startOfMonth();
-        $mesFin = Carbon::now()->endOfMonth();
+        $mesInicio = Carbon::now(CalendarioComercial::ZONA)->startOfMonth();
+        $mesFin = Carbon::now(CalendarioComercial::ZONA)->endOfMonth();
 
 
         $ventasQuery = Venta::query()
@@ -69,38 +76,38 @@ class ReporteController extends Controller
 
         $ventasHoy = (clone $ventasQuery)
             ->whereBetween('fecha_emision', [
-                $hoyInicio,
-                $hoyFin,
+                $hoyInicio->copy()->utc(),
+                $hoyFin->copy()->utc(),
             ])
             ->sum('importe_total');
 
         $ventasSemana = (clone $ventasQuery)
             ->whereBetween('fecha_emision', [
-                $semanaInicio,
-                $semanaFin,
+                $semanaInicio->copy()->utc(),
+                $semanaFin->copy()->utc(),
             ])
             ->sum('importe_total');
 
         $ventasMes = (clone $ventasQuery)
             ->whereBetween('fecha_emision', [
-                $mesInicio,
-                $mesFin,
+                $mesInicio->copy()->utc(),
+                $mesFin->copy()->utc(),
             ])
             ->sum('importe_total');
 
 
         $ventasPorPeriodo = (clone $ventasQuery)
             ->whereBetween('fecha_emision', [
-                $mesInicio,
-                $mesFin,
+                $mesInicio->copy()->utc(),
+                $mesFin->copy()->utc(),
             ])
             ->select(
-                DB::raw('DATE(fecha_emision) as fecha'),
+                DB::raw(CalendarioComercial::fechaLocalDeVentaSql() . ' as fecha'),
                 DB::raw('SUM(importe_total) as total'),
                 DB::raw('COUNT(*) as cantidad')
             )
             ->groupBy(
-                DB::raw('DATE(fecha_emision)')
+                DB::raw(CalendarioComercial::fechaLocalDeVentaSql())
             )
             ->orderBy('fecha')
             ->get();
@@ -131,8 +138,8 @@ class ReporteController extends Controller
 
         $ventasPorEmpresa = (clone $ventasQuery)
             ->whereBetween('fecha_emision', [
-                $inicioVentasEmpresa,
-                $finVentasEmpresa,
+                $inicioVentasEmpresa->copy()->utc(),
+                $finVentasEmpresa->copy()->utc(),
             ])
             ->select(
                 'empresa_emisora_id',
@@ -165,8 +172,8 @@ class ReporteController extends Controller
 
         $ventasPorTipoPago = (clone $ventasQuery)
             ->whereBetween('fecha_emision', [
-                $mesInicio,
-                $mesFin,
+                $mesInicio->copy()->utc(),
+                $mesFin->copy()->utc(),
             ])
             ->select(
                 'tipo_pago_id',
@@ -196,6 +203,11 @@ class ReporteController extends Controller
 
 
 
+        [$inicioMasVendidos, $finMasVendidos] = $this->rangoProductos(
+            $periodoMasVendidos,
+            Carbon::parse($fechaReferenciaMasVendidos, CalendarioComercial::ZONA)
+        );
+
         $productosMasVendidos = DB::table('detalle_ventas')
             ->join(
                 'ventas',
@@ -211,8 +223,8 @@ class ReporteController extends Controller
             )
             ->where('ventas.activo', true)
             ->whereBetween('ventas.fecha_emision', [
-                $mesInicio,
-                $mesFin,
+                $inicioMasVendidos->copy()->utc(),
+                $finMasVendidos->copy()->utc(),
             ])->when(
                 $empresaId,
                 function ($query) use ($empresaId) {
@@ -227,6 +239,7 @@ class ReporteController extends Controller
                 'productos.id',
                 'productos.codigo',
                 'productos.nombre',
+                'productos.stock_actual',
                 DB::raw(
                     'SUM(detalle_ventas.cantidad) as cantidad'
                 ),
@@ -237,9 +250,12 @@ class ReporteController extends Controller
             ->groupBy(
                 'productos.id',
                 'productos.codigo',
-                'productos.nombre'
+                'productos.nombre',
+                'productos.stock_actual'
             )
             ->orderByDesc('cantidad')
+            ->orderBy('productos.nombre')
+            ->orderBy('productos.id')
             ->limit(10)
             ->get()
             ->map(function ($producto) {
@@ -253,6 +269,8 @@ class ReporteController extends Controller
 
                     'cantidad' => (float) $producto->cantidad,
 
+                    'stock_actual' => (int) $producto->stock_actual,
+
                     'total' => round(
                         (float) $producto->total,
                         2
@@ -260,6 +278,33 @@ class ReporteController extends Controller
                 ];
             })
             ->values();
+
+        [$inicioProductos, $finProductos] = $this->rangoProductos(
+            $periodoProductos,
+            Carbon::parse($fechaReferencia, CalendarioComercial::ZONA)
+        );
+
+        $unidadesVendidas = DB::table('detalle_ventas')
+            ->join('ventas', 'ventas.id', '=', 'detalle_ventas.venta_id')
+            ->where('ventas.activo', true)
+            ->whereBetween('ventas.fecha_emision', [$inicioProductos->copy()->utc(), $finProductos->copy()->utc()])
+            ->when($empresaId, fn ($query) => $query->where('ventas.empresa_emisora_id', $empresaId))
+            ->groupBy('detalle_ventas.producto_id')
+            ->selectRaw('detalle_ventas.producto_id, SUM(detalle_ventas.cantidad) as cantidad');
+
+        $productosMenosVendidos = DB::table('productos')
+            ->leftJoinSub($unidadesVendidas, 'vendidos', 'vendidos.producto_id', '=', 'productos.id')
+            ->where('productos.activo', true)
+            ->when($empresaId, fn ($query) => $query
+                ->leftJoin('marcas', 'marcas.id', '=', 'productos.marca_id')
+                ->whereRaw('COALESCE(marcas.empresa_id, productos.empresa_id) = ?', [(int) $empresaId]))
+            ->select('productos.id', 'productos.codigo', 'productos.nombre', 'productos.stock_actual')
+            ->selectRaw('COALESCE(vendidos.cantidad, 0) as cantidad')
+            ->orderBy('cantidad')
+            ->orderBy('productos.nombre')
+            ->orderBy('productos.id')
+            ->limit(10)
+            ->get();
 
         $productosVendidosEmpresa = $empresaId
             ? $this->obtenerProductosVendidosPorEmpresa(
@@ -292,14 +337,14 @@ class ReporteController extends Controller
             })
             ->values();
 
-        $hoy = Carbon::today();
+        $hoy = Carbon::today(CalendarioComercial::ZONA);
 
-        $fechaLimiteVencimiento = Carbon::today()
+        $fechaLimiteVencimiento = Carbon::today(CalendarioComercial::ZONA)
             ->addDays(30);
 
-        $hoy = Carbon::today();
+        $hoy = Carbon::today(CalendarioComercial::ZONA);
 
-        $fechaLimiteVencimiento = Carbon::today()
+        $fechaLimiteVencimiento = Carbon::today(CalendarioComercial::ZONA)
             ->addDays(30);
 
         // $proximosVencer = Producto::query()
@@ -474,6 +519,8 @@ class ReporteController extends Controller
 
             'productosMasVendidos' => $productosMasVendidos,
 
+            'productosMenosVendidos' => $productosMenosVendidos,
+
             'productosVendidosEmpresa' => $productosVendidosEmpresa,
 
 
@@ -518,6 +565,8 @@ class ReporteController extends Controller
                 'tipo_pago_id' => $tipoPagoId,
                 'periodo_productos' => $periodoProductos,
                 'fecha_referencia' => $fechaReferencia,
+                'periodo_mas_vendidos' => $periodoMasVendidos,
+                'fecha_referencia_mas_vendidos' => $fechaReferenciaMasVendidos,
                 'periodo_ventas_empresa' => $periodoVentasEmpresa,
                 'fecha_referencia_ventas_empresa' => $fechaReferenciaVentasEmpresa,
             ]
@@ -542,7 +591,7 @@ class ReporteController extends Controller
         $periodo = $filtros['periodo_productos'];
         [$inicio, $fin] = $this->rangoProductos(
             $periodo,
-            Carbon::parse($filtros['fecha_referencia'])
+            Carbon::parse($filtros['fecha_referencia'], CalendarioComercial::ZONA)
         );
 
         return Pdf::loadView('reportes.productos-empresa', [
@@ -565,7 +614,7 @@ class ReporteController extends Controller
     ) {
         [$inicio, $fin] = $this->rangoProductos(
             $periodo,
-            Carbon::parse($fechaReferencia)
+            Carbon::parse($fechaReferencia, CalendarioComercial::ZONA)
         );
 
         return DB::table('detalle_ventas')
@@ -573,7 +622,7 @@ class ReporteController extends Controller
             ->join('productos', 'productos.id', '=', 'detalle_ventas.producto_id')
             ->where('detalle_ventas.empresa_id', $empresaId)
             ->where('ventas.activo', true)
-            ->whereBetween('ventas.fecha_emision', [$inicio, $fin])
+            ->whereBetween('ventas.fecha_emision', [$inicio->copy()->utc(), $fin->copy()->utc()])
             ->select(
                 'productos.codigo',
                 'productos.nombre',
@@ -622,34 +671,34 @@ class ReporteController extends Controller
         switch ($periodo) {
 
             case 'dia':
-                $inicio = Carbon::today();
-                $fin = Carbon::today()->endOfDay();
+                $inicio = Carbon::today(CalendarioComercial::ZONA);
+                $fin = Carbon::today(CalendarioComercial::ZONA)->endOfDay();
                 break;
 
             case 'semana':
-                $inicio = Carbon::now()->startOfWeek();
-                $fin = Carbon::now()->endOfWeek();
+                $inicio = Carbon::now(CalendarioComercial::ZONA)->startOfWeek();
+                $fin = Carbon::now(CalendarioComercial::ZONA)->endOfWeek();
                 break;
 
             case 'mes':
-                $inicio = Carbon::now()->startOfMonth();
-                $fin = Carbon::now()->endOfMonth();
+                $inicio = Carbon::now(CalendarioComercial::ZONA)->startOfMonth();
+                $fin = Carbon::now(CalendarioComercial::ZONA)->endOfMonth();
                 break;
 
             case 'anio':
-                $inicio = Carbon::now()->startOfYear();
-                $fin = Carbon::now()->endOfYear();
+                $inicio = Carbon::now(CalendarioComercial::ZONA)->startOfYear();
+                $fin = Carbon::now(CalendarioComercial::ZONA)->endOfYear();
                 break;
 
             case 'personalizado':
 
                 $inicio = $fechaInicio
-                    ? Carbon::parse($fechaInicio)->startOfDay()
-                    : Carbon::now()->startOfMonth();
+                    ? Carbon::parse($fechaInicio, CalendarioComercial::ZONA)->startOfDay()
+                    : Carbon::now(CalendarioComercial::ZONA)->startOfMonth();
 
                 $fin = $fechaFin
-                    ? Carbon::parse($fechaFin)->endOfDay()
-                    : Carbon::now()->endOfDay();
+                    ? Carbon::parse($fechaFin, CalendarioComercial::ZONA)->endOfDay()
+                    : Carbon::now(CalendarioComercial::ZONA)->endOfDay();
 
                 break;
 
@@ -657,8 +706,8 @@ class ReporteController extends Controller
 
                 $periodo = 'mes';
 
-                $inicio = Carbon::now()->startOfMonth();
-                $fin = Carbon::now()->endOfMonth();
+                $inicio = Carbon::now(CalendarioComercial::ZONA)->startOfMonth();
+                $fin = Carbon::now(CalendarioComercial::ZONA)->endOfMonth();
 
                 break;
         }
@@ -679,7 +728,7 @@ class ReporteController extends Controller
                 'tienda',
             ])
             ->where('activo', true)
-            ->whereBetween('fecha_emision', [$inicio, $fin]);
+            ->whereBetween('fecha_emision', [$inicio->copy()->utc(), $fin->copy()->utc()]);
 
         /*
         |--------------------------------------------------------------------------
@@ -723,7 +772,7 @@ class ReporteController extends Controller
 
         $ventasPorDia = $ventas
             ->groupBy(function ($venta) {
-                return Carbon::parse($venta->fecha_emision)
+                return Carbon::parse($venta->fecha_emision)->setTimezone(CalendarioComercial::ZONA)
                     ->format('Y-m-d');
             })
             ->map(function ($ventasDia, $fecha) {
@@ -902,13 +951,13 @@ class ReporteController extends Controller
 
         $periodo = $filtros['periodo_ventas_empresa'];
         $fechaReferencia = Carbon::parse(
-            $filtros['fecha_referencia_ventas_empresa']
+            $filtros['fecha_referencia_ventas_empresa'], CalendarioComercial::ZONA
         );
         [$inicio, $fin] = $this->rangoProductos($periodo, $fechaReferencia);
 
         $ventas = Venta::query()
             ->where('activo', true)
-            ->whereBetween('fecha_emision', [$inicio, $fin])
+            ->whereBetween('fecha_emision', [$inicio->copy()->utc(), $fin->copy()->utc()])
             ->when(
                 $filtros['tipo_pago_id'] ?? null,
                 fn ($query, $tipoPagoId) => $query->where(
@@ -934,8 +983,8 @@ class ReporteController extends Controller
 
                 return [
                     'id' => $venta->id,
-                    'fecha' => $venta->fecha_emision?->format('d/m/Y') ?? '—',
-                    'hora' => $venta->fecha_emision?->format('H:i:s') ?? '—',
+                    'fecha' => $venta->fecha_emision?->copy()->setTimezone(CalendarioComercial::ZONA)->format('d/m/Y') ?? '—',
+                    'hora' => $venta->fecha_emision?->copy()->setTimezone(CalendarioComercial::ZONA)->format('H:i:s') ?? '—',
                     'fecha_original' => $venta->fecha_emision,
                     'comprobante' => trim(
                         ($venta->serie ?? '') . '-' . ($venta->correlativo ?? ''),

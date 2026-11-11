@@ -240,7 +240,6 @@ class ProductoController extends Controller
             'ubicaciones' => Producto::UBICACIONES,
             'marcas' => $marcas,
             'empresas' => $empresas,
-            'siguienteCodigo' => $this->generarCodigoInterno(),
             'filtros' => [
                 'search' => $search,
                 'categoria.nombre' => $categoria,
@@ -253,7 +252,6 @@ class ProductoController extends Controller
     public function create()
     {
         return Inertia::render('Productos/Form', [
-            'codigoInicial' => $this->generarCodigoInterno(),
             'categorias' => Categoria::where('activo', true)
                 ->orderBy('nombre')
                 ->get(),
@@ -272,7 +270,13 @@ class ProductoController extends Controller
         ]);
     }
 
-    private function generarCodigoInterno()
+    public function siguienteCodigo()
+    {
+        return response()->json(['codigo' => $this->generarCodigoInterno()])
+            ->header('Cache-Control', 'no-store');
+    }
+
+    private function generarCodigoInterno(): string
     {
         $ultimoCodigo = Producto::orderByRaw('CAST(codigo AS UNSIGNED) DESC')
             ->value('codigo');
@@ -308,8 +312,6 @@ class ProductoController extends Controller
 
             'stock_minimo' => 'required|integer|min:0',
 
-            'stock_actual' => 'required|integer|min:0',
-
             'volumen_ml' => 'required|numeric|min:0',
 
             'imagen_url' =>
@@ -333,15 +335,13 @@ class ProductoController extends Controller
             ],
         ]);
 
-        //Generar código
-
-        $validated['codigo'] = $this->generarCodigoInterno();
-
         $this->guardarProductoConImagen($validated['imagen_url'] ?? null, function (?string $urlImagen) use ($validated) {
             $marca = $this->resolverMarca($validated);
             $validated['marca_id'] = $marca->id;
             $validated['empresa_id'] = $marca->empresa_id;
             $validated['imagen_url'] = $urlImagen;
+            $validated['codigo'] = $this->generarCodigoInterno();
+            $validated['stock_actual'] = 0;
             unset($validated['marca_nombre']);
 
             Producto::create($validated);
@@ -450,8 +450,6 @@ class ProductoController extends Controller
 
             'stock_minimo' => 'required|integer|min:0',
 
-            'stock_actual' => 'required|integer|min:0',
-
             'volumen_ml' => 'required|numeric|min:0',
 
             'imagen_url' =>
@@ -522,7 +520,6 @@ class ProductoController extends Controller
                 'ubicacion' => $validated['ubicacion'] ?? null,
                 'unidad_medida' => $validated['unidad_medida'],
                 'stock_minimo' => $validated['stock_minimo'],
-                'stock_actual' => $validated['stock_actual'],
                 'volumen_ml' => $validated['volumen_ml'],
                 'imagen_url' => $urlImagen ?? $imagenAnterior,
                 'activo' => $validated['activo'] ?? true,

@@ -37,4 +37,13 @@ class SellerDashboardAccessTest extends TestCase
             ->get('/dashboard')
             ->assertStatus(403);
     }
+
+    public function test_login_sends_a_seller_to_the_sales_screen(): void
+    {
+        $user = User::where('username', 'vendedor')->firstOrFail();
+        $user->update(['password' => 'clave-de-prueba']);
+
+        $this->post('/login', ['username' => $user->username, 'password' => 'clave-de-prueba'])
+            ->assertRedirect(route('ventas.create'));
+    }
 }

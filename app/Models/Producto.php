@@ -3,6 +3,7 @@
 namespace App\Models;
 
 use Illuminate\Database\Eloquent\Casts\Attribute;
+use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Model;
 use App\Models\PrecioProducto;
 
@@ -113,6 +114,14 @@ class Producto extends Model
             'id',                // PK de productos
             'id'                 // PK de detalle_entradas
         );
+    }
+
+    public function scopeDisponibleParaVenta(Builder $query): Builder
+    {
+        return $query->where('productos.activo', true)
+            ->where('productos.stock_actual', '>=', 1)
+            ->whereHas('precioActual', fn ($precio) => $precio->where('precio_venta', '>', 0))
+            ->whereHas('lotes', fn ($lotes) => $lotes->disponibleParaVenta());
     }
 
     public function detalleSalidas()

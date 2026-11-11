@@ -56,20 +56,6 @@ class CajaController extends Controller
             ->with('success', 'Caja registrada correctamente');
     }
 
-    public function show(Caja $caja)
-    {
-        $caja->load([
-            'sesiones' => function ($query) {
-                $query->with('usuario')
-                    ->orderByDesc('id');
-            },
-        ]);
-
-        return Inertia::render('Cajas/Show', [
-            'caja' => $caja,
-        ]);
-    }
-
     public function edit(Caja $caja)
     {
         return Inertia::render('Cajas/Form', [
