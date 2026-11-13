@@ -338,14 +338,7 @@ class ReporteController extends Controller
             ->values();
 
         $hoy = Carbon::today(CalendarioComercial::ZONA);
-
-        $fechaLimiteVencimiento = Carbon::today(CalendarioComercial::ZONA)
-            ->addDays(30);
-
-        $hoy = Carbon::today(CalendarioComercial::ZONA);
-
-        $fechaLimiteVencimiento = Carbon::today(CalendarioComercial::ZONA)
-            ->addDays(30);
+        $fechaLimiteVencimiento = $hoy->copy()->addDays(30);
 
         // $proximosVencer = Producto::query()
         //     ->where('activo', true)
@@ -406,8 +399,8 @@ class ReporteController extends Controller
             ->where('productos.activo', true)
             ->whereNotNull('lotes.fecha_vencimiento')
             ->whereBetween('lotes.fecha_vencimiento', [
-                $hoy,
-                $fechaLimiteVencimiento,
+                $hoy->toDateString(),
+                $fechaLimiteVencimiento->toDateString(),
             ])
             ->where('lotes.cantidad_actual', '>', 0)
             ->orderBy('lotes.fecha_vencimiento')
@@ -425,8 +418,9 @@ class ReporteController extends Controller
             ->map(function ($lote) use ($hoy) {
 
                 $fechaVencimiento = Carbon::parse(
-                    $lote->fecha_vencimiento
-                );
+                    $lote->fecha_vencimiento,
+                    CalendarioComercial::ZONA
+                )->startOfDay();
 
                 return [
                     'id' => $lote->lote_id,
@@ -436,7 +430,7 @@ class ReporteController extends Controller
                     'lote' => $lote->numero_lote,
                     'stock_actual' => (int) $lote->cantidad_actual,
                     'fecha_vencimiento' => $fechaVencimiento->format('m/Y'),
-                    'dias_restantes' => $hoy->diffInDays($fechaVencimiento),
+                    'dias_restantes' => (int) $hoy->diffInDays($fechaVencimiento),
                 ];
             })
             ->values();

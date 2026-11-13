@@ -19,6 +19,8 @@ const props = defineProps({
         type: Array,
         default: () => [],
     },
+    puedeCrear: Boolean,
+    puedeEditar: Boolean,
 });
 
 const mostrarForm = ref(false);
@@ -90,11 +92,10 @@ const cerrarFormulario = () => {
                     :search-fields="['nombre']"
                     title-button="Nueva subcategoría"
                     :show-view="false"
+                    :show-edit="props.puedeEditar"
                     :show-delete="false"
                     :show-filters="true"
-                    :mostrar-crear="true"
-                    create-permission="subcategorias.crear"
-                    edit-permission="subcategorias.editar"
+                    :mostrar-crear="props.puedeCrear"
                     @nuevo="abrirFormulario()"
                     @editar="abrirFormulario"
                 />

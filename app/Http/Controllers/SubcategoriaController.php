@@ -10,8 +10,11 @@ use Inertia\Inertia;
 
 class SubcategoriaController extends Controller
 {
-    public function index()
+    public function index(Request $request)
     {
+        $usuario = $request->user();
+        $esAdministrador = $usuario->hasRole('Administrador');
+
         return Inertia::render('Subcategorias/Index', [
             'subcategorias' => Subcategoria::with('categoria')
                 ->orderByDesc('id')
@@ -19,6 +22,8 @@ class SubcategoriaController extends Controller
             'categorias' => Categoria::where('activo', true)
                 ->orderBy('nombre')
                 ->get(),
+            'puedeCrear' => $esAdministrador || $usuario->can('subcategorias.crear'),
+            'puedeEditar' => $esAdministrador || $usuario->can('subcategorias.editar'),
         ]);
     }
 

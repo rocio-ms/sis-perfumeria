@@ -64,6 +64,8 @@ const inputBusqueda = ref(null);
 const productosBuscados = ref(props.productos);
 const buscandoProductos = ref(false);
 const errorBusqueda = ref("");
+const avisoBusqueda = ref("");
+const productoExactoId = ref(null);
 
 let temporizadorBusqueda = null;
 let controladorBusqueda = null;
@@ -116,6 +118,7 @@ const productosFiltrados = computed(() => {
 
     return productosDisponibles.value.filter(
         (producto) =>
+            producto.id === productoExactoId.value ||
             Number(producto.categoria_id) ===
             Number(categoriaSeleccionada.value),
     );
@@ -150,6 +153,8 @@ const solicitarProductos = async (texto = "", categoriaId = null) => {
     const solicitud = ++busquedaPendiente;
     buscandoProductos.value = true;
     errorBusqueda.value = "";
+    avisoBusqueda.value = "";
+    productoExactoId.value = null;
 
     try {
         const response = await fetch(
@@ -172,6 +177,8 @@ const solicitarProductos = async (texto = "", categoriaId = null) => {
 
         if (solicitud !== busquedaPendiente) return [];
 
+        avisoBusqueda.value = data.aviso ?? "";
+        productoExactoId.value = data.producto_exacto_id ?? null;
         productosBuscados.value = Array.isArray(data.productos)
             ? data.productos
             : [];
@@ -248,6 +255,7 @@ const buscarYAgregarProducto = async () => {
         const codigoBarras = String(producto.codigo_barras ?? "").toLowerCase();
 
         return (
+            producto.id === productoExactoId.value ||
             codigo === textoNormalizado ||
             codigoBarras === textoNormalizado ||
             nombre === textoNormalizado
@@ -255,7 +263,7 @@ const buscarYAgregarProducto = async () => {
     });
 
     if (!productoExacto) {
-        if (resultados.length > 0 || errorBusqueda.value) return;
+        if (resultados.length > 0 || errorBusqueda.value || avisoBusqueda.value) return;
 
         Swal.fire({
             icon: "warning",
@@ -336,31 +344,6 @@ const agregarAlCarrito = (producto) => {
         return;
     }
 
-    const existente = carrito.value.find(
-        (item) => item.producto_id === producto.id,
-    );
-
-    if (existente) {
-        const disponible = stockParaLote(producto, existente.lote_id);
-        if (existente.cantidad >= disponible) {
-            Swal.fire({
-                icon: "warning",
-                title: "Stock insuficiente",
-                text: `Hay ${disponible} unidades de "${producto.nombre}" disponibles en el lote seleccionado.`,
-                confirmButtonText: "Aceptar",
-            });
-
-            return;
-        }
-
-        existente.producto = producto;
-        existente.cantidad++;
-
-        calcularSubtotal(existente);
-
-        return;
-    }
-
     const precio = Number(producto.precio_venta ?? producto.precio ?? 0);
     if (precio <= 0) {
         Swal.fire("Precio no disponible", `Configura un precio para "${producto.nombre}" antes de venderlo.`, "warning");
@@ -379,6 +362,21 @@ const agregarAlCarrito = (producto) => {
             confirmButtonText: "Aceptar",
         });
 
+        return;
+    }
+
+    const lineas = carrito.value.filter((item) => item.producto_id === producto.id);
+    const existente = lineas.find((item) => item.lote_id === loteDisponible.id);
+    const cantidadTotal = lineas.reduce((total, item) => total + item.cantidad, 0);
+    if (cantidadTotal >= stock || (existente && existente.cantidad >= loteDisponible.cantidad_actual)) {
+        Swal.fire("Stock insuficiente", `No hay más unidades disponibles de "${producto.nombre}" en ese lote o en el inventario.`, "warning");
+        return;
+    }
+
+    if (existente) {
+        existente.producto = producto;
+        existente.cantidad++;
+        calcularSubtotal(existente);
         return;
     }
 
@@ -415,8 +413,11 @@ const incrementarCantidad = (index) => {
     const item = carrito.value[index];
 
     const stock = stockParaLote(item.producto, item.lote_id);
+    const cantidadTotal = carrito.value
+        .filter((linea) => linea.producto_id === item.producto_id)
+        .reduce((total, linea) => total + linea.cantidad, 0);
 
-    if (item.cantidad >= stock) {
+    if (item.cantidad >= stock || cantidadTotal >= Number(item.producto.stock_actual)) {
         Swal.fire({
             icon: "warning",
             title: "Stock máximo alcanzado",
@@ -1074,6 +1075,14 @@ onMounted(() => {
                             </p>
 
                             <div
+                                v-else-if="avisoBusqueda"
+                                class="px-4 py-10 text-center text-amber-800"
+                                role="status"
+                            >
+                                {{ avisoBusqueda }}
+                            </div>
+
+                            <div
                                 v-else-if="busqueda"
                                 class="flex flex-col items-center justify-center py-16 text-center text-gray-400"
                             >
@@ -1172,7 +1181,7 @@ onMounted(() => {
                                 >
                                     <div
                                         v-for="(item, index) in carrito"
-                                        :key="item.producto_id"
+                                        :key="`${item.producto_id}-${item.lote_id}`"
                                         class="border border-[#F5DCE4] rounded-xl p-3 bg-[#FDF8FA] hover:bg-[#FDF2F5] transition"
                                     >
                                         <div class="flex justify-between gap-3">

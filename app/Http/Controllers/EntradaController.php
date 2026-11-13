@@ -46,7 +46,8 @@ class EntradaController extends Controller
                 $query->where(function ($query) use ($termino) {
                     $query->where('nombre', 'like', "%{$termino}%")
                         ->orWhere('codigo', 'like', "{$termino}%")
-                        ->orWhere('codigo_barras', 'like', "{$termino}%");
+                        ->orWhere('codigo_barras', 'like', "{$termino}%")
+                        ->orWhereHas('lotes', fn ($lotes) => $lotes->where('lotes.codigo_barras', $termino));
                 });
             })
             ->with('categoria:id,nombre')
@@ -74,10 +75,11 @@ class EntradaController extends Controller
             'codigo_barras' => ['required', 'string', 'max:100'],
         ]);
 
-        $producto = Producto::where('activo', true)
-            ->where('codigo_barras', $validated['codigo_barras'])
+        $productos = Producto::where('activo', true)
+            ->conCodigoDeEtiqueta(trim($validated['codigo_barras']))
             ->with('categoria:id,nombre')
-            ->first([
+            ->limit(2)
+            ->get([
                 'id',
                 'nombre',
                 'codigo',
@@ -88,7 +90,8 @@ class EntradaController extends Controller
             ]);
 
         return response()->json([
-            'producto' => $producto,
+            'producto' => $productos->count() === 1 ? $productos->first() : null,
+            'ambiguo' => $productos->count() > 1,
         ]);
     }
 

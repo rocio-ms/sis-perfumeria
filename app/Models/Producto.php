@@ -124,6 +124,14 @@ class Producto extends Model
             ->whereHas('lotes', fn ($lotes) => $lotes->disponibleParaVenta());
     }
 
+    public function scopeConCodigoDeEtiqueta(Builder $query, string $codigo): Builder
+    {
+        return $query->where(fn (Builder $productos) => $productos
+            ->where('productos.codigo', $codigo)
+            ->orWhere('productos.codigo_barras', $codigo)
+            ->orWhereHas('lotes', fn ($lotes) => $lotes->where('lotes.codigo_barras', $codigo)));
+    }
+
     public function detalleSalidas()
     {
         return $this->hasMany(DetalleSalida::class);

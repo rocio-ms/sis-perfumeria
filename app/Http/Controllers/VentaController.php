@@ -164,19 +164,49 @@ class VentaController extends Controller
             'categoria_id' => ['nullable', 'integer', 'exists:categorias,id'],
         ]);
 
+        $codigo = trim($validated['search'] ?? '');
+        if ($codigo !== '') {
+            $coincidencias = Producto::conCodigoDeEtiqueta($codigo)->limit(2)->get();
+
+            if ($coincidencias->count() > 1) {
+                return response()->json([
+                    'productos' => [],
+                    'aviso' => 'El código corresponde a varios productos. Busca por nombre o revisa sus etiquetas.',
+                ]);
+            }
+
+            if ($producto = $coincidencias->first()) {
+                $codigoDeLote = in_array(mb_strtolower($codigo), [
+                    mb_strtolower($producto->codigo),
+                    mb_strtolower($producto->codigo_barras ?? ''),
+                ], true)
+                    ? null
+                    : $codigo;
+                $productos = $this->productosParaVenta(productoId: $producto->id, codigoDeLote: $codigoDeLote);
+
+                return response()->json([
+                    'productos' => $productos,
+                    'producto_exacto_id' => $productos->isNotEmpty() ? $producto->id : null,
+                    'aviso' => $productos->isEmpty()
+                        ? "Encontramos «{$producto->nombre}», pero no está disponible para vender. Revisa su estado, stock, precio vigente y el lote."
+                        : null,
+                ]);
+            }
+        }
+
         return response()->json([
-            'productos' => $this->productosParaVenta(
-                trim($validated['search'] ?? ''),
-                isset($validated['categoria_id'])
-                    ? (int) $validated['categoria_id']
-                    : null,
-            ),
+            'productos' => $this->productosParaVenta($codigo, $validated['categoria_id'] ?? null),
         ]);
     }
 
-    private function productosParaVenta(string $search = '', ?int $categoriaId = null)
+    private function productosParaVenta(
+        string $search = '',
+        ?int $categoriaId = null,
+        ?int $productoId = null,
+        ?string $codigoDeLote = null,
+    )
     {
-        $crearConsulta = fn() => Producto::query()
+        $consulta = Producto::query()
             ->select([
                 'id',
                 'codigo',
@@ -190,76 +220,37 @@ class VentaController extends Controller
                 'marca_id',
             ])
             ->disponibleParaVenta()
+            ->when($productoId, fn ($query) => $query->whereKey($productoId))
+            ->when($codigoDeLote !== null, fn ($query) => $query->whereHas('lotes', fn ($lotes) => $lotes
+                ->disponibleParaVenta()->where('lotes.codigo_barras', $codigoDeLote)))
             ->when(
                 $categoriaId,
                 fn($query) => $query->where('categoria_id', $categoriaId),
             )
             ->with([
                 'precioActual',
-                'lotes' => function ($query) {
+                'lotes' => function ($query) use ($codigoDeLote) {
                     $query->disponibleParaVenta()
+                        ->when($codigoDeLote !== null, fn ($lotes) => $lotes->where('lotes.codigo_barras', $codigoDeLote))
                         ->orderByRaw('CASE WHEN fecha_vencimiento IS NULL THEN 1 ELSE 0 END')
                         ->orderBy('fecha_vencimiento')
                         ->orderBy('lotes.id');
                 },
-            ]);
-
-        $productos = collect();
+            ])
+            ->orderBy('productos.nombre')
+            ->orderBy('productos.id');
 
         if ($search !== '') {
-            $termino = addcslashes($search, '\\%_');
-            $prefijo = $termino . '%';
-
-            $productoExacto = $crearConsulta()
-                ->where(function ($query) use ($search) {
-                    $query
-                        ->where('codigo', $search)
-                        ->orWhere('codigo_barras', $search);
-                })
-                ->first();
-
-            if ($productoExacto) {
-                $productos = collect([$productoExacto]);
-            } else {
-                $productos = $crearConsulta()
-                    ->where(function ($query) use ($prefijo) {
-                        $query
-                            ->where('codigo', 'like', $prefijo)
-                            ->orWhere('codigo_barras', 'like', $prefijo);
-                    })
-                    ->orderBy('codigo')
-                    ->limit(24)
-                    ->get();
-
-                if ($productos->isEmpty()) {
-                    $productos = $crearConsulta()
-                        ->where('nombre', 'like', $prefijo)
-                        ->orderBy('nombre')
-                        ->limit(24)
-                        ->get();
-                }
-
-                if ($productos->isEmpty() && mb_strlen($search) >= 3) {
-                    $productos = $crearConsulta()
-                        ->where('nombre', 'like', '%' . $termino . '%')
-                        ->orderBy('nombre')
-                        ->limit(24)
-                        ->get();
-                }
-            }
-        } else {
-            $consulta = $crearConsulta()
-                ->orderBy('nombre')
-                ;
-
-            if (!$categoriaId) {
-                $consulta->limit(24);
-            }
-
-            $productos = $consulta->get();
+            $termino = strtr($search, ['!' => '!!', '%' => '!%', '_' => '!_']);
+            $consulta->where(fn ($query) => $query
+                ->whereRaw("productos.nombre LIKE ? ESCAPE '!'", ["%{$termino}%"])
+                ->orWhereRaw("productos.codigo LIKE ? ESCAPE '!'", ["{$termino}%"])
+                ->orWhereRaw("productos.codigo_barras LIKE ? ESCAPE '!'", ["{$termino}%"]));
+        } elseif (!$categoriaId && !$productoId) {
+            $consulta->limit(24);
         }
 
-        return $productos
+        return $consulta->get()
             ->map(function ($producto) {
                 $precio = $producto->precioActual;
                 $lote = $producto->lotes->first();

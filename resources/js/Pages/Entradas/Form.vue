@@ -608,6 +608,11 @@ const escanearProducto = async (evento = null, soloSiCoincide = false) => {
             return;
         }
 
+        if (data.ambiguo) {
+            errorBusquedaProducto.value = "El código corresponde a varios productos. Selecciona el correcto por nombre.";
+            return;
+        }
+
         if (soloSiCoincide) return;
 
         codigoBarrasLotePendiente.value = codigo;

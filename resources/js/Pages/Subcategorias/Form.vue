@@ -25,6 +25,14 @@ const form = useForm({
 });
 
 const esEdicion = computed(() => props.subcategoria !== null);
+const categoriasDisponibles = computed(() => {
+    const categoriaActual = props.subcategoria?.categoria;
+    if (!categoriaActual || props.categorias.some(({ id }) => id === categoriaActual.id)) {
+        return props.categorias;
+    }
+
+    return [...props.categorias, categoriaActual];
+});
 
 const limpiarFormulario = () => {
     form.reset();
@@ -71,6 +79,7 @@ watch(visible, (estaVisible) => {
 });
 
 const guardar = () => {
+    const editando = esEdicion.value;
     const opciones = {
         onSuccess: async () => {
             limpiarFormulario();
@@ -78,8 +87,8 @@ const guardar = () => {
             emit("saved");
 
             await Swal.fire({
-                title: esEdicion.value ? "¡Actualizada!" : "¡Guardada!",
-                text: esEdicion.value
+                title: editando ? "¡Actualizada!" : "¡Guardada!",
+                text: editando
                     ? "La subcategoría se actualizó correctamente."
                     : "La subcategoría se registró correctamente.",
                 icon: "success",
@@ -88,7 +97,7 @@ const guardar = () => {
         },
     };
 
-    if (esEdicion.value) {
+    if (editando) {
         form.put(route("subcategorias.update", props.subcategoria.id), opciones);
         return;
     }
@@ -108,15 +117,15 @@ const cerrar = () => {
         v-model:visible="visible"
         modal
         :header="esEdicion ? 'Editar subcategoría' : 'Nueva subcategoría'"
-        :style="{ width: '550px' }"
+        :style="{ width: '550px', maxWidth: '92vw' }"
     >
         <div class="flex flex-col gap-5 mt-3">
             <div class="flex flex-col gap-1">
                 <FloatLabel variant="on">
                     <Select
-                        id="categoria_id"
+                        input-id="categoria_id"
                         v-model="form.categoria_id"
-                        :options="categorias"
+                        :options="categoriasDisponibles"
                         option-label="nombre"
                         option-value="id"
                         class="w-full"

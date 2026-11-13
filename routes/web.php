@@ -195,7 +195,9 @@ Route::middleware([
     Route::resource('/categorias', CategoriaController::class)->except(['show', 'destroy']);
 
     Route::resource('/subcategorias', SubcategoriaController::class)
-        ->except(['show', 'destroy']);
+        ->except(['show', 'destroy'])
+        ->middlewareFor(['create', 'store'], 'role_or_permission:Administrador|subcategorias.crear')
+        ->middlewareFor(['edit', 'update'], 'role_or_permission:Administrador|subcategorias.editar');
 
     /*
     |--------------------------------------------------------------------------
