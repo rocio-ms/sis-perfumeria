@@ -1,7 +1,7 @@
 <script setup>
 import { ref, onMounted, computed } from "vue";
 import { router, usePage } from "@inertiajs/vue3";
-import axios from "axios";
+import { api as axios } from "@/solicitudes";
 
 import AppLayout from "@/Layouts/AppLayout.vue";
 import Card from "@/Components/Card.vue";

@@ -1,4 +1,5 @@
 <script setup>
+import { api as axios } from "@/solicitudes";
 import { ref, computed, watch } from 'vue';
 import { router, useForm, usePage } from '@inertiajs/vue3';
 import ActionSection from '@/Components/ActionSection.vue';

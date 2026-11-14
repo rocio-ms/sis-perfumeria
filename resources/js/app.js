@@ -2,7 +2,8 @@ import "../css/app.css";
 import "sweetalert2/dist/sweetalert2.min.css";
 
 import { createApp, h } from "vue";
-import { createInertiaApp } from "@inertiajs/vue3";
+import { createInertiaApp, router } from "@inertiajs/vue3";
+import { mostrarErrorSolicitud, requiereAviso } from "./solicitudes";
 import { resolvePageComponent } from "laravel-vite-plugin/inertia-helpers";
 import { ZiggyVue } from "../../vendor/tightenco/ziggy";
 
@@ -44,6 +45,19 @@ import Password from "primevue/password";
 document.documentElement.classList.remove("dark", "dark-mode", "p-dark");
 
 const appName = import.meta.env.VITE_APP_NAME || "Perfumería Belleza";
+
+router.on("invalid", ({ detail }) => {
+    mostrarErrorSolicitud(detail.response.status);
+    return false;
+});
+
+router.on("exception", ({ detail }) => {
+    const error = detail.exception;
+    if (error.code === "ERR_NETWORK" || requiereAviso(error.response?.status)) {
+        mostrarErrorSolicitud(error.response?.status);
+        return false;
+    }
+});
 
 const vuetify = createVuetify({
     theme: {

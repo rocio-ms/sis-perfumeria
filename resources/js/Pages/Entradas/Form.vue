@@ -1,7 +1,7 @@
 <script setup>
 import { computed, nextTick, onBeforeUnmount, ref, shallowRef, watch } from "vue";
 import { useForm } from "@inertiajs/vue3";
-import axios from "axios";
+import { api as axios, requiereAviso } from "@/solicitudes";
 
 import Swal from "sweetalert2";
 
@@ -313,6 +313,8 @@ const productoGuardado = async (producto) => {
             });
         } catch (error) {
             codigoBarrasProductoPendiente.value = "";
+
+            if (requiereAviso(error.response?.status)) return;
 
             await Swal.fire({
                 title: "Producto registrado",
@@ -643,7 +645,7 @@ const escanearProducto = async (evento = null, soloSiCoincide = false) => {
             codigoBarrasLotePendiente.value = "";
         }
     } catch (error) {
-        if (soloSiCoincide) return;
+        if (soloSiCoincide || requiereAviso(error.response?.status)) return;
 
         await Swal.fire({
             title: "No se pudo buscar el producto",
@@ -1018,6 +1020,8 @@ const importarDetallesExcel = async (filas) => {
             confirmButtonText: "Aceptar",
         });
     } catch (error) {
+        if (requiereAviso(error.response?.status)) return;
+
         await Swal.fire({
             title: "No se pudo importar el Excel",
             text:

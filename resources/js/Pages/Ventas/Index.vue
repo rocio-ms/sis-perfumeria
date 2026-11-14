@@ -6,6 +6,7 @@ import Card from "@/Components/Card.vue";
 import AppLayout from "@/Layouts/AppLayout.vue";
 import DataTableBase from "@/Components/DataTableBase.vue";
 import ComprobanteTicket from "./ComprobanteTicket.vue";
+import { api, requiereAviso } from "@/solicitudes";
 
 import Swal from "sweetalert2";
 
@@ -21,8 +22,8 @@ defineOptions({
 
 const props = defineProps({
     ventas: {
-        type: Array,
-        default: () => [],
+        type: Object,
+        default: () => ({ data: [], total: 0, current_page: 1, per_page: 20 }),
     },
 
     filters: {
@@ -32,10 +33,6 @@ const props = defineProps({
         }),
     },
 
-    tienda: {
-        type: Object,
-        default: () => ({}),
-    },
 });
 
 /*
@@ -47,14 +44,41 @@ const props = defineProps({
 |
 */
 
-const filtros = ref({
-    search: props.filters?.search ?? "",
-});
+const cargandoVentas = ref(false);
+const fechaConsulta = (fecha) => {
+    if (!(fecha instanceof Date)) return null;
+
+    const mes = String(fecha.getMonth() + 1).padStart(2, "0");
+    const dia = String(fecha.getDate()).padStart(2, "0");
+    return `${fecha.getFullYear()}-${mes}-${dia}`;
+};
+
+const buscarVentas = (consulta) => {
+    const fechas = consulta.filters.fecha_emision;
+    router.get(route("ventas.index"), {
+        page: consulta.page,
+        per_page: consulta.rows,
+        search: consulta.search,
+        fecha_desde: fechaConsulta(fechas?.[0]),
+        fecha_hasta: fechaConsulta(fechas?.[1]),
+        sort: consulta.sortField,
+        direction: consulta.sortOrder === 1 ? "asc" : "desc",
+    }, {
+        only: ["ventas", "filters"],
+        preserveState: true,
+        preserveScroll: true,
+        replace: true,
+        onStart: () => (cargandoVentas.value = true),
+        onFinish: () => (cargandoVentas.value = false),
+    });
+};
 
 //Dialogs
 const mostrarDetalle = ref(false);
 const mostrarComprobantes = ref(false);
 const ventaSeleccionada = ref(null);
+const cargandoDetalle = ref(false);
+const tienda = ref(null);
 
 /*
 |--------------------------------------------------------------------------
@@ -122,19 +146,23 @@ const columns = [
 |--------------------------------------------------------------------------
 */
 
-const verVenta = (venta) => {
-    console.log("VENTA SELECCIONADA:", venta);
+const verVenta = async (venta) => {
+    if (cargandoDetalle.value) return;
+    cargandoDetalle.value = true;
 
-    venta.detalles?.forEach((detalle) => {
-        console.log("Producto:", detalle.producto?.nombre);
-        console.log("Precio:", detalle.precio_unitario);
-        console.log("Descuento:", detalle.descuento);
-        console.log("Subtotal:", detalle.subtotal);
-    });
-
-    ventaSeleccionada.value = venta;
-    mostrarComprobantes.value = false;
-    mostrarDetalle.value = true;
+    try {
+        const { data } = await api.get(route("ventas.detalle", venta.id));
+        ventaSeleccionada.value = { ...data.venta, comprobantes: data.comprobantes };
+        tienda.value = data.tienda;
+        mostrarComprobantes.value = false;
+        mostrarDetalle.value = true;
+    } catch (error) {
+        if (!requiereAviso(error.response?.status)) {
+            Swal.fire("No se pudo abrir la venta", "Inténtalo nuevamente.", "error");
+        }
+    } finally {
+        cargandoDetalle.value = false;
+    }
 };
 const formatearFecha = (fecha) => {
     if (!fecha) return "—";
@@ -335,16 +363,24 @@ const totalVenta = computed(() => {
             <template #content>
                 <DataTableBase
                     title="Ventas"
-                    :data="props.ventas"
+                    :data="props.ventas.data"
                     :columns="columns"
-                    :loading="false"
+                    server-pagination
+                    :total-records="props.ventas.total"
+                    :current-page="props.ventas.current_page"
+                    :rows="props.ventas.per_page"
+                    :server-filters="props.filters"
+                    wait-for-complete-date-range
+                    :loading="cargandoVentas || cargandoDetalle"
                     title-button="Nueva venta"
                     :show-view="true"
+                    view-permission="ventas.ver"
                     :show-edit="false"
                     :show-delete="false"
                     :show-filters="true"
                     @nuevo="nuevaVenta"
                     @ver="verVenta"
+                    @server-query="buscarVentas"
                 />
             </template>
         </Card>
@@ -536,7 +572,7 @@ const totalVenta = computed(() => {
                         v-if="ventaSeleccionada"
                         :key="ventaSeleccionada.id"
                         :venta="ventaSeleccionada"
-                        :tienda="props.tienda"
+                        :tienda="tienda"
                     />
                 </div>
             </div>

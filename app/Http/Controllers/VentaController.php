@@ -19,6 +19,8 @@ use App\Models\TipoMovimiento;
 use App\Models\Salida;
 use App\Models\DetalleSalida;
 use App\Support\BusquedaNombre;
+use App\Support\CalendarioComercial;
+use Illuminate\Support\Carbon;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Validator;
@@ -35,52 +37,58 @@ class VentaController extends Controller
      */
     public function index(Request $request)
     {
-        $ventas = Venta::with([
-            'cliente',
-            'usuario',
-            'tipoComprobante',
-            'tipoPago',
-            'sesionCaja',
-            'empresaEmisora',
-            'serieComprobante',
-            'detalles.producto',
-            'detalles.lote',
-            'comprobantes.cliente',
-            'comprobantes.tipoComprobante',
-            'comprobantes.detalles.producto',
-        ])
+        $columnas = ['id', 'serie', 'correlativo', 'comprobantes_count', 'fecha_emision', 'cliente.numero_documento', 'importe_total'];
+        $filtros = $request->validate([
+            'search' => 'nullable|string|max:150',
+            'page' => 'nullable|integer|min:1',
+            'per_page' => ['nullable', 'integer', Rule::in([10, 20, 50])],
+            'sort' => ['nullable', Rule::in($columnas)],
+            'direction' => 'nullable|in:asc,desc',
+            'fecha_desde' => 'nullable|date_format:Y-m-d',
+            'fecha_hasta' => 'nullable|date_format:Y-m-d|after_or_equal:fecha_desde',
+        ]);
+        $search = trim($filtros['search'] ?? '');
+        $sort = $filtros['sort'] ?? 'id';
+        $direction = $filtros['direction'] ?? 'desc';
+        $ventas = Venta::query()
+            ->select(['id', 'serie', 'correlativo', 'fecha_emision', 'cliente_id', 'importe_total', 'grupo_venta'])
+            ->with('cliente:id,tipo_documento,numero_documento,razon_social_nombre,nombres,ap_paterno,ap_materno')
             ->withCount('comprobantes')
-            ->when($request->search, function ($query, $search) {
-                $query->where(function ($q) use ($search) {
-                    $q->where('serie', 'like', "%{$search}%")
-                        ->orWhere(
-                            'correlativo',
-                            'like',
-                            "%{$search}%"
-                        )
-                        ->orWhereHas('cliente', function ($cliente) use ($search) {
-                            $cliente
-                                ->where(
-                                    'nombres',
-                                    'like',
-                                    "%{$search}%"
-                                )
-                                ->orWhere(
-                                    'numero_documento',
-                                    'like',
-                                    "%{$search}%"
-                                );
-                        });
-                });
-            })
-            ->orderByDesc('id')
-            ->get();
+            ->when($search !== '', function ($query) use ($search) {
+                $termino = '%' . strtr($search, ['!' => '!!', '%' => '!%', '_' => '!_']) . '%';
+                $query->where(fn ($ventas) => $ventas
+                    ->whereRaw("serie LIKE ? ESCAPE '!'", [$termino])
+                    ->orWhereRaw("correlativo LIKE ? ESCAPE '!'", [$termino])
+                    ->orWhereHas('cliente', fn ($cliente) => $cliente
+                        ->whereRaw("razon_social_nombre LIKE ? ESCAPE '!'", [$termino])
+                        ->orWhereRaw("nombres LIKE ? ESCAPE '!'", [$termino])
+                        ->orWhereRaw("numero_documento LIKE ? ESCAPE '!'", [$termino])));
+            });
+
+        $desde = $filtros['fecha_desde'] ?? null;
+        $hasta = $filtros['fecha_hasta'] ?? null;
+        if ($desde) {
+            $ventas->where('fecha_emision', '>=', Carbon::parse($desde, CalendarioComercial::ZONA)->startOfDay()->utc());
+        }
+        if ($hasta) {
+            $ventas->where('fecha_emision', '<', Carbon::parse($hasta, CalendarioComercial::ZONA)->addDay()->startOfDay()->utc());
+        }
+
+        $campoOrden = $sort === 'cliente.numero_documento'
+            ? Cliente::select('numero_documento')->whereColumn('clientes.id', 'ventas.cliente_id')
+            : $sort;
+        $ventas->orderBy($campoOrden, $direction);
+        if ($sort !== 'id') {
+            $ventas->orderByDesc('ventas.id');
+        }
 
         return Inertia::render('Ventas/Index', [
-            'ventas' => $ventas,
-            'tienda' => Tienda::first(),
+            'ventas' => $ventas->paginate($filtros['per_page'] ?? 20)->withQueryString(),
             'filters' => [
-                'search' => $request->search,
+                'search' => $search,
+                'sort' => $sort,
+                'direction' => $direction,
+                'fecha_emision' => [$desde, $hasta],
             ],
         ]);
     }
@@ -1554,7 +1562,17 @@ class VentaController extends Controller
     /**
      * Mostrar comprobante
      */
+    public function detalle(Venta $venta)
+    {
+        return response()->json($this->datosComprobante($venta));
+    }
+
     public function comprobante(Venta $venta)
+    {
+        return Inertia::render('Ventas/Comprobante', $this->datosComprobante($venta));
+    }
+
+    private function datosComprobante(Venta $venta): array
     {
         $venta->load([
             'cliente',
@@ -1588,10 +1606,10 @@ class VentaController extends Controller
 
         $tienda = Tienda::first();
 
-        return Inertia::render('Ventas/Comprobante', [
+        return [
             'venta' => $venta,
             'comprobantes' => $comprobantes,
             'tienda' => $tienda,
-        ]);
+        ];
     }
 }

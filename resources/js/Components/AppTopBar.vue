@@ -1,4 +1,5 @@
 <script setup>
+import { solicitar } from "@/solicitudes";
 import { ref, onMounted, computed } from "vue";
 import { usePage, router } from "@inertiajs/vue3";
 import Swal from "sweetalert2";
@@ -84,7 +85,7 @@ const toggleUserMenu = (event) => {
 const logout = async () => {
     userMenu.value?.hide();
     try {
-        const response = await fetch("/sesiones-caja/verificar-abierta", {
+        const response = await solicitar("/sesiones-caja/verificar-abierta", {
             headers: {
                 Accept: "application/json",
                 "X-Requested-With": "XMLHttpRequest",

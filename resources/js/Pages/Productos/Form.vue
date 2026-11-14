@@ -1,4 +1,5 @@
 <script setup>
+import { solicitar } from "@/solicitudes";
 import { ref, computed, watch } from "vue";
 import { useForm } from "@inertiajs/vue3";
 
@@ -305,7 +306,7 @@ watch(
         onCleanup(() => controlador.abort());
 
         try {
-            const respuesta = await fetch(route("productos.siguiente-codigo"), {
+            const respuesta = await solicitar(route("productos.siguiente-codigo"), {
                 headers: { Accept: "application/json" },
                 cache: "no-store",
                 signal: controlador.signal,

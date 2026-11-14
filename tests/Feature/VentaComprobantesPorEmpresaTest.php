@@ -3,6 +3,7 @@
 namespace Tests\Feature;
 
 use App\Models\User;
+use App\Models\Venta;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Hash;
@@ -252,6 +253,30 @@ class VentaComprobantesPorEmpresaTest extends TestCase
 
         $ventas = DB::table('ventas')->orderBy('empresa_emisora_id')->get();
         $this->assertCount(2, $ventas);
+        $primeraVenta = $ventas->first();
+        $this->getJson(route('ventas.detalle', $primeraVenta->id))->assertForbidden();
+        foreach (['ventas.index', 'ventas.ver'] as $permiso) {
+            $user->givePermissionTo(Permission::findOrCreate($permiso, 'web'));
+        }
+        $this->get(route('ventas.index', ['per_page' => 10, 'search' => $primeraVenta->serie]))
+            ->assertOk()->assertInertia(fn ($page) => $page->component('Ventas/Index')
+                ->where('ventas.total', 2)->where('ventas.per_page', 10)
+                ->has('ventas.data', 2)->where('ventas.data.0.comprobantes_count', 2)
+                ->missing('ventas.data.0.detalles')->missing('ventas.data.0.comprobantes')->missing('tienda'));
+        $this->getJson(route('ventas.detalle', $primeraVenta->id))->assertOk()
+            ->assertJsonPath('venta.id', $primeraVenta->id)
+            ->assertJsonCount(1, 'venta.detalles')->assertJsonCount(2, 'comprobantes');
+
+        $this->assertDatabaseCount('notificaciones', 0);
+        $this->artisan('notificaciones:sincronizar')->assertSuccessful();
+        $this->assertDatabaseHas('notificaciones', [
+            'tipo' => 'stock_bajo', 'referencia_id' => $productos[0]['producto_id'],
+        ]);
+        $this->get(route('reportes.productos-empresa.pdf', [
+            'empresa_id' => $empresas['Empresa A'],
+            'periodo_productos' => 'mes',
+            'fecha_referencia' => $now->toDateString(),
+        ]))->assertOk()->assertHeader('Content-Type', 'application/pdf');
         $this->assertSame(
             $empresas->sort()->values()->all(),
             $ventas->pluck('empresa_emisora_id')->map(fn($id) => (int) $id)->all()
@@ -319,5 +344,19 @@ class VentaComprobantesPorEmpresaTest extends TestCase
             'periodo_mas_vendidos' => 'dia', 'fecha_referencia_mas_vendidos' => '2026-11-09',
         ]))->assertOk()->assertInertia(fn ($page) => $page->has('productosMasVendidos', 1)
             ->where('productosMasVendidos.0.id', $producto->id));
+
+        $this->get(route('ventas.index', ['fecha_desde' => '2026-11-09', 'fecha_hasta' => '2026-11-09']))
+            ->assertOk()->assertInertia(fn ($page) => $page->where('ventas.total', 1)
+                ->where('ventas.data.0.id', $primeraVenta->id));
+
+        $ventaBase = Venta::findOrFail($primeraVenta->id);
+        for ($i = 1; $i <= 10; $i++) {
+            $venta = $ventaBase->replicate();
+            $venta->fill(['grupo_venta' => null, 'correlativo' => (string) (100 + $i)])->save();
+        }
+        $this->get(route('ventas.index', ['per_page' => 10, 'page' => 2, 'sort' => 'id', 'direction' => 'asc']))
+            ->assertOk()->assertInertia(fn ($page) => $page->where('ventas.total', 12)
+                ->where('ventas.current_page', 2)->has('ventas.data', 2)
+                ->where('ventas.data.0.correlativo', '109'));
     }
 }

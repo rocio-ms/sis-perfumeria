@@ -11,7 +11,7 @@ final class BusquedaNombre
         return preg_replace(
             '/[\p{M}\p{Z}\s]+/u',
             '',
-            Normalizer::normalize(mb_strtolower($nombre), Normalizer::FORM_D)
-        );
+            Normalizer::normalize(mb_strtolower($nombre, 'UTF-8'), Normalizer::FORM_D) ?: $nombre
+        ) ?? '';
     }
 }

@@ -1,4 +1,5 @@
 <script setup>
+import { solicitar } from "@/solicitudes";
 import {
     ref,
     computed,
@@ -157,7 +158,7 @@ const solicitarProductos = async (texto = "", categoriaId = null, agregarEtiquet
     productoExactoId.value = null;
 
     try {
-        const response = await fetch(
+        const response = await solicitar(
             route("ventas.productos.buscar", {
                 search: texto,
                 categoria_id: categoriaId,
@@ -1063,7 +1064,7 @@ onMounted(() => {
                                     severity="secondary"
                                     outlined
                                     class="mt-3"
-                                    @click="recargarCatalogo()"
+                                    @click="solicitarProductos(busqueda.trim(), categoriaSeleccionada)"
                                 />
                             </div>
 

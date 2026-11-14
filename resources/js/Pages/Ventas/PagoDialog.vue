@@ -1,4 +1,5 @@
 <script setup>
+import { solicitar } from "@/solicitudes";
 import { ref, computed, onBeforeUnmount, watch } from "vue";
 
 const props = defineProps({
@@ -226,7 +227,7 @@ const buscarCliente = async () => {
             `?tipo_documento=${encodeURIComponent(tipoDocumento)}` +
             `&numero_documento=${encodeURIComponent(documento)}`;
 
-        const responseBD = await fetch(urlBD, {
+        const responseBD = await solicitar(urlBD, {
             method: "GET",
             signal: solicitud.signal,
             headers: {
@@ -265,7 +266,7 @@ const buscarCliente = async () => {
         }
 
         // La consulta externa se usa solo si el DNI no está registrado localmente.
-        const responseAPI = await fetch(route("clientes.consultar-dni"), {
+        const responseAPI = await solicitar(route("clientes.consultar-dni"), {
             method: "POST",
             signal: solicitud.signal,
             headers: {

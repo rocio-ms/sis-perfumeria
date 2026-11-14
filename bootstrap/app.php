@@ -6,7 +6,7 @@ use Illuminate\Foundation\Configuration\Exceptions;
 use Illuminate\Foundation\Configuration\Middleware;
 use Illuminate\Http\Request;
 use Inertia\Inertia;
-use Symfony\Component\HttpKernel\Exception\HttpExceptionInterface;
+use Symfony\Component\HttpFoundation\Response;
 
 return Application::configure(basePath: dirname(__DIR__))
     ->withRouting(
@@ -36,29 +36,37 @@ return Application::configure(basePath: dirname(__DIR__))
     })
     ->withExceptions(function (Exceptions $exceptions): void {
 
-        // $exceptions->shouldRenderJsonWhen(
-        //     fn(Request $request) => $request->is('api/*'),
-        // );
+        $exceptions->shouldRenderJsonWhen(
+            fn (Request $request) => $request->is('api/*') || $request->expectsJson()
+        );
 
-        $exceptions->render(function (
-            HttpExceptionInterface $exception,
-            $request
-        ) {
-            $status = $exception->getStatusCode();
+        $exceptions->respond(function (Response $response, \Throwable $exception, Request $request) {
+            $status = $response->getStatusCode();
+            $message = match ($status) {
+                419 => 'La sesión o el formulario venció. Actualiza la página e inténtalo nuevamente.',
+                429 => 'Hay demasiadas solicitudes. Espera unos segundos e inténtalo nuevamente.',
+                503 => 'El sistema no está disponible en este momento. Intenta nuevamente en unos minutos.',
+                default => $status >= 500
+                    ? 'Ocurrió un error al procesar la solicitud. Actualiza la página si el problema continúa.'
+                    : null,
+            };
 
-            $errores = [
-                403,
-                404,
-                419,
-                429,
-                500,
-                503,
-            ];
+            if ($message !== null) {
+                $headers = ['Cache-Control' => 'no-store'];
+                if ($response->headers->has('Retry-After')) {
+                    $headers['Retry-After'] = $response->headers->get('Retry-After');
+                }
 
-            if (in_array($status, $errores)) {
-                return Inertia::render(
-                    "Errors/{$status}"
-                )->toResponse($request)->setStatusCode($status);
+                return $request->expectsJson() || $request->is('api/*') || $request->headers->has('X-Inertia')
+                    ? response()->json(['message' => $message], $status, $headers)
+                    : response()->view('errors.solicitud', compact('status', 'message'), $status, $headers);
             }
+
+            if (in_array($status, [403, 404], true)
+                && !$request->expectsJson() && !$request->is('api/*')) {
+                return Inertia::render("Errors/{$status}")->toResponse($request)->setStatusCode($status);
+            }
+
+            return $response;
         });
     })->create();

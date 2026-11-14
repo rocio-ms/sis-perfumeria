@@ -1,7 +1,7 @@
 <script setup>
 import { computed, onBeforeUnmount, ref, watch } from "vue";
 import { router, useForm } from "@inertiajs/vue3";
-import axios from "axios";
+import { api as axios, requiereAviso } from "@/solicitudes";
 import Swal from "sweetalert2";
 import ImportacionExcel from "@/Components/ImportacionExcel.vue";
 
@@ -746,6 +746,8 @@ const importarDetallesExcel = async (filas) => {
             confirmButtonText: "Aceptar",
         });
     } catch (error) {
+        if (requiereAviso(error.response?.status)) return;
+
         await Swal.fire({
             title: "No se pudo importar el Excel",
             text:

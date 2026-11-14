@@ -393,6 +393,10 @@ Route::middleware([
         ->name('ventas.show');
 
 
+    Route::get('/ventas/{venta}/detalle', [VentaController::class, 'detalle'])
+        ->middleware('permission:ventas.ver')
+        ->name('ventas.detalle');
+
     // Comprobante
     Route::get(
         '/ventas/{venta}/comprobante',

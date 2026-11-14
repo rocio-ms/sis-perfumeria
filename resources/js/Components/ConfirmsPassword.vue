@@ -1,4 +1,5 @@
 <script setup>
+import { api as axios } from "@/solicitudes";
 import { ref, reactive, nextTick } from 'vue';
 import DialogModal from './DialogModal.vue';
 import InputError from './InputError.vue';

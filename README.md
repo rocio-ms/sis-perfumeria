@@ -9,6 +9,16 @@
 
 ## About Laravel
 
+### Notificaciones de inventario
+
+En producción, configura el cron del servidor con el usuario que ejecuta Laravel. Sustituye las rutas por las de tu instalación.
+
+```cron
+* * * * * cd /ruta/al/proyecto && /ruta/a/php artisan schedule:run
+```
+
+Comprueba la programación con `php artisan schedule:list`. En Laragon, puedes ejecutar `php artisan schedule:work` en una terminal mientras desarrollas. Para sincronizar una vez, ejecuta `php artisan notificaciones:sincronizar`.
+
 Laravel is a web application framework with expressive, elegant syntax. We believe development must be an enjoyable and creative experience to be truly fulfilling. Laravel takes the pain out of development by easing common tasks used in many web projects, such as:
 
 - [Simple, fast routing engine](https://laravel.com/docs/routing).
