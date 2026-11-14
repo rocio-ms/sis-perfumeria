@@ -110,6 +110,21 @@ class ProductoImagenTest extends TestCase
         $this->assertSame(['productos/anterior.png'], Storage::disk('public')->files('productos'));
     }
 
+    public function test_busca_por_nombre_sin_tildes_ni_espacios(): void
+    {
+        auth()->user()->givePermissionTo(Permission::findOrCreate('productos.index', 'web'));
+        $producto = $this->productoConImagenAnterior();
+        $producto->update(['nombre' => 'Kit Perfumería  Rosa', 'codigo_barras' => '87126757391']);
+
+        $this->withoutVite();
+        foreach (['perfumeriarosa', 'PERFUMERÍA    ROSA', 'meria ro', '87126757391'] as $texto) {
+            $this->get(route('productos.index', ['search' => $texto]))
+                ->assertOk()
+                ->assertInertia(fn ($page) => $page->has('productos.data', 1)
+                    ->where('productos.data.0.id', $producto->id));
+        }
+    }
+
     private function productoConImagenAnterior(): Producto
     {
         Storage::disk('public')->put('productos/anterior.png', 'imagen anterior');

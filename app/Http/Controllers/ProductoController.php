@@ -8,6 +8,7 @@ use App\Models\Producto;
 use App\Models\PrecioProducto;
 use App\Models\Empresa;
 use App\Models\Subcategoria;
+use App\Support\BusquedaNombre;
 
 use Closure;
 use Illuminate\Http\Request;
@@ -162,11 +163,18 @@ class ProductoController extends Controller
 
         if ($search !== '') {
             $termino = "%{$search}%";
+            $nombreBuscado = BusquedaNombre::normalizar($search);
+            $idsPorNombre = [];
+            if ($nombreBuscado !== '') {
+                $idsPorNombre = Producto::query()->select('id', 'nombre')->lazyById()
+                    ->filter(fn (Producto $producto) => str_contains(BusquedaNombre::normalizar($producto->nombre), $nombreBuscado))
+                    ->pluck('id')->all();
+            }
 
-            $productos->where(function ($query) use ($termino, $search) {
+            $productos->where(function ($query) use ($termino, $search, $idsPorNombre) {
                 $query->where('codigo', 'like', $termino)
                     ->orWhere('codigo_barras', 'like', $termino)
-                    ->orWhere('nombre', 'like', $termino)
+                    ->orWhereIntegerInRaw('productos.id', $idsPorNombre)
                     ->orWhere('imagen_url', 'like', $termino)
                     ->orWhere('stock_actual', 'like', $termino)
                     ->orWhereHas('categoria', fn ($categoriaQuery) => $categoriaQuery

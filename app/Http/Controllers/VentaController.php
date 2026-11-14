@@ -18,6 +18,7 @@ use App\Models\Tienda;
 use App\Models\TipoMovimiento;
 use App\Models\Salida;
 use App\Models\DetalleSalida;
+use App\Support\BusquedaNombre;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Validator;
@@ -176,17 +177,16 @@ class VentaController extends Controller
             }
 
             if ($producto = $coincidencias->first()) {
-                $codigoDeLote = in_array(mb_strtolower($codigo), [
-                    mb_strtolower($producto->codigo),
-                    mb_strtolower($producto->codigo_barras ?? ''),
-                ], true)
-                    ? null
-                    : $codigo;
+                $codigoNormalizado = mb_strtolower($codigo);
+                $esCodigoDeBarras = $codigoNormalizado === mb_strtolower($producto->codigo_barras ?? '');
+                $esCodigoInterno = $codigoNormalizado === mb_strtolower($producto->codigo);
+                $codigoDeLote = $esCodigoDeBarras || $esCodigoInterno ? null : $codigo;
                 $productos = $this->productosParaVenta(productoId: $producto->id, codigoDeLote: $codigoDeLote);
 
                 return response()->json([
                     'productos' => $productos,
                     'producto_exacto_id' => $productos->isNotEmpty() ? $producto->id : null,
+                    'etiqueta_exacta' => $esCodigoDeBarras || $codigoDeLote !== null,
                     'aviso' => $productos->isEmpty()
                         ? "Encontramos «{$producto->nombre}», pero no está disponible para vender. Revisa su estado, stock, precio vigente y el lote."
                         : null,
@@ -227,30 +227,36 @@ class VentaController extends Controller
                 $categoriaId,
                 fn($query) => $query->where('categoria_id', $categoriaId),
             )
-            ->with([
-                'precioActual',
-                'lotes' => function ($query) use ($codigoDeLote) {
-                    $query->disponibleParaVenta()
-                        ->when($codigoDeLote !== null, fn ($lotes) => $lotes->where('lotes.codigo_barras', $codigoDeLote))
-                        ->orderByRaw('CASE WHEN fecha_vencimiento IS NULL THEN 1 ELSE 0 END')
-                        ->orderBy('fecha_vencimiento')
-                        ->orderBy('lotes.id');
-                },
-            ])
             ->orderBy('productos.nombre')
             ->orderBy('productos.id');
 
-        if ($search !== '') {
-            $termino = strtr($search, ['!' => '!!', '%' => '!%', '_' => '!_']);
-            $consulta->where(fn ($query) => $query
-                ->whereRaw("productos.nombre LIKE ? ESCAPE '!'", ["%{$termino}%"])
-                ->orWhereRaw("productos.codigo LIKE ? ESCAPE '!'", ["{$termino}%"])
-                ->orWhereRaw("productos.codigo_barras LIKE ? ESCAPE '!'", ["{$termino}%"]));
-        } elseif (!$categoriaId && !$productoId) {
+        if ($search === '' && !$categoriaId && !$productoId) {
             $consulta->limit(24);
         }
 
-        return $consulta->get()
+        $productos = $consulta->get();
+        if ($search !== '') {
+            $nombreBuscado = BusquedaNombre::normalizar($search);
+            $codigoBuscado = mb_strtolower($search);
+            $productos = $productos->filter(fn (Producto $producto) =>
+                ($nombreBuscado !== '' && str_contains(BusquedaNombre::normalizar($producto->nombre), $nombreBuscado))
+                || str_starts_with(mb_strtolower($producto->codigo), $codigoBuscado)
+                || str_starts_with(mb_strtolower($producto->codigo_barras ?? ''), $codigoBuscado)
+            );
+        }
+
+        $productos->load([
+            'precioActual',
+            'lotes' => function ($query) use ($codigoDeLote) {
+                $query->disponibleParaVenta()
+                    ->when($codigoDeLote !== null, fn ($lotes) => $lotes->where('lotes.codigo_barras', $codigoDeLote))
+                    ->orderByRaw('CASE WHEN fecha_vencimiento IS NULL THEN 1 ELSE 0 END')
+                    ->orderBy('fecha_vencimiento')
+                    ->orderBy('lotes.id');
+            },
+        ]);
+
+        return $productos
             ->map(function ($producto) {
                 $precio = $producto->precioActual;
                 $lote = $producto->lotes->first();

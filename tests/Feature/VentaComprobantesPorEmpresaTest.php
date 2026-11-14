@@ -188,6 +188,33 @@ class VentaComprobantesPorEmpresaTest extends TestCase
         ];
 
         $this->actingAs($user);
+        DB::table('productos')->where('id', $productos[0]['producto_id'])
+            ->update(['nombre' => 'Perfumería  Rosa', 'codigo_barras' => '87126757391']);
+        DB::table('productos')->where('id', $productos[1]['producto_id'])
+            ->update(['nombre' => 'Kit de Perfumeria Rosa']);
+
+        foreach (['perfumeriarosa', 'PERFUMERÍA    ROSA', 'meria ro'] as $texto) {
+            $resultado = $this->getJson(route('ventas.productos.buscar', ['search' => $texto]))
+                ->assertOk()->assertJsonCount(2, 'productos');
+            $this->assertEqualsCanonicalizing(
+                array_column($productos, 'producto_id'),
+                array_column($resultado->json('productos'), 'id')
+            );
+        }
+        $this->getJson(route('ventas.productos.buscar', ['search' => '87126757391']))
+            ->assertOk()->assertJsonPath('producto_exacto_id', $productos[0]['producto_id'])
+            ->assertJsonPath('etiqueta_exacta', true);
+        $this->getJson(route('ventas.productos.buscar', ['search' => 'P-1']))
+            ->assertOk()->assertJsonPath('etiqueta_exacta', false);
+        $this->getJson(route('ventas.productos.buscar', ['search' => '87126 757391']))
+            ->assertOk()->assertJsonCount(0, 'productos');
+        DB::table('lotes')->where('id', $productos[1]['lote_id'])->update(['codigo_barras' => 'QR-LOTE-2']);
+        $this->getJson(route('ventas.productos.buscar', ['search' => 'QR-LOTE-2']))
+            ->assertOk()
+            ->assertJsonPath('producto_exacto_id', $productos[1]['producto_id'])
+            ->assertJsonPath('etiqueta_exacta', true)
+            ->assertJsonPath('productos.0.lotes.0.id', $productos[1]['lote_id']);
+
         $this->withoutVite()->get(route('ventas.create'))->assertOk()
             ->assertInertia(fn ($page) => $page->has('productos', 2)
                 ->where('categorias.0.stock_total', 2));

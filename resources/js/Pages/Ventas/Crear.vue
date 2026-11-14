@@ -145,7 +145,7 @@ const desplazarCategorias = (direccion) => {
     });
 };
 
-const solicitarProductos = async (texto = "", categoriaId = null) => {
+const solicitarProductos = async (texto = "", categoriaId = null, agregarEtiqueta = false) => {
     controladorBusqueda?.abort();
 
     const controlador = new AbortController();
@@ -183,6 +183,14 @@ const solicitarProductos = async (texto = "", categoriaId = null) => {
             ? data.productos
             : [];
 
+        if (agregarEtiqueta && data.etiqueta_exacta && busqueda.value.trim() === texto) {
+            const producto = productosBuscados.value.find((item) => item.id === productoExactoId.value);
+            if (producto) {
+                agregarAlCarrito(producto);
+                limpiarBusqueda();
+            }
+        }
+
         return productosBuscados.value;
     } catch (error) {
         if (error.name !== "AbortError" && solicitud === busquedaPendiente) {
@@ -213,6 +221,7 @@ watch(busqueda, (valor) => {
                 solicitarProductos(
                     termino,
                     categoriaSeleccionada.value,
+                    true,
                 );
             }
         },
@@ -238,10 +247,11 @@ onBeforeUnmount(() => {
 |--------------------------------------------------------------------------
 */
 
+const normalizarNombreBusqueda = (nombre) =>
+    nombre.toLowerCase().normalize("NFD").replace(/[\p{M}\p{Z}\s]+/gu, "");
+
 const buscarYAgregarProducto = async () => {
     const texto = busqueda.value.trim();
-    const textoNormalizado = texto.toLowerCase();
-
     if (!texto) {
         return;
     }
@@ -249,18 +259,12 @@ const buscarYAgregarProducto = async () => {
     clearTimeout(temporizadorBusqueda);
 
     const resultados = await solicitarProductos(texto);
-    const productoExacto = resultados.find((producto) => {
-        const nombre = String(producto.nombre ?? "").toLowerCase();
-        const codigo = String(producto.codigo ?? "").toLowerCase();
-        const codigoBarras = String(producto.codigo_barras ?? "").toLowerCase();
-
-        return (
-            producto.id === productoExactoId.value ||
-            codigo === textoNormalizado ||
-            codigoBarras === textoNormalizado ||
-            nombre === textoNormalizado
-        );
-    });
+    const nombreBuscado = normalizarNombreBusqueda(texto);
+    const coincidenciasNombre = resultados.filter((producto) =>
+        nombreBuscado && normalizarNombreBusqueda(producto.nombre) === nombreBuscado,
+    );
+    const productoExacto = resultados.find((producto) => producto.id === productoExactoId.value)
+        ?? (coincidenciasNombre.length === 1 ? coincidenciasNombre[0] : null);
 
     if (!productoExacto) {
         if (resultados.length > 0 || errorBusqueda.value || avisoBusqueda.value) return;
@@ -933,12 +937,9 @@ onMounted(() => {
                                 <i class="pi pi-info-circle text-[#7F1D3F]"></i>
 
                                 <span>
-                                    Escanea un código para agregarlo o busca por
-                                    nombre y selecciona un resultado. Presiona
-                                    <strong class="text-[#7F1D3F]">
-                                        Enter
-                                    </strong>
-                                    para agregar una coincidencia exacta.
+                                    Escanea un código de barras o QR para
+                                    agregarlo automáticamente. Si buscas por
+                                    nombre, selecciona el producto.
                                 </span>
                             </div>
                         </div>
