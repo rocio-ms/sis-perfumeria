@@ -39,11 +39,6 @@ const columns = [
         header: "Razón Social",
         default: "Sin empresa",
     },
-    {
-        field: "activo",
-        header: "Estado",
-        type: "status",
-    },
 ];
 
 const home = ref({
@@ -100,6 +95,7 @@ const cerrarForm = () => {
             </template>
             <template #content>
                 <DataTableBase
+                    modulo-estado="marcas"
                     title="Marcas"
                     :data="props.marcas"
                     :columns="columns"

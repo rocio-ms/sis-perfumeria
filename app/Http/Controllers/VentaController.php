@@ -151,10 +151,9 @@ class VentaController extends Controller
             'productos' => $productos,
             'categorias' => Categoria::where('activo', true)
                 ->select(['id', 'nombre'])
-                ->withSum([
-                    'productos as stock_total' => fn ($query) => $query->disponibleParaVenta(),
-                ], 'stock_actual')
-                ->withCasts(['stock_total' => 'integer'])
+                ->withCount([
+                    'productos' => fn ($query) => $query->disponibleParaVenta(),
+                ])
                 ->orderBy('nombre')
                 ->get(),
             'tiposComprobante' => $tiposComprobante,
@@ -790,14 +789,12 @@ class VentaController extends Controller
                     $nombreTipoComprobante = Str::lower(
                         $tipoComprobante->nombre
                     );
-                    $seriePorDefecto = Str::contains(
-                        $nombreTipoComprobante,
-                        ['boleta', 'boleto']
-                    )
-                        ? 'B001'
-                        : (Str::contains($nombreTipoComprobante, 'factura')
-                            ? 'F001'
-                            : null);
+                    $seriePorDefecto = match (true) {
+                        $nombreTipoComprobante === Str::lower(TipoComprobante::NOTA_VENTA) => 'N001',
+                        Str::contains($nombreTipoComprobante, ['boleta', 'boleto']) => 'B001',
+                        Str::contains($nombreTipoComprobante, 'factura') => 'F001',
+                        default => null,
+                    };
 
                     if ($seriePorDefecto === null) {
                         $nombreEmpresa =

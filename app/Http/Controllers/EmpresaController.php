@@ -93,7 +93,6 @@ class EmpresaController extends Controller
                 ],
 
                 'activo' => [
-                    'required',
                     'boolean',
                 ],
 
@@ -141,9 +140,6 @@ class EmpresaController extends Controller
 
                 'razon_social.required' =>
                     'La razón social es obligatoria.',
-
-                'activo.required' =>
-                    'Debes indicar el estado de la empresa.',
 
                 'series.required' =>
                     'Debes configurar las series de comprobantes.',
@@ -196,7 +192,7 @@ class EmpresaController extends Controller
                     $validated['razon_social'],
 
                 'activo' =>
-                    $validated['activo'],
+                    $validated['activo'] ?? true,
             ]);
 
             /*
@@ -373,7 +369,6 @@ class EmpresaController extends Controller
                 ],
 
                 'activo' => [
-                    'required',
                     'boolean',
                 ],
 
@@ -421,9 +416,6 @@ class EmpresaController extends Controller
 
                 'razon_social.required' =>
                     'La razón social es obligatoria.',
-
-                'activo.required' =>
-                    'Debes indicar el estado de la empresa.',
 
                 'series.required' =>
                     'Debes configurar las series de comprobantes.',
@@ -475,8 +467,7 @@ class EmpresaController extends Controller
                 'razon_social' =>
                     $validated['razon_social'],
 
-                'activo' =>
-                    $validated['activo'],
+                ...array_intersect_key($validated, ['activo' => true]),
             ]);
 
             /*

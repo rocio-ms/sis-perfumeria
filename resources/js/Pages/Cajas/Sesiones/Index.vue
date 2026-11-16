@@ -1,5 +1,5 @@
 <script setup>
-import { ref, onMounted, computed } from "vue";
+import { ref, computed } from "vue";
 import { router, usePage } from "@inertiajs/vue3";
 import { api as axios } from "@/solicitudes";
 
@@ -44,6 +44,20 @@ const tiposMovimiento = [
     { label: "Egreso", value: "egreso", icon: "pi pi-arrow-up-right" },
 ];
 const page = usePage();
+const opcionesUsuario = computed(() => {
+    const usuarios = new Map();
+    for (const { user_id, usuario } of props.sesiones) {
+        if (!usuario || usuarios.has(user_id)) continue;
+
+        usuarios.set(user_id, {
+            value: user_id,
+            label: usuario.username ? `${usuario.name} (@${usuario.username})` : usuario.name,
+        });
+    }
+
+    return Array.from(usuarios.values()).sort((a, b) => a.label.localeCompare(b.label, "es"));
+});
+
 const sesionPropia = computed(() => props.sesiones.find(
     (sesion) => sesion.estado === "abierta" && sesion.user_id === page.props.auth?.user?.id,
 ));
@@ -109,6 +123,11 @@ const columns = [
     {
         field: "usuario",
         header: "Usuario",
+        filter: true,
+        filterType: "select",
+        filterField: "user_id",
+        filterSearch: true,
+        filterOptions: () => opcionesUsuario.value,
     },
     {
         field: "fecha_apertura",
@@ -131,6 +150,7 @@ const columns = [
     {
         field: "estado",
         header: "Estado",
+        type: "status",
     },
 ];
 

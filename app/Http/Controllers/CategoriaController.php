@@ -33,7 +33,7 @@ class CategoriaController extends Controller
         $validated = $request->validate([
             'nombre' => 'required|string|max:100|unique:categorias,nombre',
             'descripcion' => 'nullable|string|max:255',
-            'activo' => 'required|boolean',
+            'activo' => 'boolean',
         ]);
 
         Categoria::create($validated);
@@ -61,7 +61,7 @@ class CategoriaController extends Controller
                 Rule::unique('categorias', 'nombre')->ignore($categoria->id)
             ],
             'descripcion' => 'nullable|string|max:255',
-            'activo' => 'required|boolean',
+            'activo' => 'boolean',
         ]);
 
         $categoria->update($validated);

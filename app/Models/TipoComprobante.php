@@ -6,6 +6,8 @@ use Illuminate\Database\Eloquent\Model;
 
 class TipoComprobante extends Model
 {
+    public const NOTA_VENTA = 'Nota de venta';
+
     protected $fillable = [
         'nombre',
         'activo',

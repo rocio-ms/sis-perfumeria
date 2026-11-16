@@ -46,11 +46,6 @@ const columns = [
         header: "Descripción",
         default: "Sin descripción",
     },
-    {
-        field: "activo",
-        header: "Estado",
-        type: "status",
-    },
 ];
 
 const abrirFormulario = (subcategoria = null) => {
@@ -86,6 +81,7 @@ const cerrarFormulario = () => {
 
             <template #content>
                 <DataTableBase
+                    modulo-estado="subcategorias"
                     title="Subcategorías"
                     :data="props.subcategorias"
                     :columns="columns"

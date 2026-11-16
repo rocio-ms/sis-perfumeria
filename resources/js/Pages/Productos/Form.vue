@@ -56,7 +56,6 @@ const form = useForm({
     stock_actual: 0,
     volumen_ml: 0,
     imagen_url: null,
-    activo: true,
     categoria_id: null,
     subcategoria_id: null,
     marca_id: null,
@@ -226,7 +225,6 @@ const limpiarFormulario = () => {
 
     form.imagen_url = null;
 
-    form.activo = true;
 
     form.categoria_id = null;
     form.subcategoria_id = null;
@@ -271,7 +269,6 @@ const cargarProducto = (producto) => {
 
     imagenPreview.value = producto.imagen_url || "/images/producto_default.svg";
 
-    form.activo = Boolean(producto.activo);
 
     form.categoria_id = producto.categoria_id ?? null;
     form.subcategoria_id = producto.subcategoria_id ?? null;
@@ -899,24 +896,6 @@ const cerrar = () => {
                         </small>
                     </div>
                 </div>
-            </div>
-            <!-- Estado -->
-            <div class="flex items-center justify-between col-span-2 pt-2">
-                <div>
-                    <label for="activo" class="font-medium block">
-                        Estado del producto
-                    </label>
-
-                    <small class="text-gray-500">
-                        {{
-                            form.activo
-                                ? "El producto está activo"
-                                : "El producto está inactivo"
-                        }}
-                    </small>
-                </div>
-
-                <ToggleSwitch v-model="form.activo" inputId="activo" />
             </div>
         </div>
         <template #footer>

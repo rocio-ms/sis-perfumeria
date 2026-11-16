@@ -14,6 +14,7 @@ class TipoComprobanteSeeder extends Seeder
     public function run(): void
     {
         $tipos = [
+            TipoComprobante::NOTA_VENTA,
             'Boleta',
             'Factura',
             'Guía de Remisión',

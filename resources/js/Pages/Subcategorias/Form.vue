@@ -21,7 +21,6 @@ const form = useForm({
     categoria_id: null,
     nombre: "",
     descripcion: "",
-    activo: true,
 });
 
 const esEdicion = computed(() => props.subcategoria !== null);
@@ -40,7 +39,6 @@ const limpiarFormulario = () => {
     form.categoria_id = null;
     form.nombre = "";
     form.descripcion = "";
-    form.activo = true;
 };
 
 const cargarSubcategoria = (subcategoria) => {
@@ -48,7 +46,6 @@ const cargarSubcategoria = (subcategoria) => {
     form.categoria_id = subcategoria.categoria_id ?? null;
     form.nombre = subcategoria.nombre ?? "";
     form.descripcion = subcategoria.descripcion ?? "";
-    form.activo = Boolean(subcategoria.activo);
 };
 
 watch(
@@ -173,17 +170,6 @@ const cerrar = () => {
                 </small>
             </div>
 
-            <div class="flex items-center justify-between">
-                <div>
-                    <label for="activo" class="font-medium block">
-                        Estado de la subcategoría
-                    </label>
-                    <small class="text-gray-500">
-                        {{ form.activo ? "Activa" : "Inactiva" }}
-                    </small>
-                </div>
-                <ToggleSwitch v-model="form.activo" input-id="activo" />
-            </div>
         </div>
 
         <template #footer>

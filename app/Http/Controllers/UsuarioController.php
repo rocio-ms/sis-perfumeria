@@ -68,7 +68,6 @@ class UsuarioController extends Controller
             ],
 
             'activo' => [
-                'required',
                 'boolean',
             ],
 
@@ -145,7 +144,6 @@ class UsuarioController extends Controller
             ],
 
             'activo' => [
-                'required',
                 'boolean',
             ],
 

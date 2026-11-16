@@ -30,7 +30,6 @@ const form = useForm({
 
     razon_social: "",
 
-    activo: true,
 
     series: {
         boleta: {
@@ -77,7 +76,6 @@ const limpiarFormulario = () => {
 
     form.razon_social = "";
 
-    form.activo = true;
 
     form.series = {
         boleta: {
@@ -120,7 +118,6 @@ const cargarEmpresa = (empresa) => {
 
     form.razon_social = empresa.razon_social ?? "";
 
-    form.activo = Boolean(empresa.activo);
 
     const seriesEmpresa = empresa.series_comprobantes ?? empresa.series ?? [];
 
@@ -487,29 +484,6 @@ const cerrar = () => {
                 </div>
             </div>
 
-            <div class="grid grid.cols.zz">
-                <!-- ===================================================== -->
-                <!-- ESTADO -->
-                <!-- ===================================================== -->
-
-                <div class="flex items-center justify-between">
-                    <div>
-                        <label for="activo" class="font-medium block">
-                            Estado de la empresa
-                        </label>
-
-                        <small class="text-gray-500">
-                            {{
-                                form.activo
-                                    ? "La empresa está activa"
-                                    : "La empresa está inactiva"
-                            }}
-                        </small>
-                    </div>
-
-                    <ToggleSwitch v-model="form.activo" inputId="activo" />
-                </div>
-            </div>
         </div>
         <!-- ========================================================= -->
         <!-- FOOTER -->

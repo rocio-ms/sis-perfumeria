@@ -530,7 +530,7 @@ class ProductoController extends Controller
                 'stock_minimo' => $validated['stock_minimo'],
                 'volumen_ml' => $validated['volumen_ml'],
                 'imagen_url' => $urlImagen ?? $imagenAnterior,
-                'activo' => $validated['activo'] ?? true,
+                ...array_intersect_key($validated, ['activo' => true]),
                 'marca_id' => $validated['marca_id'],
                 'categoria_id' => $validated['categoria_id'],
                 'subcategoria_id' => $validated['subcategoria_id'] ?? null,

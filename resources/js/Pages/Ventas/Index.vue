@@ -115,7 +115,7 @@ const columns = [
 
     {
         field: "comprobantes_count",
-        header: "Boletas",
+        header: "Comprobantes",
     },
 
     {
@@ -313,10 +313,6 @@ const boletasVenta = computed(() => {
 
 const esVentaAgrupada = computed(() => boletasVenta.value.length > 1);
 
-const nombreBoletas = computed(() => {
-    return boletasVenta.value.length === 1 ? "boleta" : "boletas";
-});
-
 const totalBoleta = (boleta) => {
     return Number(boleta.importe_total ?? boleta.total ?? 0);
 };
@@ -400,7 +396,7 @@ const totalVenta = computed(() => {
                 <!-- Información de la venta -->
                 <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
                     <div>
-                        <p class="text-sm text-gray-500">Boletas generadas</p>
+                        <p class="text-sm text-gray-500">Comprobantes emitidos</p>
 
                         <p class="font-semibold text-rose-700">
                             {{ boletasVenta.length }}
@@ -536,7 +532,6 @@ const totalVenta = computed(() => {
                     </div>
                 </div>
 
-                <!-- Botón de boletas -->
                 <div class="flex justify-end border-t pt-4">
                     <Button
                         :label="

@@ -74,7 +74,7 @@ class CajaController extends Controller
         $caja->update([
             'nombre' => $validated['nombre'],
             'turno' => $validated['turno'],
-            'activo' => $validated['activo'] ?? true,
+            ...array_intersect_key($validated, ['activo' => true]),
         ]);
 
         return redirect()

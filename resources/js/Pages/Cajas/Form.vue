@@ -17,7 +17,6 @@ const emit = defineEmits(["update:visible", "saved", "cancel"]);
 const form = useForm({
     nombre: "",
     turno: null,
-    activo: true,
 });
 
 const errores = ref({});
@@ -39,12 +38,10 @@ watch(
         if (caja) {
             form.nombre = caja.nombre ?? "";
             form.turno = caja.turno ?? null;
-            form.activo = Boolean(caja.activo);
         } else {
             form.reset();
             form.nombre = "";
             form.turno = null;
-            form.activo = true;
         }
 
         form.clearErrors();
@@ -57,7 +54,6 @@ watch(visible, (estaVisible) => {
         form.reset();
         form.nombre = "";
         form.turno = null;
-        form.activo = true;
         form.clearErrors();
         errores.value = {};
     }
@@ -180,27 +176,6 @@ const cerrar = () => {
                 </small>
             </div>
 
-            <div class="flex items-center justify-between">
-                <div>
-                    <label for="activo" class="font-medium block">
-                        Estado de la caja
-                    </label>
-
-                    <small class="text-gray-500">
-                        {{
-                            form.activo
-                                ? "La caja está activa"
-                                : "La caja está inactiva"
-                        }}
-                    </small>
-                </div>
-
-                <ToggleSwitch
-                    v-model="form.activo"
-                    inputId="activo"
-                    :disabled="form.processing"
-                />
-            </div>
         </div>
 
         <template #footer>

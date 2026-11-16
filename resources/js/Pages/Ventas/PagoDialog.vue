@@ -47,10 +47,14 @@ const texto = (valor) => String(valor ?? "").trim();
 
 /*
 |--------------------------------------------------------------------------
-| COMPROBANTE (Boleta / Factura)
+| COMPROBANTE
 |--------------------------------------------------------------------------
 */
-const comprobante = ref("Boleta");
+const esFactura = computed(() => !props.tiposComprobante.notadeventa && Boolean(props.tiposComprobante.factura));
+const comprobante = computed(() => esFactura.value ? "Factura" : "Nota de venta");
+const comprobanteDisponible = computed(() =>
+    Boolean(props.tiposComprobante[esFactura.value ? "factura" : "notadeventa"]),
+);
 
 /*
 |--------------------------------------------------------------------------
@@ -127,7 +131,7 @@ const activarClienteIdentificado = () => {
 
     cliente.value = {
         id: null,
-        tipo_documento: comprobante.value === "Factura" ? "RUC" : "DNI",
+        tipo_documento: esFactura.value ? "RUC" : "DNI",
         numero_documento: "",
         nombre: "",
         razon_social_nombre: "",
@@ -418,141 +422,18 @@ const metodoPago = ref(null);
 const metodoSeleccionado = computed(() => metodosPago.value.find(({ value }) => value === metodoPago.value));
 const pagoEsEfectivo = computed(() => metodoSeleccionado.value?.efectivo === true);
 
-const montoRecibido = ref(null);
-const montoCalculadora = ref("");
-const calculadoraActiva = ref(false);
+const montoEfectivo = ref("");
+const montoRecibido = computed(() => {
+    const monto = texto(montoEfectivo.value);
+    if (!/^(?:\d+(?:[.,]\d{0,2})?|[.,]\d{1,2})$/.test(monto)) return null;
 
-/**
- * El modo compacto colapsa Comprobante mientras se usa la calculadora.
- * El cliente y las tarjetas de pago siguen visibles.
- */
-const modoPagoActivo = computed(() => {
-    return calculadoraActiva.value && pagoEsEfectivo.value;
+    const importe = Number(monto.replace(",", "."));
+    return Number.isFinite(importe) ? importe : null;
 });
 
-const expandirSecciones = () => {
-    calculadoraActiva.value = false;
-};
-
-const abrirCalculadora = () => {
-    calculadoraActiva.value = true;
-};
-
-const finalizarIngresoMonto = () => {
-    if (montoRecibido.value !== null) {
-        calculadoraActiva.value = false;
-    }
-};
-
-/**
- * Sincroniza el texto de la calculadora con el monto recibido.
- */
-watch(montoCalculadora, (valor, _, onCleanup) => {
-    if (valor === "" || valor === null) {
-        montoRecibido.value = null;
-        calculadoraActiva.value = true;
-        return;
-    }
-
-    calculadoraActiva.value = true;
-
-    const numero = Number(valor);
-    montoRecibido.value = Number.isFinite(numero) ? numero : null;
-
-    const timeout = setTimeout(() => {
-        calculadoraActiva.value = false;
-    }, 700);
-
-    onCleanup(() => clearTimeout(timeout));
-});
-
-/**
- * Agregar números desde el teclado de la calculadora
- */
-const agregarNumero = (numero) => {
-    calculadoraActiva.value = true;
-
-    let valor = montoCalculadora.value;
-
-    // Evitar múltiples puntos decimales
-    if (numero === "." && valor.includes(".")) {
-        return;
-    }
-
-    // "." al inicio → "0."
-    if (numero === "." && valor === "") {
-        montoCalculadora.value = "0.";
-        return;
-    }
-
-    // Limitar a 2 decimales
-    if (valor.includes(".")) {
-        const decimales = valor.split(".")[1];
-
-        if (decimales.length >= 2) {
-            return;
-        }
-
-        // "00" con un solo decimal: solo agregar lo que quepa
-        if (numero === "00" && decimales.length === 1) {
-            numero = "0";
-        }
-    }
-
-    // Evitar ceros innecesarios al inicio
-    if (valor === "0" && numero !== ".") {
-        valor = numero === "00" ? "0" : numero;
-    } else if (valor === "" && numero === "00") {
-        valor = "0";
-    } else {
-        valor += numero;
-    }
-
-    montoCalculadora.value = valor;
-};
-
-const borrarNumero = () => {
-    montoCalculadora.value = montoCalculadora.value.slice(0, -1);
-};
-
-const limpiarMonto = () => {
-    montoCalculadora.value = "";
-};
-
-/**
- * Establecer un monto directamente (billetes rápidos, pago exacto)
- */
-const establecerMonto = (monto) => {
-    montoCalculadora.value = redondear(monto).toFixed(2);
-    calculadoraActiva.value = false;
-};
-
-/**
- * Pagar el monto exacto del total, sin dar vuelto.
- */
 const pagarExacto = () => {
-    if (totalRedondeado.value <= 0) return;
-
-    establecerMonto(totalRedondeado.value);
+    montoEfectivo.value = totalRedondeado.value.toFixed(2);
 };
-
-const esMontoExacto = computed(() => {
-    return (
-        montoRecibido.value !== null &&
-        redondear(montoRecibido.value) === totalRedondeado.value
-    );
-});
-
-const montosRapidos = computed(() => {
-    const total = totalRedondeado.value;
-
-    if (total <= 0) {
-        return [];
-    }
-
-    // Solo billetes que alcanzan para cubrir el total
-    return [50, 100, 200].filter((billete) => billete >= total);
-});
 
 const vuelto = computed(() => {
     if (!pagoEsEfectivo.value) return 0;
@@ -578,24 +459,6 @@ const pagoEfectivoValido = computed(() => {
     return redondear(montoRecibido.value) >= totalRedondeado.value;
 });
 
-/*
-|--------------------------------------------------------------------------
-| TOTALES
-|--------------------------------------------------------------------------
-*/
-const totales = computed(() => {
-    const total = props.total;
-
-    const op_gravada = total / 1.18;
-    const igv = total - op_gravada;
-
-    return {
-        total,
-        op_gravada,
-        igv,
-    };
-});
-
 const formatearMoneda = (valor) =>
     new Intl.NumberFormat("es-PE", {
         style: "currency",
@@ -611,7 +474,7 @@ const formularioValido = computed(() => {
     if (props.procesando) return false;
     if (totalRedondeado.value <= 0) return false;
     if (!props.carrito || props.carrito.length === 0) return false;
-    if (!metodoSeleccionado.value || !props.tiposComprobante[comprobante.value.toLowerCase()]) return false;
+    if (!metodoSeleccionado.value || !comprobanteDisponible.value) return false;
     if (!clienteValido.value) return false;
     if (!pagoEfectivoValido.value) return false;
 
@@ -629,7 +492,7 @@ const motivoBloqueo = computed(() => {
     }
 
     if (!metodosPago.value.length) return "No hay medios de pago activos.";
-    if (!props.tiposComprobante[comprobante.value.toLowerCase()]) return "No hay un comprobante activo seleccionado.";
+    if (!comprobanteDisponible.value) return "No hay un tipo de comprobante activo para esta venta.";
 
     if (!clienteValido.value) {
         if (
@@ -645,7 +508,7 @@ const motivoBloqueo = computed(() => {
     if (!pagoEfectivoValido.value) {
         return montoRecibido.value === null
             ? "Ingresa el monto recibido en efectivo."
-            : `Faltan ${formatearMoneda(faltante.value)} para completar el pago.`;
+            : "El monto recibido debe cubrir el total.";
     }
 
     return "";
@@ -729,17 +592,13 @@ watch(
             return;
         }
 
-        comprobante.value = props.tiposComprobante.boleta ? "Boleta" : "Factura";
-
-        if (comprobante.value === "Factura") activarClienteIdentificado();
+        if (esFactura.value) activarClienteIdentificado();
         else establecerClienteVarios();
 
         const metodoInicial = metodosPago.value.find(({ efectivo }) => efectivo) ?? metodosPago.value[0];
         metodoPago.value = metodoInicial?.value ?? null;
 
-        montoRecibido.value = null;
-        montoCalculadora.value = "";
-        calculadoraActiva.value = true;
+        montoEfectivo.value = "";
     },
 );
 </script>
@@ -751,107 +610,113 @@ watch(
         :closable="!procesando"
         :close-on-escape="!procesando"
         :dismissable-mask="!procesando"
-        :style="{ width: '600px' }"
+        :style="{ width: '560px', maxWidth: 'calc(100vw - 1.5rem)' }"
         class="pago-dialog"
     >
-        <!-- HEADER -->
         <template #header>
-            <div class="flex items-center gap-3">
-                <div
-                    class="w-10 h-10 rounded-xl bg-rose-50 flex items-center justify-center"
-                >
-                    <i class="pi pi-credit-card text-rose-800"></i>
-                </div>
-
-                <div>
-                    <h2 class="text-base font-semibold text-gray-800 m-0">
-                        Confirmar venta
-                    </h2>
-
-                    <p class="text-xs text-gray-500 m-0">
-                        Completa los datos para emitir el comprobante
-                    </p>
-                </div>
+            <div>
+                <h2 class="text-lg font-semibold text-gray-900">Confirmar venta</h2>
+                <p class="mt-1 text-sm text-gray-600">
+                    {{ comprobante }} · {{ carrito.length }} {{ carrito.length === 1 ? "producto" : "productos" }}
+                </p>
             </div>
         </template>
 
-        <div class="flex flex-col gap-5">
-            <!-- COMPROBANTE -->
-            <div
-                class="transition-all duration-300"
-                :class="modoPagoActivo ? 'opacity-70' : ''"
-            >
-                <div
-                    class="flex items-center justify-between"
-                    :class="modoPagoActivo ? 'cursor-pointer' : ''"
-                    @click="modoPagoActivo && expandirSecciones()"
-                >
-                    <label
-                        class="text-xs font-semibold text-gray-500 uppercase tracking-wide"
-                    >
-                        Comprobante
-                    </label>
+        <div class="flex flex-col gap-4">
+            <div class="flex flex-wrap items-baseline justify-between gap-x-3 rounded-lg bg-rose-50 px-4 py-3 text-rose-900">
+                <span class="text-sm font-semibold">Total a cobrar</span>
+                <strong class="text-2xl tabular-nums">{{ formatearMoneda(totalRedondeado) }}</strong>
+            </div>
 
-                    <span
-                        v-if="modoPagoActivo"
-                        class="text-[11px] text-gray-400 flex items-center gap-1"
-                    >
-                        {{ comprobante }}
-                        <i class="pi pi-chevron-down text-[9px]"></i>
-                    </span>
-                </div>
-
-                <div v-if="!modoPagoActivo" class="w-full mt-2">
+            <fieldset>
+                <legend class="mb-2 text-sm font-semibold text-gray-800">Método de pago</legend>
+                <div class="grid grid-cols-2 gap-2 min-[400px]:grid-cols-3">
                     <button
+                        v-for="metodo in metodosPago"
+                        :key="metodo.value"
                         type="button"
-                        class="border rounded-lg py-2 text-sm font-medium w-full
-                                border-rose-700 bg-rose-50 text-rose-800"
+                        class="flex min-h-11 items-center justify-center gap-1.5 rounded-lg border px-2 py-2 text-center text-sm font-medium"
+                        :class="metodoPago === metodo.value
+                            ? 'border-rose-700 bg-rose-50 text-rose-900'
+                            : 'border-gray-200 text-gray-700 hover:border-rose-300'"
+                        :aria-pressed="metodoPago === metodo.value"
+                        :disabled="procesando"
+                        @click="metodoPago = metodo.value"
                     >
-                        {{ comprobante }}
+                        <i :class="metodo.icon" aria-hidden="true"></i>
+                        {{ metodo.label }}
                     </button>
+                </div>
+            </fieldset>
+
+            <div v-if="pagoEsEfectivo" class="rounded-lg bg-rose-50 p-3">
+                <label for="monto-efectivo-venta" class="mb-2 block text-base font-semibold text-rose-950">
+                    Monto recibido
+                </label>
+                <div class="grid gap-2 min-[420px]:grid-cols-[minmax(0,1fr)_auto]">
+                    <InputText
+                        id="monto-efectivo-venta"
+                        v-model="montoEfectivo"
+                        inputmode="decimal"
+                        autocomplete="off"
+                        class="min-h-12 w-full min-w-0 !border-rose-300 !bg-white !text-2xl !font-bold !text-rose-950 tabular-nums"
+                        :disabled="procesando"
+                        autofocus
+                    />
+                    <Button
+                        type="button"
+                        label="Monto exacto"
+                        icon="pi pi-check-circle"
+                        severity="success"
+                        class="min-h-11 !border-emerald-700 !bg-emerald-700 !px-4 !font-semibold !text-white hover:!border-emerald-800 hover:!bg-emerald-800"
+                        :disabled="procesando || totalRedondeado <= 0"
+                        @click="pagarExacto"
+                    />
+                </div>
+                <div
+                    class="mt-2 flex flex-wrap items-baseline justify-between gap-x-2 text-rose-900"
+                    :class="{ '!text-amber-800': montoRecibido !== null && !pagoEfectivoValido }"
+                    aria-live="polite"
+                >
+                    <span class="font-semibold">{{ montoRecibido !== null && !pagoEfectivoValido ? "Falta" : "Vuelto" }}</span>
+                    <strong class="text-3xl tabular-nums">
+                        {{ formatearMoneda(montoRecibido === null || pagoEfectivoValido ? vuelto : faltante) }}
+                    </strong>
                 </div>
             </div>
 
-            <!-- CLIENTE (siempre visible) -->
-            <div class="border border-gray-200 rounded-xl p-3">
-                <!-- ENCABEZADO -->
-                <div class="flex items-center justify-between mb-2">
-                    <div class="flex items-center gap-2">
-                        <Checkbox
-                            :modelValue="esClienteVarios"
-                            :binary="true"
-                            :disabled="comprobante === 'Factura'"
-                            inputId="cliVarios"
-                            @update:modelValue="alternarClienteVarios"
-                        />
-
-                        <label
-                            for="cliVarios"
-                            class="text-xs font-semibold text-gray-700 cursor-pointer"
-                        >
-                            Cliente anónimo
-                        </label>
+            <section aria-labelledby="cliente-venta-label">
+                <div class="flex flex-wrap items-center justify-between gap-2">
+                    <div>
+                        <h3 id="cliente-venta-label" class="text-sm font-semibold text-gray-800">Cliente</h3>
+                        <p class="text-sm text-gray-600">
+                            {{ esClienteVarios ? "Cliente anónimo" : (esFactura ? "La factura requiere RUC" : "Cliente identificado") }}
+                        </p>
                     </div>
-
-                    <span
-                        v-if="comprobante === 'Factura'"
-                        class="text-[11px] text-amber-600"
-                    >
-                        La factura requiere RUC
-                    </span>
+                    <Button
+                        v-if="!esFactura"
+                        type="button"
+                        :label="esClienteVarios ? 'Identificar cliente' : 'Usar cliente anónimo'"
+                        :icon="esClienteVarios ? 'pi pi-user-plus' : 'pi pi-user-minus'"
+                        outlined
+                        class="min-h-11 !border-rose-300 !bg-rose-50 !px-4 !font-semibold !text-rose-900 hover:!border-rose-600 hover:!bg-rose-100"
+                        aria-controls="datos-cliente-venta"
+                        :aria-expanded="!esClienteVarios"
+                        :disabled="procesando"
+                        @click="alternarClienteVarios(!esClienteVarios)"
+                    />
                 </div>
 
-                <!-- DATOS DEL CLIENTE (API o manual) -->
-                <div v-if="!esClienteVarios" class="flex flex-col gap-2">
+                <div v-if="!esClienteVarios" id="datos-cliente-venta" class="mt-3 flex flex-col gap-2">
                     <div class="flex gap-2">
-                        <Select
+                        <Select aria-label="Tipo de documento del cliente"
                             v-model="cliente.tipo_documento"
                             :options="
-                                comprobante === 'Factura'
+                                esFactura
                                     ? ['RUC']
                                     : ['DNI', 'RUC']
                             "
-                            :disabled="comprobante === 'Factura'"
+                            :disabled="esFactura"
                             class="w-28"
                             @change="cambiarTipoDocumento"
                         />
@@ -873,7 +738,7 @@ watch(
 
                             <button
                                 type="button"
-                                class="absolute inset-y-0 right-0 flex w-10 items-center justify-center rounded-r-md text-gray-500 hover:text-rose-700 disabled:opacity-60"
+                                class="absolute inset-y-px right-px flex w-10 items-center justify-center rounded-r-md bg-emerald-700 text-white hover:bg-emerald-800 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-emerald-700 disabled:opacity-60"
                                 aria-label="Buscar cliente por documento"
                                 :disabled="buscandoCliente"
                                 @click="buscarCliente"
@@ -887,7 +752,7 @@ watch(
                     </div>
 
                     <InputText
-                        v-model="cliente.nombre"
+                        v-model="cliente.nombre" aria-label="Nombre o razón social del cliente"
                         :placeholder="
                             cliente.tipo_documento === 'RUC'
                                 ? 'Razón social'
@@ -944,337 +809,41 @@ watch(
                         />
                     </div>
                 </div>
+            </section>
 
-                <p v-else class="text-xs text-gray-400 m-0">
-                    Se registrará como "Clientes varios".
-                </p>
-            </div>
-
-            <!-- MÉTODO DE PAGO -->
-            <div class="transition-all duration-300">
-                <p
-                    class="text-xs font-semibold text-gray-500 uppercase tracking-wide"
-                >
-                    Método de pago
-                </p>
-
-                <!-- MÉTODOS -->
-                <div
-                    class="grid grid-cols-3 gap-2 mt-2"
-                    role="group"
-                    aria-label="Método de pago"
-                >
-                    <button
-                        v-for="metodo in metodosPago"
-                        :key="metodo.value"
-                        type="button"
-                        class="flex flex-col items-center gap-1 border rounded-lg py-3 transition-all"
-                        :class="
-                            metodoPago === metodo.value
-                                ? 'border-rose-700 bg-rose-50 text-rose-800'
-                                : 'border-gray-200 text-gray-500 hover:border-rose-300 hover:text-rose-700'
-                        "
-                        :aria-pressed="metodoPago === metodo.value"
-                        @click="metodoPago = metodo.value"
-                    >
-                        <i :class="metodo.icon" class="text-lg"></i>
-
-                        <span
-                            class="text-[11px] font-medium leading-tight text-center"
-                        >
-                            {{ metodo.label }}
-                        </span>
-                    </button>
-                </div>
-
-                <!-- CALCULADORA -->
-                <div
-                    v-if="pagoEsEfectivo"
-                    class="mt-3 border rounded-xl overflow-hidden transition-all duration-300"
-                    :class="
-                        modoPagoActivo
-                            ? 'border-rose-300 shadow-md ring-1 ring-rose-100'
-                            : 'border-gray-200'
-                    "
-                >
-                    <!-- PANTALLA -->
-                    <div
-                        class="px-4 py-3 transition-all duration-300"
-                        :class="modoPagoActivo ? 'bg-rose-100' : 'bg-rose-50'"
-                    >
-                        <div class="flex justify-between items-center mb-1">
-                            <span class="text-xs text-gray-500">
-                                Total a pagar
-                            </span>
-
-                            <span class="text-sm font-semibold text-gray-700">
-                                {{ formatearMoneda(props.total) }}
-                            </span>
-                        </div>
-
-                        <div class="flex justify-between items-end gap-3">
-                            <span class="text-xs font-semibold text-gray-500">
-                                Monto recibido
-                            </span>
-
-                            <InputText
-                                v-model="montoCalculadora"
-                                inputmode="decimal"
-                                autocomplete="off"
-                                class="!w-40 !text-right !text-2xl !font-bold !text-rose-800"
-                                placeholder="0.00"
-                                @focus="abrirCalculadora"
-                                @keydown.enter.prevent="finalizarIngresoMonto"
-                            />
-                        </div>
-                    </div>
-
-                    <!-- MONTOS RÁPIDOS -->
-                    <div v-if="!modoPagoActivo" class="px-3 pt-3">
-                        <div class="flex gap-2 flex-wrap">
-                            <button
-                                type="button"
-                                class="flex-1 min-w-[75px] text-xs font-semibold px-3 py-2 rounded-lg border transition"
-                                :class="
-                                    esMontoExacto
-                                        ? 'border-emerald-600 bg-emerald-600 text-white'
-                                        : 'border-emerald-200 bg-emerald-50 text-emerald-700 hover:bg-emerald-100'
-                                "
-                                @click="pagarExacto"
-                            >
-                                <i class="pi pi-check-circle mr-1"></i>
-                                Exacto
-                            </button>
-
-                            <button
-                                v-for="monto in montosRapidos"
-                                :key="monto"
-                                type="button"
-                                class="flex-1 min-w-[75px] text-xs font-semibold px-3 py-2 rounded-lg border transition"
-                                :class="
-                                    montoRecibido === monto
-                                        ? 'border-rose-700 bg-rose-700 text-white'
-                                        : 'border-rose-200 bg-rose-50 text-rose-800 hover:bg-rose-100'
-                                "
-                                @click="establecerMonto(monto)"
-                            >
-                                {{ formatearMoneda(monto) }}
-                            </button>
-                        </div>
-                    </div>
-
-                    <!-- TECLADO -->
-                    <div
-                        v-if="calculadoraActiva"
-                        class="grid grid-cols-3 gap-2 p-3"
-                        :class="modoPagoActivo ? 'pt-3' : ''"
-                    >
-                        <button
-                            v-for="numero in [
-                                '7',
-                                '8',
-                                '9',
-                                '4',
-                                '5',
-                                '6',
-                                '1',
-                                '2',
-                                '3',
-                            ]"
-                            :key="numero"
-                            type="button"
-                            class="h-12 rounded-lg bg-white border border-gray-200 text-lg font-semibold text-gray-700 hover:bg-rose-50 hover:border-rose-200 hover:text-rose-800 active:scale-95 transition"
-                            @click="agregarNumero(numero)"
-                        >
-                            {{ numero }}
-                        </button>
-
-                        <!-- LIMPIAR -->
-                        <button
-                            type="button"
-                            class="h-12 rounded-lg bg-gray-100 border border-gray-200 text-sm font-semibold text-gray-600 hover:bg-gray-200 active:scale-95 transition"
-                            @click="limpiarMonto"
-                        >
-                            C
-                        </button>
-
-                        <!-- 0 -->
-                        <button
-                            type="button"
-                            class="h-12 rounded-lg bg-white border border-gray-200 text-lg font-semibold text-gray-700 hover:bg-rose-50 hover:border-rose-200 hover:text-rose-800 active:scale-95 transition"
-                            @click="agregarNumero('0')"
-                        >
-                            0
-                        </button>
-
-                        <!-- BORRAR -->
-                        <button
-                            type="button"
-                            class="h-12 rounded-lg bg-gray-100 border border-gray-200 text-gray-600 hover:bg-gray-200 active:scale-95 transition"
-                            @click="borrarNumero"
-                        >
-                            <i class="pi pi-delete-left"></i>
-                        </button>
-
-                        <!-- DECIMAL -->
-                        <button
-                            type="button"
-                            class="h-12 rounded-lg bg-white border border-gray-200 text-lg font-semibold text-gray-700 hover:bg-rose-50 hover:border-rose-200 hover:text-rose-800 active:scale-95 transition"
-                            @click="agregarNumero('.')"
-                        >
-                            .
-                        </button>
-
-                        <!-- 00 -->
-                        <button
-                            type="button"
-                            class="col-span-2 h-12 rounded-lg bg-white border border-gray-200 text-lg font-semibold text-gray-700 hover:bg-rose-50 hover:border-rose-200 hover:text-rose-800 active:scale-95 transition"
-                            @click="agregarNumero('00')"
-                        >
-                            00
-                        </button>
-
-                        <button
-                            type="button"
-                            class="col-span-3 h-11 rounded-lg bg-rose-700 text-sm font-semibold text-white hover:bg-rose-800 active:scale-95 transition"
-                            @click="finalizarIngresoMonto"
-                        >
-                            Listo
-                        </button>
-                    </div>
-
-                    <!-- VUELTO / FALTANTE -->
-                    <div
-                        v-if="montoRecibido !== null"
-                        class="mx-3 mb-3 px-4 py-4 rounded-xl flex justify-between items-center transition-all duration-300"
-                        :class="
-                            pagoEfectivoValido
-                                ? 'bg-green-50 border border-green-200 text-green-700'
-                                : 'bg-amber-50 border border-amber-200 text-amber-700'
-                        "
-                    >
-                        <div>
-                            <span class="text-xs font-semibold block">
-                                {{
-                                    pagoEfectivoValido
-                                        ? esMontoExacto
-                                            ? "Pago exacto"
-                                            : "Vuelto"
-                                        : "Falta pagar"
-                                }}
-                            </span>
-
-                            <span class="text-[11px] opacity-70">
-                                {{
-                                    pagoEfectivoValido
-                                        ? esMontoExacto
-                                            ? "Sin vuelto que entregar"
-                                            : "Entregar al cliente"
-                                        : "Monto insuficiente"
-                                }}
-                            </span>
-                        </div>
-
-                        <span class="text-2xl font-bold">
-                            {{
-                                formatearMoneda(
-                                    pagoEfectivoValido ? vuelto : faltante,
-                                )
-                            }}
-                        </span>
-                    </div>
-                </div>
-            </div>
-
-            <Divider class="my-0" />
-
-            <!-- RESUMEN -->
-            <div
-                class="w-full rounded-lg bg-gray-50 border border-gray-200 p-3"
-            >
-                <div class="flex items-center justify-between mb-2">
-                    <span
-                        class="text-xs font-semibold text-gray-500 uppercase tracking-wide"
-                    >
-                        Resumen de compra
-                    </span>
-
-                    <span class="text-xs text-gray-400">
-                        {{ carrito.length }} producto{{
-                            carrito.length !== 1 ? "s" : ""
-                        }}
-                    </span>
-                </div>
-
-                <div class="flex flex-col gap-1 max-h-32 overflow-y-auto pr-1">
-                    <div
+            <details class="border-t border-gray-200 pt-3">
+                <summary class="cursor-pointer text-sm font-semibold text-rose-900">Ver productos</summary>
+                <ul class="mt-2 max-h-36 space-y-2 overflow-y-auto">
+                    <li
                         v-for="item in carrito"
-                        :key="item.producto_id"
-                        class="flex items-center justify-between gap-3 py-1"
+                        :key="`${item.producto_id}-${item.lote_id}`"
+                        class="flex justify-between gap-3 text-sm text-gray-700"
                     >
-                        <div class="min-w-0 flex-1 flex items-center gap-2">
-                            <span class="shrink-0 text-[11px] text-gray-400">
-                                {{ item.cantidad }} ×
-                                {{ formatearMoneda(item.precio_unitario) }}
-                            </span>
-
-                            <p
-                                class="text-xs font-medium text-gray-700 truncate"
-                                :title="item.producto?.nombre"
-                            >
-                                {{ item.producto?.nombre }}
-                            </p>
-                        </div>
-
-                        <span
-                            class="shrink-0 text-xs font-semibold text-gray-700"
-                        >
-                            {{ formatearMoneda(item.subtotal) }}
-                        </span>
-                    </div>
-                </div>
-
-                <div
-                    class="flex items-center justify-between border-t border-gray-200 mt-2 pt-2"
-                >
-                    <span class="text-xs font-semibold text-gray-600">
-                        Total
-                    </span>
-
-                    <span class="text-base font-bold text-rose-800">
-                        {{ formatearMoneda(totales.total) }}
-                    </span>
-                </div>
-            </div>
+                        <span class="min-w-0 break-words">{{ item.cantidad }} × {{ item.producto?.nombre }}</span>
+                        <strong class="shrink-0 tabular-nums">{{ formatearMoneda(item.subtotal) }}</strong>
+                    </li>
+                </ul>
+            </details>
         </div>
 
-        <!-- FOOTER -->
         <template #footer>
-            <div class="flex flex-col gap-2 w-full">
-                <p
-                    v-if="motivoBloqueo"
-                    class="text-[11px] text-amber-600 m-0 flex items-center gap-1"
-                >
-                    <i class="pi pi-info-circle"></i>
-                    {{ motivoBloqueo }}
-                </p>
-
-                <div class="flex gap-2 w-full">
+            <div class="flex w-full flex-col gap-2">
+                <p v-if="motivoBloqueo" class="text-sm text-gray-600" role="status">{{ motivoBloqueo }}</p>
+                <div class="flex flex-wrap gap-2">
                     <Button
+                        type="button"
                         label="Cancelar"
                         severity="secondary"
                         text
                         :disabled="procesando"
-                        class="flex-1"
                         @click="cerrar"
                     />
-
                     <Button
-                        label="Confirmar venta"
-                        icon="pi pi-check"
+                        type="button"
+                        :label="`Confirmar venta · ${formatearMoneda(totalRedondeado)}`"
                         :loading="procesando"
                         :disabled="!formularioValido"
-                        class="flex-1 !bg-rose-800 !border-rose-800 hover:!bg-rose-900 hover:!border-rose-900"
+                        class="flex-1 !border-rose-800 !bg-rose-800 hover:!bg-rose-900"
                         @click="confirmar"
                     />
                 </div>
@@ -1282,21 +851,3 @@ watch(
         </template>
     </Dialog>
 </template>
-
-<style scoped>
-.pago-dialog :deep(.p-dialog-header) {
-    padding-bottom: 0.75rem;
-}
-
-/* Color vino para el foco de los campos */
-.pago-dialog :deep(.p-inputtext:focus) {
-    border-color: #9f1239;
-    box-shadow: 0 0 0 1px #9f1239;
-}
-
-/* Color vino para el Select */
-.pago-dialog :deep(.p-select:focus) {
-    border-color: #9f1239;
-    box-shadow: 0 0 0 1px #9f1239;
-}
-</style>

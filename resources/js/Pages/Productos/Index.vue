@@ -64,6 +64,7 @@ const columns = [
     {
         field: "categoria.nombre",
         header: "Categoría",
+        hidden: true,
         filter: true,
         type: "select",
         filterOptions: props.categorias.map((categoria) => ({
@@ -87,12 +88,7 @@ const columns = [
     },
     {
         field: "stock_actual",
-        header: "Stock",
-    },
-    {
-        field: "activo",
-        header: "Estado",
-        type: "status",
+        header: "Stock Actual",
     },
 ];
 
@@ -197,6 +193,7 @@ const formularioGuardado = async (tipo) => {
             </template>
             <template #content>
                 <DataTableBase
+                    modulo-estado="productos"
                     title="Productos"
                     :data="props.productos.data"
                     :columns="columns"

@@ -46,11 +46,6 @@ const columns = [
         header: "Teléfono",
         default: "Sin teléfono",
     },
-    {
-        field: "activo",
-        header: "Estado",
-        type: "status",
-    },
 ];
 
 const home = ref({
@@ -116,6 +111,7 @@ const cerrarForm = () => {
             </template>
             <template #content>
                 <DataTableBase
+                    modulo-estado="proveedores"
                     v-model:filters="filters"
                     title="Proveedores"
                     :data="props.proveedores"

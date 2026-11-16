@@ -53,12 +53,10 @@ class VentaComprobantesPorEmpresaTest extends TestCase
                 ]),
             ]
         );
-        $tipoComprobanteId = DB::table('tipo_comprobantes')->insertGetId([
-            'nombre' => 'Boleta',
-            'activo' => true,
-            'created_at' => $now,
-            'updated_at' => $now,
-        ]);
+        $tipoComprobanteId = DB::table('tipo_comprobantes')
+            ->where('nombre', 'Nota de venta')
+            ->value('id');
+        $this->assertNotNull($tipoComprobanteId);
         $tipoPagoId = DB::table('tipo_pagos')->insertGetId([
             'nombre' => 'Efectivo',
             'activo' => true,
@@ -155,7 +153,7 @@ class VentaComprobantesPorEmpresaTest extends TestCase
                     'tienda_id' => $tiendaId,
                     'empresa_id' => $empresaId,
                     'tipo_comprobante_id' => $tipoComprobanteId,
-                    'serie' => 'B001',
+                    'serie' => 'N001',
                     'correlativo_actual' => 0,
                     'activo' => true,
                     'created_at' => $now,
@@ -216,9 +214,11 @@ class VentaComprobantesPorEmpresaTest extends TestCase
             ->assertJsonPath('etiqueta_exacta', true)
             ->assertJsonPath('productos.0.lotes.0.id', $productos[1]['lote_id']);
 
+        DB::table('productos')->where('id', $productos[0]['producto_id'])->update(['stock_actual' => 8]);
         $this->withoutVite()->get(route('ventas.create'))->assertOk()
             ->assertInertia(fn ($page) => $page->has('productos', 2)
-                ->where('categorias.0.stock_total', 2));
+                ->where('categorias.0.productos_count', 2));
+        DB::table('productos')->where('id', $productos[0]['producto_id'])->update(['stock_actual' => 1]);
 
         $precioId = DB::table('precios_productos')->where('producto_id', $productos[0]['producto_id'])->value('id');
         DB::table('precios_productos')->where('id', $precioId)->update(['activo' => false]);
@@ -237,6 +237,10 @@ class VentaComprobantesPorEmpresaTest extends TestCase
         DB::table('lotes')->where('id', $loteVencido)->update(['fecha_vencimiento' => $now->copy()->subDays(2)->toDateString()]);
         $this->getJson(route('ventas.productos.buscar', ['search' => 'P-1']))
             ->assertOk()->assertJsonCount(0, 'productos');
+        $this->getJson(route('ventas.productos.buscar', ['categoria_id' => $categoriaId]))
+            ->assertOk()->assertJsonCount(1, 'productos');
+        $this->get(route('ventas.create'))->assertOk()
+            ->assertInertia(fn ($page) => $page->where('categorias.0.productos_count', 1));
         $this->postJson(route('ventas.store'), $datosVenta)
             ->assertUnprocessable()->assertJsonValidationErrors('detalles.stock');
         DB::table('lotes')->where('id', $loteVencido)->update(['fecha_vencimiento' => null]);
@@ -250,6 +254,8 @@ class VentaComprobantesPorEmpresaTest extends TestCase
 
         $response->assertRedirect(route('ventas.create'));
         $response->assertSessionHas('comprobantes_emitidos_ids');
+        $this->get(route('ventas.create'))->assertOk()
+            ->assertInertia(fn ($page) => $page->where('categorias.0.productos_count', 0));
 
         $ventas = DB::table('ventas')->orderBy('empresa_emisora_id')->get();
         $this->assertCount(2, $ventas);
@@ -265,6 +271,7 @@ class VentaComprobantesPorEmpresaTest extends TestCase
                 ->missing('ventas.data.0.detalles')->missing('ventas.data.0.comprobantes')->missing('tienda'));
         $this->getJson(route('ventas.detalle', $primeraVenta->id))->assertOk()
             ->assertJsonPath('venta.id', $primeraVenta->id)
+            ->assertJsonPath('venta.tipo_comprobante.nombre', 'Nota de venta')
             ->assertJsonCount(1, 'venta.detalles')->assertJsonCount(2, 'comprobantes');
 
         $this->assertDatabaseCount('notificaciones', 0);
@@ -282,14 +289,14 @@ class VentaComprobantesPorEmpresaTest extends TestCase
             $ventas->pluck('empresa_emisora_id')->map(fn($id) => (int) $id)->all()
         );
         $this->assertSame(
-            ['B001', 'B001'],
+            ['N001', 'N001'],
             $ventas->pluck('serie')->all()
         );
         $this->assertDatabaseHas('serie_comprobantes', [
             'tienda_id' => $tiendaId,
             'empresa_id' => $empresas['Empresa B'],
             'tipo_comprobante_id' => $tipoComprobanteId,
-            'serie' => 'B001',
+            'serie' => 'N001',
             'activo' => true,
             'correlativo_actual' => 1,
         ]);

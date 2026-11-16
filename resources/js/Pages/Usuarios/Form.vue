@@ -29,7 +29,6 @@ const form = useForm({
     username: "",
     password: "",
     password_confirmation: "",
-    activo: true,
     rol: null,
 });
 
@@ -64,7 +63,6 @@ const limpiarFormulario = () => {
     form.email = "";
     form.password = "";
     form.password_confirmation = "";
-    form.activo = true;
     form.rol = null;
 
     form.clearErrors();
@@ -86,7 +84,6 @@ const cargarUsuario = () => {
     form.password = "";
     form.password_confirmation = "";
 
-    form.activo = Boolean(props.usuario.activo);
 
     form.rol = props.usuario.roles?.length ? props.usuario.roles[0].id : null;
 
@@ -334,22 +331,6 @@ const guardar = () => {
                 </div>
             </div>
 
-            <div class="flex items-center justify-between">
-                <div>
-                    <label for="activo" class="font-medium block">
-                        Estado del usuario
-                    </label>
-
-                    <small class="text-gray-500">
-                        {{
-                            form.activo
-                                ? "El usuario puede acceder al sistema"
-                                : "El usuario no puede acceder al sistema"
-                        }}
-                    </small>
-                </div>
-                <ToggleSwitch v-model="form.activo" inputId="activo" />
-            </div>
         </div>
 
         <template #footer>

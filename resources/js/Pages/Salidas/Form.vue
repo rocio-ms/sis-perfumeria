@@ -1218,7 +1218,6 @@ const nombreTipoSalida = (tipo) => {
                 </div>
 
                 <ImportacionExcel
-                    tipo="salida"
                     class="mb-4"
                     :disabled="importandoExcel"
                     @imported="importarDetallesExcel"

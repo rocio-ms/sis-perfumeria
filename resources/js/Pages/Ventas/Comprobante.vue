@@ -63,6 +63,9 @@ const ubicacionTienda = computed(() => {
 */
 
 const venta = computed(() => props.venta ?? {});
+const nombreComprobante = computed(() =>
+    venta.value.tipo_comprobante?.nombre || venta.value.tipoComprobante?.nombre || "Comprobante de venta",
+);
 
 const comprobantesAdicionales = computed(() => {
     const ids = new Set([String(props.venta?.id ?? "")]);
@@ -619,11 +622,7 @@ const nuevaVenta = () => {
 
                             <div class="text-center">
                                 <div class="ticket-title">
-                                    {{
-                                        venta.tipo_comprobante?.nombre ||
-                                        venta.tipoComprobante?.nombre ||
-                                        "BOLETA DE VENTA ELECTRÓNICA"
-                                    }}
+                                    {{ nombreComprobante }}
                                 </div>
 
                                 <div class="bold-text text-md">
@@ -852,9 +851,8 @@ const nuevaVenta = () => {
                             <!-- PIE -->
 
                             <div class="footer text-center">
-                                <div>
-                                    Representación impresa de la Boleta de Venta
-                                    Electrónica.
+                                <div v-if="nombreComprobante.toLowerCase() !== 'nota de venta'">
+                                    Representación impresa del comprobante.
                                 </div>
 
                                 <div class="bold-text mt-1">

@@ -80,11 +80,32 @@ let observadorCategorias = null;
 */
 
 const carrito = ref([]);
+const listaCarrito = ref(null);
 const mostrarPago = ref(false);
 const procesandoVenta = ref(false);
 const mostrarComprobantesEmitidos = ref(false);
 const comprobantesEmitidos = ref([]);
 const comprobanteSeleccionadoParaImprimir = ref(null);
+
+const enfocarBusqueda = () => {
+    nextTick(() => {
+        if (
+            !props.cajaAbierta ||
+            mostrarPago.value ||
+            mostrarComprobantesEmitidos.value ||
+            Swal.isVisible()
+        ) {
+            return;
+        }
+
+        inputBusqueda.value?.$el?.focus({ preventScroll: true });
+    });
+};
+
+const alertaBusqueda = Swal.mixin({
+    returnFocus: false,
+    didClose: enfocarBusqueda,
+});
 
 /*
 |--------------------------------------------------------------------------
@@ -270,7 +291,7 @@ const buscarYAgregarProducto = async () => {
     if (!productoExacto) {
         if (resultados.length > 0 || errorBusqueda.value || avisoBusqueda.value) return;
 
-        Swal.fire({
+        alertaBusqueda.fire({
             icon: "warning",
             title: "Producto no encontrado",
             text: `No se encontró ningún producto relacionado con "${busqueda.value}".`,
@@ -294,9 +315,7 @@ const buscarYAgregarProducto = async () => {
 const limpiarBusqueda = () => {
     busqueda.value = "";
 
-    nextTick(() => {
-        inputBusqueda.value?.$el?.focus({ preventScroll: true });
-    });
+    enfocarBusqueda();
 };
 
 const recargarCatalogo = async (productosActualizados = null) => {
@@ -318,7 +337,7 @@ const recargarCatalogo = async (productosActualizados = null) => {
         errorBusqueda.value = "";
     }
 
-    inputBusqueda.value?.$el?.focus();
+    enfocarBusqueda();
 };
 
 /*
@@ -339,7 +358,7 @@ const agregarAlCarrito = (producto) => {
     const stock = Number(producto.stock_actual ?? 0);
 
     if (stock <= 0) {
-        Swal.fire({
+        alertaBusqueda.fire({
             icon: "warning",
             title: "Sin stock",
             text: `El producto "${producto.nombre}" no tiene stock disponible.`,
@@ -351,7 +370,7 @@ const agregarAlCarrito = (producto) => {
 
     const precio = Number(producto.precio_venta ?? producto.precio ?? 0);
     if (precio <= 0) {
-        Swal.fire("Precio no disponible", `Configura un precio para "${producto.nombre}" antes de venderlo.`, "warning");
+        alertaBusqueda.fire("Precio no disponible", `Configura un precio para "${producto.nombre}" antes de venderlo.`, "warning");
         return;
     }
 
@@ -360,7 +379,7 @@ const agregarAlCarrito = (producto) => {
     );
 
     if (!loteDisponible) {
-        Swal.fire({
+        alertaBusqueda.fire({
             icon: "warning",
             title: "Sin stock disponible",
             text: `El producto "${producto.nombre}" no tiene ningún lote con stock disponible.`,
@@ -374,7 +393,7 @@ const agregarAlCarrito = (producto) => {
     const existente = lineas.find((item) => item.lote_id === loteDisponible.id);
     const cantidadTotal = lineas.reduce((total, item) => total + item.cantidad, 0);
     if (cantidadTotal >= stock || (existente && existente.cantidad >= loteDisponible.cantidad_actual)) {
-        Swal.fire("Stock insuficiente", `No hay más unidades disponibles de "${producto.nombre}" en ese lote o en el inventario.`, "warning");
+        alertaBusqueda.fire("Stock insuficiente", `No hay más unidades disponibles de "${producto.nombre}" en ese lote o en el inventario.`, "warning");
         return;
     }
 
@@ -384,8 +403,6 @@ const agregarAlCarrito = (producto) => {
         calcularSubtotal(existente);
         return;
     }
-
-    window.dispatchEvent(new CustomEvent("sidebar-collapse"));
 
     carrito.value.push({
         producto_id: producto.id,
@@ -406,6 +423,13 @@ const agregarAlCarrito = (producto) => {
 
         subtotal: precio,
     });
+
+    nextTick(() => {
+        const lista = listaCarrito.value;
+        if (lista) {
+            lista.scrollTop = lista.scrollHeight;
+        }
+    });
 };
 
 /*
@@ -423,7 +447,7 @@ const incrementarCantidad = (index) => {
         .reduce((total, linea) => total + linea.cantidad, 0);
 
     if (item.cantidad >= stock || cantidadTotal >= Number(item.producto.stock_actual)) {
-        Swal.fire({
+        alertaBusqueda.fire({
             icon: "warning",
             title: "Stock máximo alcanzado",
             text: `Hay ${stock} unidades disponibles en el lote seleccionado.`,
@@ -495,9 +519,7 @@ const alternarDescuento = (item) => {
 const eliminarDelCarrito = (index) => {
     carrito.value.splice(index, 1);
 
-    nextTick(() => {
-        inputBusqueda.value?.$el?.focus();
-    });
+    enfocarBusqueda();
 };
 
 const vaciarCarrito = async () => {
@@ -505,7 +527,7 @@ const vaciarCarrito = async () => {
         return;
     }
 
-    const resultado = await Swal.fire({
+    const resultado = await alertaBusqueda.fire({
         icon: "question",
         title: "¿Vaciar carrito?",
         text: "Se eliminarán todos los productos de la venta.",
@@ -708,6 +730,8 @@ const procesarVenta = (datosPago) => {
 };
 
 onMounted(() => {
+    enfocarBusqueda();
+
     nextTick(() => {
         actualizarDesplazamientoCategorias();
 
@@ -742,14 +766,14 @@ onMounted(() => {
 
 <template>
     <v-container fluid class="ventas-page pa-2">
-        <Card>
+        <Card card-class="venta-card">
             <!-- HEADER -->
             <template #title>
                 <div
                     class="flex flex-col md:flex-row justify-between items-start md:items-center gap-2 mb-2"
                 >
                     <div class="min-w-0 w-full">
-                        <div class="category-filter">
+                        <div class="category-filter" @click.capture="enfocarBusqueda">
                             <Button
                                 icon="pi pi-chevron-left"
                                 rounded
@@ -791,8 +815,8 @@ onMounted(() => {
                                         v-for="categoria in categorias"
                                         :key="categoria.id"
                                         :label="categoria.nombre"
-                                        :badge="String(categoria.stock_total ?? 0)"
-                                        :aria-label="`${categoria.nombre}, stock disponible: ${categoria.stock_total ?? 0}`"
+                                        :badge="String(categoria.productos_count)"
+                                        :aria-label="`${categoria.nombre}, productos disponibles para venta: ${categoria.productos_count}`"
                                         size="small"
                                         :outlined="
                                             Number(categoriaSeleccionada) !==
@@ -842,16 +866,13 @@ onMounted(() => {
             <!-- CONTENIDO -->
             <template #content>
                 <div
-                    class="grid grid-cols-1 gap-3"
-                    :class="
-                        carrito.length > 0
-                            ? 'lg:grid-cols-[minmax(0,3fr)_minmax(420px,2fr)]'
-                            : 'lg:grid-cols-1'
-                    "
+                    class="venta-paneles grid grid-cols-1 gap-3"
+                    :class="{ 'venta-paneles-con-carrito': carrito.length > 0 }"
+                    @click.capture="enfocarBusqueda"
                 >
                     <!-- CATÁLOGO -->
                     <div
-                        class="border border-[#F5DCE4] rounded-2xl bg-white overflow-clip"
+                        class="venta-catalogo border border-[#F5DCE4] rounded-2xl bg-white overflow-clip"
                     >
                         <!-- HEADER CATÁLOGO -->
                         <div class="px-4 pt-3">
@@ -891,7 +912,7 @@ onMounted(() => {
 
                         <!-- BUSCADOR -->
                         <div
-                            class="venta-buscador border-b border-[#F9E8ED] bg-white px-4 py-3"
+                            class="border-b border-[#F9E8ED] bg-white px-4 py-3 shrink-0"
                             role="search"
                             aria-label="Buscar productos para la venta"
                         >
@@ -946,10 +967,15 @@ onMounted(() => {
                         </div>
 
                         <!-- CATÁLOGO DE PRODUCTOS -->
-                        <div class="p-3">
+                        <div
+                            class="venta-catalogo-resultados p-3"
+                            role="region"
+                            aria-label="Lista de productos disponibles"
+                            tabindex="0"
+                        >
                             <div
                                 v-if="productosFiltrados.length"
-                                class="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-4 gap-4"
+                                class="venta-productos grid grid-cols-2 gap-4"
                             >
                                 <div
                                     v-for="producto in productosFiltrados"
@@ -1119,12 +1145,8 @@ onMounted(() => {
                                 </div>
 
                                 <p class="font-medium text-gray-600 m-0">
-                                    No hay productos disponibles
+                                    No hay productos disponibles para la venta.
                                 </p>
-
-                                <small class="mt-1">
-                                    No existen productos con stock.
-                                </small>
                             </div>
                         </div>
                     </div>
@@ -1175,7 +1197,13 @@ onMounted(() => {
                             </div>
 
                             <!-- PRODUCTOS DEL CARRITO -->
-                            <div class="venta-carrito-productos p-3 pb-0">
+                            <div
+                                ref="listaCarrito"
+                                class="venta-carrito-productos p-3 pb-0"
+                                role="region"
+                                aria-label="Productos de la venta"
+                                tabindex="0"
+                            >
                                 <transition-group
                                     name="cart-row"
                                     tag="div"
@@ -1404,6 +1432,7 @@ onMounted(() => {
             :tipos-comprobante="tiposComprobante"
             :procesando="procesandoVenta"
             @confirmar="procesarVenta"
+            @after-hide="enfocarBusqueda"
         />
 
         <Dialog
@@ -1413,6 +1442,7 @@ onMounted(() => {
             :style="{ width: '900px', maxHeight: '90vh' }"
             :breakpoints="{ '1199px': '80vw', '575px': '95vw' }"
             @hide="comprobantesEmitidos = []"
+            @after-hide="enfocarBusqueda"
         >
             <p class="mb-4 text-sm text-gray-600">
                 Se emitieron {{ comprobantesEmitidos.length }}
@@ -1463,14 +1493,34 @@ onMounted(() => {
 </template>
 
 <style scoped>
-.ventas-page {
-    --venta-sticky-top: 73px;
+.venta-catalogo {
+    display: flex;
+    flex-direction: column;
+    min-width: 0;
 }
 
-.venta-buscador {
-    position: sticky;
-    top: var(--venta-sticky-top);
-    z-index: 5;
+.venta-catalogo-resultados {
+    container-type: inline-size;
+    max-height: clamp(12rem, 50dvh, 28rem);
+}
+
+.venta-catalogo-resultados,
+.venta-carrito-productos {
+    min-height: 0;
+    overflow-y: auto;
+    scrollbar-gutter: stable;
+}
+
+@container (min-width: 27rem) {
+    .venta-productos {
+        grid-template-columns: repeat(3, minmax(0, 1fr));
+    }
+}
+
+@container (min-width: 36rem) {
+    .venta-productos {
+        grid-template-columns: repeat(4, minmax(0, 1fr));
+    }
 }
 
 .venta-carrito {
@@ -1478,9 +1528,7 @@ onMounted(() => {
 }
 
 .venta-carrito-productos {
-    min-height: 0;
     max-height: 360px;
-    overflow-y: auto;
 }
 
 .venta-cobro {
@@ -1515,15 +1563,50 @@ onMounted(() => {
 }
 
 @media (min-width: 1024px) and (min-height: 420px) {
+    .venta-card {
+        /* Deja espacio para la barra superior y el padding de la página. */
+        height: calc(100dvh - 73px - 1rem);
+        min-height: 27rem;
+    }
+
+    .venta-card :deep(.p-card-body) {
+        height: 100%;
+    }
+
+    .venta-card :deep(.p-card-caption) {
+        flex-shrink: 0;
+    }
+
+    .venta-card :deep(.p-card-content) {
+        display: grid;
+        grid-template-rows: minmax(0, 1fr);
+        flex: 1;
+        min-height: 0;
+    }
+
+    .venta-paneles {
+        grid-template-rows: minmax(0, 1fr);
+    }
+
+    .venta-paneles-con-carrito {
+        grid-template-columns: minmax(0, 3fr) minmax(340px, 2fr);
+    }
+
     .venta-carrito {
-        position: sticky;
-        top: var(--venta-sticky-top);
-        align-self: start;
+        display: flex;
+        min-width: 0;
         margin-bottom: 0;
     }
 
     .venta-carrito-panel {
-        max-height: calc(100dvh - var(--venta-sticky-top) - 0.5rem);
+        width: 100%;
+    }
+
+    .venta-catalogo-resultados,
+    .venta-carrito-productos {
+        flex: 1;
+        max-height: none;
+        overscroll-behavior-y: contain;
     }
 
     .venta-cobro {

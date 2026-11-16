@@ -48,7 +48,7 @@ class SubcategoriaController extends Controller
                     ->where('categoria_id', $request->input('categoria_id')),
             ],
             'descripcion' => 'nullable|string|max:255',
-            'activo' => 'required|boolean',
+            'activo' => 'boolean',
         ]);
 
         Subcategoria::create($validated);
@@ -79,7 +79,7 @@ class SubcategoriaController extends Controller
                     ->ignore($subcategoria->id),
             ],
             'descripcion' => 'nullable|string|max:255',
-            'activo' => 'required|boolean',
+            'activo' => 'boolean',
         ]);
 
         $subcategoria->update($validated);

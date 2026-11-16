@@ -13,6 +13,9 @@ const props = defineProps({
 });
 
 const venta = computed(() => props.venta);
+const nombreComprobante = computed(() =>
+    venta.value.tipo_comprobante?.nombre || venta.value.tipoComprobante?.nombre || "Comprobante de venta",
+);
 const cliente = computed(() => venta.value.cliente ?? null);
 const detalles = computed(() => venta.value.detalles ?? []);
 const empresa = computed(() => venta.value.empresa_emisora ?? null);
@@ -217,7 +220,7 @@ const vuelto = computed(() => Number(venta.value.vuelto ?? 0));
 
         <div class="text-center">
             <div class="ticket-title">
-                {{ venta.tipo_comprobante?.nombre || venta.tipoComprobante?.nombre || "BOLETA DE VENTA ELECTRÓNICA" }}
+                {{ nombreComprobante }}
             </div>
             <div class="bold-text text-md">{{ numeroComprobante }}</div>
         </div>
@@ -305,7 +308,9 @@ const vuelto = computed(() => Number(venta.value.vuelto ?? 0));
 
         <div class="double-divider"></div>
         <footer class="footer text-center">
-            <div>Representación impresa de la Boleta de Venta Electrónica.</div>
+            <div v-if="nombreComprobante.toLowerCase() !== 'nota de venta'">
+                Representación impresa del comprobante.
+            </div>
             <div class="bold-text mt-1">¡Gracias por su compra!</div>
         </footer>
     </article>

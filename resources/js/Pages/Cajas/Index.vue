@@ -52,14 +52,6 @@ const columns = [
         header: "Turno",
     },
     {
-        field: "activo_label",
-        header: "Estado",
-        type: "status",
-        severity: (value) => {
-            return value === "Activo" ? "success" : "danger";
-        },
-    },
-    {
         field: "sesion_estado",
         header: "Sesión actual",
         type: "status",
@@ -71,16 +63,8 @@ const columns = [
 
 const cargarCajas = computed(() => {
     return props.cajas.map((caja) => {
-        const activo = Number(caja.activo) === 1;
-
         return {
             ...caja,
-
-            // Mantener el valor original
-            activo,
-
-            // Texto para el Tag
-            activo_label: activo ? "Activo" : "Inactivo",
 
             // Turno
             turno: caja.turno,
@@ -177,6 +161,7 @@ const cerrarForm = () => {
             </template>
             <template #content>
                 <DataTableBase
+                    modulo-estado="cajas"
                     title="Cajas"
                     :data="cargarCajas"
                     :columns="columns"

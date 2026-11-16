@@ -68,7 +68,6 @@ const columns = [
     {
         field: "codigo_salida",
         header: "Código",
-        filter: true,
     },
 
     {
@@ -84,6 +83,7 @@ const columns = [
         type: "salida",
         filter: true,
         filterType: "select",
+        filterFullWidth: true,
         filterOptions: [
             {
                 label: "Venta Automática",

@@ -23,7 +23,6 @@ const form = useForm({
     direccion: "",
     telefono: "",
     email: "",
-    activo: true,
 });
 
 const tiposDocumento = [
@@ -76,7 +75,6 @@ const subtitulo = computed(() => {
 const limpiarFormulario = () => {
     form.reset();
     form.clearErrors();
-    form.activo = true;
 };
 
 const cargarProveedor = (proveedor) => {
@@ -88,7 +86,6 @@ const cargarProveedor = (proveedor) => {
     form.direccion = proveedor.direccion ?? "";
     form.telefono = proveedor.telefono ?? "";
     form.email = proveedor.email ?? "";
-    form.activo = Boolean(proveedor.activo);
     form.clearErrors();
 };
 
@@ -343,21 +340,6 @@ watch(
                 </small>
             </div>
 
-            <div class="flex items-center justify-between col-span-2 pt-2">
-                <div>
-                    <label for="activo" class="font-medium block">
-                        Estado del proveedor
-                    </label>
-                    <small class="text-gray-500">
-                        {{
-                            form.activo
-                                ? "El proveedor está activo"
-                                : "El proveedor está inactivo"
-                        }}
-                    </small>
-                </div>
-                <ToggleSwitch v-model="form.activo" inputId="activo" />
-            </div>
         </div>
 
         <template #footer>

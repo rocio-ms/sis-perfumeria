@@ -22,7 +22,6 @@ const emit = defineEmits(["update:visible", "saved", "cancel"]);
 const form = useForm({
     nombre: "",
     empresa_id: null,
-    activo: true,
 });
 
 const esEdicion = computed(() => {
@@ -47,7 +46,6 @@ const limpiarFormulario = () => {
 
     form.nombre = "";
     form.empresa_id = null;
-    form.activo = true;
 };
 
 //Cargar datos de edición
@@ -56,7 +54,6 @@ const cargarMarca = (marca) => {
 
     form.nombre = marca.nombre ?? "";
     form.empresa_id = marca.empresa_id ?? null;
-    form.activo = Boolean(marca.activo);
 };
 
 //Cuando cambia la marca
@@ -193,23 +190,6 @@ const cerrar = () => {
                 <small v-if="form.errors.empresa_id" class="text-red-500">
                     {{ form.errors.empresa_id }}
                 </small>
-            </div>
-            <!-- Estado -->
-            <div class="flex items-center justify-between">
-                <div>
-                    <label for="activo" class="font-medium block">
-                        Estado de la marca
-                    </label>
-
-                    <small class="text-gray-500">
-                        {{
-                            form.activo
-                                ? "La marca está activa"
-                                : "La marca está inactiva"
-                        }}
-                    </small>
-                </div>
-                <ToggleSwitch v-model="form.activo" inputId="activo" />
             </div>
         </div>
 

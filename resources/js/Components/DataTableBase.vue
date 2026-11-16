@@ -10,7 +10,8 @@ import Button from "primevue/button";
 import Select from "primevue/select";
 import DatePicker from "primevue/datepicker";
 import Tag from "primevue/tag";
-import { usePage } from "@inertiajs/vue3";
+import ToggleSwitch from "primevue/toggleswitch";
+import { router, usePage } from "@inertiajs/vue3";
 /*
 |--------------------------------------------------------------------------
 | PROPS
@@ -132,6 +133,10 @@ const props = defineProps({
         type: Boolean,
         default: true,
     },
+    moduloEstado: {
+        type: String,
+        default: null,
+    },
 });
 
 /*
@@ -173,6 +178,34 @@ const puedeVer = computed(() => tienePermiso(props.viewPermission));
 const puedeEditar = computed(() => tienePermiso(props.editPermission));
 const puedeEliminar = computed(() => tienePermiso(props.deletePermission));
 const puedeCerrar = computed(() => tienePermiso(props.closePermission));
+const puedeCambiarEstado = computed(() => props.moduloEstado && (
+    (page.props.auth?.roles ?? []).includes("Administrador") ||
+    tienePermiso(`${props.moduloEstado}.editar`)
+));
+const cambioEstado = ref(null);
+const errorEstado = ref("");
+
+const estadoRegistro = (fila) => cambioEstado.value?.id === fila.id
+    ? cambioEstado.value.activo
+    : [true, 1, "1"].includes(fila.activo);
+
+const cambiarEstado = (fila, activo) => {
+    if (!puedeCambiarEstado.value || cambioEstado.value) return;
+
+    cambioEstado.value = { id: fila.id, activo };
+    errorEstado.value = "";
+
+    router.patch(route("registros.estado", { modulo: props.moduloEstado, registro: fila.id }), { activo }, {
+        preserveScroll: true,
+        onError: (errores) => {
+            errorEstado.value = errores.activo ?? "No se pudo cambiar el estado.";
+        },
+        onFinish: () => {
+            cambioEstado.value = null;
+        },
+    });
+};
+
 const columnasFiltrables = computed(() =>
     props.columns.filter((columna) => columna.filter),
 );
@@ -187,7 +220,8 @@ const alCambiarFiltro = (columna) => {
         .filter((dependiente) => dependiente.filterDependsOn === columna.field)
         .forEach((dependiente) => {
             if (filtros.value[dependiente.field]) {
-                filtros.value[dependiente.field].value = null;
+                filtros.value[dependiente.field].value =
+                    dependiente.type === "date" ? [null, null] : null;
             }
         });
 };
@@ -220,20 +254,19 @@ const obtenerValor = (objeto, path) => {
 |--------------------------------------------------------------------------
 */
 
-const inicializarFiltros = () => {
+const inicializarFiltros = (valores) => {
     const nuevosFiltros = {};
 
     props.columns.forEach((columna) => {
         if (columna.filter) {
-            const valorInicial = props.serverFilters[columna.field] ?? null;
+            const valorInicial = valores[columna.field] ?? null;
+            const rango = Array.isArray(valorInicial) ? valorInicial : [];
             nuevosFiltros[columna.field] = {
                 value:
                     columna.type === "date"
-                        ? Array.isArray(valorInicial)
-                            ? valorInicial.map((fecha) =>
-                                  fecha ? new Date(`${fecha}T00:00:00`) : null,
-                              )
-                            : [null, null]
+                        ? [rango[0], rango[1]].map((fecha) =>
+                              fecha ? new Date(`${fecha}T00:00:00`) : null,
+                          )
                         : valorInicial,
             };
         }
@@ -242,7 +275,7 @@ const inicializarFiltros = () => {
     filtros.value = nuevosFiltros;
 };
 
-inicializarFiltros();
+inicializarFiltros(props.serverFilters);
 
 const emitirConsultaServidor = (page = 1, rows = props.rows) => {
     emit("server-query", {
@@ -391,7 +424,7 @@ const datosFiltrados = computed(() => {
                 continue;
             }
 
-            const valorFila = obtenerValor(fila, columna.field);
+            const valorFila = obtenerValor(fila, columna.filterField ?? columna.field);
 
             /*
             |--------------------------------------------------------------------------
@@ -399,7 +432,7 @@ const datosFiltrados = computed(() => {
             |--------------------------------------------------------------------------
             */
 
-            if (columna.type === "select") {
+            if (columna.type === "select" || columna.filterType === "select") {
                 if (String(valorFila ?? "") !== String(valorFiltro)) {
                     return false;
                 }
@@ -488,7 +521,7 @@ const cantidadFiltros = computed(() => {
         const valor = filtro.value;
 
         if (Array.isArray(valor)) {
-            if (valor.length === 2 && valor[0] && valor[1]) {
+            if (valor.some(Boolean)) {
                 cantidad++;
             }
 
@@ -511,10 +544,8 @@ const cantidadFiltros = computed(() => {
 
 const limpiarFiltros = () => {
     busqueda.value = "";
-
-    Object.keys(filtros.value).forEach((campo) => {
-        filtros.value[campo].value = null;
-    });
+    first.value = 0;
+    inicializarFiltros({});
 };
 
 /*
@@ -653,6 +684,7 @@ const estadoTag = (valor, columna) => {
 
 <template>
     <div class="space-y-4">
+        <p v-if="errorEstado" class="text-sm text-red-700" role="alert">{{ errorEstado }}</p>
         <!-- ===================================================== -->
         <!-- CABECERA -->
         <!-- ===================================================== -->
@@ -681,10 +713,11 @@ const estadoTag = (valor, columna) => {
                 />
 
                 <Button
-                    v-if="cantidadFiltros > 0"
+                    v-if="cantidadFiltros > 0 || busqueda.trim()"
                     icon="pi pi-filter-slash"
                     severity="secondary"
                     variant="text"
+                    aria-label="Limpiar filtros"
                     v-tooltip.top="'Limpiar filtros'"
                     @click="limpiarFiltros"
                 />
@@ -735,7 +768,7 @@ const estadoTag = (valor, columna) => {
                 </div>
 
                 <Button
-                    v-if="cantidadFiltros > 0"
+                    v-if="cantidadFiltros > 0 || busqueda.trim()"
                     label="Limpiar"
                     icon="pi pi-filter-slash"
                     severity="secondary"
@@ -789,6 +822,7 @@ const estadoTag = (valor, columna) => {
                             (columna.type === 'select' ||
                                 columna.filterType === 'select')
                         "
+                        :class="{ 'col-span-full': columna.filterFullWidth }"
                     >
                         <label
                             class="block text-sm font-medium text-gray-600 mb-1.5"
@@ -801,6 +835,8 @@ const estadoTag = (valor, columna) => {
                             :options="opcionesFiltro(columna)"
                             optionLabel="label"
                             optionValue="value"
+                            :aria-label="columna.header"
+                            :filter="columna.filterSearch === true"
                             placeholder="Todos"
                             showClear
                             size="large"
@@ -908,6 +944,7 @@ const estadoTag = (valor, columna) => {
                 :key="columna.field"
                 :field="columna.field"
                 :header="columna.header"
+                :hidden="columna.hidden === true"
                 sortable
             >
                 <template #body="{ data }">
@@ -1013,13 +1050,13 @@ const estadoTag = (valor, columna) => {
             <!-- ================================================= -->
 
             <Column
-                v-if="showView || showEdit || showDelete || showClose"
+                v-if="showView || showEdit || showDelete || showClose || moduloEstado"
                 header="Acciones"
                 :exportable="false"
-                style="width: 150px"
+                :style="{ width: moduloEstado ? '12rem' : '150px' }"
             >
                 <template #body="{ data }">
-                    <div class="flex justify-center gap-1">
+                    <div class="flex items-center justify-center gap-1">
                         <Button
                             v-if="showView && puedeVer"
                             icon="pi pi-eye"
@@ -1056,6 +1093,16 @@ const estadoTag = (valor, columna) => {
                             v-tooltip.top="'Cerrar caja'"
                             @click="emit('cerrar', data)"
                         />
+
+                        <ToggleSwitch
+                            v-if="moduloEstado"
+                            :model-value="estadoRegistro(data)"
+                            :disabled="!puedeCambiarEstado || cambioEstado !== null"
+                            :aria-label="`Estado del registro ${data.id}`"
+                            v-tooltip.top="estadoRegistro(data) ? 'Activo' : 'Inactivo'"
+                            class="interruptor-estado ml-2 shrink-0"
+                            @update:model-value="cambiarEstado(data, $event)"
+                        />
                     </div>
                 </template>
             </Column>
@@ -1064,6 +1111,23 @@ const estadoTag = (valor, columna) => {
 </template>
 
 <style scoped>
+.interruptor-estado {
+    --p-toggleswitch-background: #b91c1c;
+    --p-toggleswitch-hover-background: #991b1b;
+    --p-toggleswitch-checked-background: #15803d;
+    --p-toggleswitch-checked-hover-background: #166534;
+    --p-toggleswitch-handle-background: #fff;
+    --p-toggleswitch-handle-hover-background: #fff;
+    --p-toggleswitch-handle-checked-background: #fff;
+    --p-toggleswitch-handle-checked-hover-background: #fff;
+    --p-toggleswitch-disabled-background: #b91c1c;
+    --p-toggleswitch-handle-disabled-background: #fff;
+}
+
+.interruptor-estado.p-toggleswitch-checked {
+    --p-toggleswitch-disabled-background: #15803d;
+}
+
 .tabla-registros :deep(.p-datatable-thead) {
     position: sticky;
     top: 0;

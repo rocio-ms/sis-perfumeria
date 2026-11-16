@@ -22,6 +22,7 @@ use App\Http\Controllers\TipoPagoController;
 use App\Http\Controllers\VentaController;
 use App\Http\Controllers\EmpresaController;
 use App\Http\Controllers\EntradaController;
+use App\Http\Controllers\EstadoRegistroController;
 use App\Http\Controllers\SalidaController;
 use App\Http\Controllers\UsuarioController;
 use App\Http\Controllers\NotificacionController;
@@ -70,6 +71,10 @@ Route::middleware([
     'verified',
 ])->group(function () {
 
+    Route::patch('/{modulo}/{registro}/estado', EstadoRegistroController::class)
+        ->whereIn('modulo', array_keys(EstadoRegistroController::MODELOS))
+        ->whereNumber('registro')
+        ->name('registros.estado');
 
     /*
     |--------------------------------------------------------------------------

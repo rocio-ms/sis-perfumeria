@@ -18,7 +18,6 @@ const emit = defineEmits(["update:visible", "saved", "cancel"]);
 const form = useForm({
     nombre: "",
     descripcion: "",
-    activo: true,
 });
 
 const esEdicion = computed(() => {
@@ -41,7 +40,6 @@ const limpiarFormulario = () => {
     form.clearErrors();
 
     form.nombre = "";
-    form.activo = true;
 };
 
 //Cargar datos de edición
@@ -50,7 +48,6 @@ const cargarCategoria = (categoria) => {
 
     form.nombre = categoria.nombre ?? "";
     form.descripcion = categoria.descripcion ?? "";
-    form.activo = Boolean(categoria.activo);
 }
 
 //Limite para el tamaño de la descripción
@@ -195,23 +192,6 @@ const cerrar = () => {
                 </div>
             </div>
 
-            <div class="flex items-center justify-between">
-                <div>
-                    <label for="activo" class="font-medium block">
-                        Estado de la categoría
-                    </label>
-
-                    <small class="text-gray-500">
-                        {{
-                            form.activo
-                                ? "La categoría está activa"
-                                : "La categoría está inactiva"
-                        }}
-                    </small>
-                </div>
-
-                <ToggleSwitch v-model="form.activo" inputId="activo" />
-            </div>
         </div>
 
         <template #footer>

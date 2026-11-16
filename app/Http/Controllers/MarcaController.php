@@ -61,7 +61,6 @@ class MarcaController extends Controller
             ],
 
             'activo' => [
-                'required',
                 'boolean',
             ],
         ]);
@@ -110,7 +109,6 @@ class MarcaController extends Controller
             ],
 
             'activo' => [
-                'required',
                 'boolean',
             ],
         ]);

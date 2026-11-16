@@ -56,11 +56,6 @@ const columns = [
         field: "contacto",
         header: "Contacto",
     },
-    {
-        field: "activo",
-        header: "Estado",
-        type: "status",
-    },
 ];
 
 const clientesConContacto = computed(() =>
@@ -184,6 +179,7 @@ const formularioGuardado = async (tipo) => {
 
             <template #content>
                 <DataTableBase
+                    modulo-estado="clientes"
                     title="Clientes"
                     :data="clientesConContacto"
                     :columns="columns"

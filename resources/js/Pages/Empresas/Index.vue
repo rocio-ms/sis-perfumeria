@@ -44,11 +44,6 @@ const columns = [
         header: "Tienda",
         default: "Sin tienda",
     },
-    {
-        field: "activo",
-        header: "Estado",
-        type: "status",
-    },
 ];
 
 // console.log(props);
@@ -128,6 +123,7 @@ const cerrarShow = () => {
 
             <template #content>
                 <DataTableBase
+                    modulo-estado="empresas"
                     title="Empresas"
                     :data="props.empresas"
                     :columns="columns"

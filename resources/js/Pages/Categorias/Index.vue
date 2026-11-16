@@ -35,11 +35,6 @@ const columns = [
         header: "Descripción",
         default: "Sin descripción",
     },
-    {
-        field: "activo",
-        header: "Estado",
-        type: "status",
-    },
 ];
 
 const home = ref({
@@ -101,6 +96,7 @@ const cerrarForm = () => {
             </template>
             <template #content>
                 <DataTableBase
+                    modulo-estado="categorias"
                     title="Categorías"
                     :data="props.categorias"
                     :columns="columns"

@@ -55,11 +55,6 @@ const columns = [
         header: "Rol",
     },
 
-    {
-        field: "activo",
-        header: "Estado",
-        type: "status",
-    },
 ];
 
 const home = ref({
@@ -155,6 +150,7 @@ const formularioGuardado = async (tipo) => {
 
             <template #content>
                 <DataTableBase
+                    modulo-estado="usuarios"
                     title="Usuarios"
                     :data="props.usuarios"
                     :columns="columns"
